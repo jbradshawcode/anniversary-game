@@ -64,3 +64,49 @@ class James(Humanoid):
         r( 2, -5, 2, 1, _CHEEK)
 
         r(-1, -4, 2, 1, _LIP)
+
+    def _draw_head_side(self, screen, px, py, flip):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+        def el(x, y, w, h, c):
+            pygame.draw.ellipse(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+
+        r(-7, -15, 13, 4, _HAIR)              # back + top, wavy tail
+        r(-5, -15, 4, 2, _HAIR_LT)
+        r(-7, -12, 4, 9, _HAIR)
+        r(-5, -12, 2, 6, _HAIR_LT)
+        r(-8, -10, 2, 4, _HAIR)
+        r(-8, -6, 2, 3, _HAIR)
+        r(-7, -3, 2, 2, _HAIR_DK)
+
+        el(-2, -12, 8, 10, _SKIN)             # face, turned right
+        r(-2, -10, 2, 6, _SKIN_SH)
+
+        r(-2, -12, 8, 2, _HAIR)               # fringe + front tuft
+        r( 0, -12, 3, 1, _HAIR_LT)
+        r( 5, -12, 2, 4, _HAIR)
+
+        r( 1, -8, 3, 1, _LASH)                # eye
+        r( 1, -7, 2, 2, _EYE)
+        r( 1, -7, 1, 1, _GLINT)
+
+        r( 5, -7, 1, 2, _SKIN)                # nose
+        r( 6, -6, 1, 1, _SKIN_SH)
+
+        r( 3, -5, 2, 1, _CHEEK)               # cheek + lip
+        r( 2, -4, 3, 1, _LIP)
+        r( 2, -3, 2, 1, _SKIN_SH)
+
+    def _draw_head_up(self, screen, px, py):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + x, py + y, w, h))
+
+        r(-7, -16, 14, 5, _HAIR)
+        r(-4, -16,  5, 2, _HAIR)
+        r(-8, -11, 16, 9, _HAIR)
+        r(-9, -10,  2, 4, _HAIR)
+        r( 7, -10,  2, 4, _HAIR)
+        r(-5, -15,  4, 2, _HAIR_LT)
+        r(-2, -11,  5, 7, _HAIR_LT)
+        r(-8, -11,  2, 7, _HAIR_DK)
+        r( 6, -11,  2, 7, _HAIR_DK)

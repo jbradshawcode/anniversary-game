@@ -68,3 +68,51 @@ class Dan(Humanoid):
         r(-2, -2, 4, 1, _STUBBLE)
 
         r(-1, -4, 2, 1, _LIP)
+
+    def _draw_head_side(self, screen, px, py, flip):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+        def el(x, y, w, h, c):
+            pygame.draw.ellipse(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+
+        r(-6, -15, 12, 4, _HAIR)              # quiff stacked up and swept forward
+        r(-6, -18,  5, 4, _HAIR)
+        r(-3, -19,  6, 3, _HAIR)
+        r( 1, -20,  5, 3, _HAIR)
+        r( 0, -19,  3, 2, _HAIR_LT)
+        r(-4, -17,  3, 2, _HAIR_LT)
+        r(-6, -12,  4, 8, _HAIR)
+        r(-6, -12,  1, 6, _HAIR_DK)
+
+        el(-2, -12, 8, 10, _SKIN)             # face
+        r(-2, -10, 2, 6, _SKIN_SH)
+
+        r(-2, -12, 7, 2, _HAIR)               # fringe
+        r( 0, -12, 3, 1, _HAIR_LT)
+        r( 5, -12, 1, 3, _HAIR)
+
+        r( 1, -8, 3, 1, _LASH)                # eye
+        r( 1, -7, 2, 2, _EYE)
+        r( 1, -7, 1, 1, _GLINT)
+
+        r( 5, -7, 1, 2, _SKIN)                # nose
+        r( 6, -6, 1, 1, _SKIN_SH)
+
+        r( 2, -4, 3, 1, _LIP)                 # mouth + stubble
+        r( 3, -5, 2, 1, _STUBBLE)
+        r( 2, -3, 3, 1, _STUBBLE)
+        r( 0, -3, 2, 1, _STUBBLE)
+
+    def _draw_head_up(self, screen, px, py):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + x, py + y, w, h))
+
+        r(-6, -16, 12, 5, _HAIR)
+        r(-3, -19,  7, 4, _HAIR)              # quiff from behind
+        r(-1, -20,  5, 2, _HAIR_LT)
+        r(-7, -11, 14, 9, _HAIR)
+        r(-8, -10,  2, 4, _HAIR)
+        r( 6, -10,  2, 4, _HAIR)
+        r(-2, -11,  5, 6, _HAIR_LT)
+        r(-7, -11,  2, 6, _HAIR_DK)
+        r( 5, -11,  2, 6, _HAIR_DK)

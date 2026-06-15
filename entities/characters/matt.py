@@ -55,3 +55,41 @@ class Matt(Humanoid):
         r(-3, -3, 6, 2, _BEARD)
 
         r(-2, -4, 4, 1, _TEETH)
+
+    def _draw_head_side(self, screen, px, py, flip):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+        def el(x, y, w, h, c):
+            pygame.draw.ellipse(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+
+        el(-10, -18, 19, 16, _HAIR)           # round afro mass
+        el( -9, -17,  9,  5, _HAIR_LT)
+        r( -10, -8, 3, 5, _HAIR)
+        r(  -9, -3, 3, 3, _HAIR_DK)
+
+        el(-2, -12, 8, 10, _SKIN)             # face
+        r(-2, -10, 2, 6, _SKIN_SH)
+        el(-3, -13, 8, 4, _HAIR)              # hairline over brow
+
+        r( 1, -8, 3, 1, _LASH)                # eye
+        r( 1, -7, 2, 2, _EYE)
+        r( 1, -7, 1, 1, _GLINT)
+
+        r( 5, -7, 1, 2, _SKIN)                # nose
+        r( 6, -6, 1, 1, _SKIN_SH)
+
+        r( 2, -5, 3, 1, _BEARD)               # beard along jaw + smile
+        r( 1, -4, 4, 2, _BEARD)
+        r(-1, -3, 4, 1, _BEARD)
+        r( 3, -4, 2, 1, _TEETH)
+
+    def _draw_head_up(self, screen, px, py):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + x, py + y, w, h))
+        def el(x, y, w, h, c):
+            pygame.draw.ellipse(screen, c, (px + x, py + y, w, h))
+
+        el(-11, -17, 22, 16, _HAIR)
+        el( -6, -16, 10,  5, _HAIR_LT)
+        r(-10, -6, 3, 4, _HAIR_DK)
+        r(  7, -6, 3, 4, _HAIR_DK)

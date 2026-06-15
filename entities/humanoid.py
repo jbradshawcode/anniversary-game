@@ -67,6 +67,7 @@ class Humanoid(GameObject):
     _palette: Palette
     walking = False        # set by a mover to enable the walk bob
     walk_phase = 0.0       # advanced by distance moved
+    facing = 'down'        # movers (party/cutscene) set this; statics stay 'down'
 
     def __init__(self, tile_x: int, tile_y: int, blocking: bool = True):
         super().__init__(tile_x, tile_y, blocking=blocking)
@@ -76,8 +77,34 @@ class Humanoid(GameObject):
         if self.walking:
             py -= int(3 * abs(math.sin(self.walk_phase)))
         draw_shadow(screen, self.x, self.y)        # stays grounded under the bob
-        self._draw_head_down(screen, self.x, py)
+        if self.facing == 'up':
+            self._draw_head_up(screen, self.x, py)
+        elif self.facing == 'right':
+            self._draw_head_right(screen, self.x, py)
+        elif self.facing == 'left':
+            self._draw_head_left(screen, self.x, py)
+        else:
+            self._draw_head_down(screen, self.x, py)
         self._draw_body(screen, self.x, py)
+        if self.facing == 'up':
+            self._draw_back_hair(screen, self.x, py)
+
+    # Direction dispatch. left/right share one bespoke profile head (auto-mirrored);
+    # characters without turned art fall back to the front head, as before.
+    def _draw_head_right(self, screen, px, py):
+        self._draw_head_side(screen, px, py, False)
+
+    def _draw_head_left(self, screen, px, py):
+        self._draw_head_side(screen, px, py, True)
+
+    def _draw_head_side(self, screen, px, py, flip):
+        self._draw_head_down(screen, px, py)
+
+    def _draw_head_up(self, screen, px, py):
+        self._draw_head_down(screen, px, py)
+
+    def _draw_back_hair(self, screen, px, py):
+        pass
 
     def _draw_body(self, screen, px, py):
         p = self._palette

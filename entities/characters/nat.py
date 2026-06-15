@@ -67,3 +67,46 @@ class Nat(Humanoid):
         r( 2, -5, 2, 1, _CHEEK)
 
         r(-1, -4, 2, 1, _LIP)
+
+    def _draw_head_side(self, screen, px, py, flip):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+        def el(x, y, w, h, c):
+            pygame.draw.ellipse(screen, c, (px + (-(x + w) if flip else x), py + y, w, h))
+
+        el(-9, -17, 17, 14, _HAIR)            # voluminous bob mass
+        el(-7, -16,  8,  4, _HAIR_LT)
+        r(-9, -8, 4, 6, _HAIR)                # length down the back
+        r(-9, -8, 1, 6, _HAIR_DK)
+        r(-7, -4, 3, 3, _HAIR)
+        r(-6, -2, 2, 2, _HAIR_LT)
+
+        el(-2, -12, 8, 10, _SKIN)             # face
+        r(-2, -10, 2, 6, _SKIN_SH)
+        el(-3, -13, 8, 4, _HAIR)              # hairline
+        r( 0, -13, 3, 1, _HAIR_LT)
+        r( 5, -12, 2, 4, _HAIR)               # front curl
+
+        r( 1, -8, 3, 1, _LASH)                # eye (golden)
+        r( 1, -7, 2, 2, _EYE)
+        r( 1, -7, 1, 1, _GLINT)
+
+        r( 5, -7, 1, 2, _SKIN)                # nose
+        r( 6, -6, 1, 1, _SKIN_SH)
+
+        r( 3, -5, 2, 1, _CHEEK)               # cheek + lip
+        r( 2, -4, 3, 1, _LIP)
+        r( 2, -3, 2, 1, _SKIN_SH)
+
+    def _draw_head_up(self, screen, px, py):
+        def r(x, y, w, h, c):
+            pygame.draw.rect(screen, c, (px + x, py + y, w, h))
+        def el(x, y, w, h, c):
+            pygame.draw.ellipse(screen, c, (px + x, py + y, w, h))
+
+        el(-9, -17, 18, 14, _HAIR)
+        el(-5, -16,  8,  4, _HAIR_LT)
+        r(-9, -7, 3, 5, _HAIR)
+        r( 6, -7, 3, 5, _HAIR)
+        r(-9, -7, 1, 5, _HAIR_DK)
+        r( 8, -7, 1, 5, _HAIR_DK)
