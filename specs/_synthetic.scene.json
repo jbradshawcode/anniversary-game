@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "name": "Synthetic Test Room",
+    "slug": "_synthetic",
+    "kind": "interior",
+    "notes": "Throwaway fixture for renderer/validator tests. Not a real place."
+  },
+  "grid": { "cols": 20, "rows": 15, "tile": 32 },
+  "regions": [
+    { "rect": [1, 1, 18, 13], "material": "wood", "label": "main room" },
+    { "rect": [9, 14, 2, 1], "material": "wood", "label": "doorway" }
+  ],
+  "walls": [
+    [0, 0, 20, 1],
+    [0, 14, 9, 1],
+    [11, 14, 9, 1],
+    [0, 1, 1, 13],
+    [19, 1, 1, 13]
+  ],
+  "objects": [
+    { "id": "bar", "type": "bar", "rect": [2, 2, 4, 1], "blocks": true, "label": "Bar", "palette": "oak" },
+    { "id": "table_a", "type": "table", "rect": [9, 6, 2, 2], "blocks": true, "label": "Table" },
+    { "id": "chair_1", "type": "chair", "rect": [9, 8, 1, 1], "blocks": false, "label": "chair" }
+  ],
+  "exits": {
+    "south": { "to": 0, "tiles": [[9, 14], [10, 14]], "label": "door out" }
+  },
+  "entry": { "south": [9, 13] },
+  "lights": [
+    { "type": "pendant", "at": [5, 7] },
+    { "type": "pendant", "at": [14, 7] }
+  ]
+}

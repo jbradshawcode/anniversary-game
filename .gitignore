@@ -1,0 +1,12 @@
+.env
+__pycache__/
+streetview_refs/
+*.pyc
+streetview_ext/
+wetherspoons_refs/
+salutation_refs/
+CLAUDE.md
+gym_refs/
+saves/
+refs/
+.playwright-mcp/
