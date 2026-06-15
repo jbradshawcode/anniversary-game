@@ -47,13 +47,9 @@ class Party:
             f.blocking = False
             f.x, f.y = float(player.x), float(player.y)
         if scene_manager is not None and scene_manager.current is not None:
-            crew_types = tuple(WEEK1_CREW)
-            scene = scene_manager.current
-            scene.objects = [
-                o for o in scene.objects if not isinstance(o, crew_types)]
-            # The crew's old tiles were baked in as blocked at scene build time;
-            # rebuild so the player can walk through the space they vacated.
-            scene._build_tile_map()
+            # Drop the crew from the scene (they become followers); despawn owns
+            # the tile-map rebuild so the space they vacated turns walkable.
+            scene_manager.current.despawn(tuple(WEEK1_CREW))
         self._seed(player)
         self._following = True
 

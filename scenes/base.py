@@ -5,6 +5,7 @@ from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT,
 )
 from systems.factory import ObjectFactory
+from systems.tilemap import TileMap
 
 
 class Scene:
@@ -30,30 +31,30 @@ class Scene:
         row0, row1 = self.walkable_rows
 
         self.objects = ObjectFactory.create_scene_objects(config_key)
-        self._build_tile_map()
+        self._tile_map = TileMap(
+            self.walkable_cols, self.walkable_rows,
+            self._map_cols, MAP_ROWS,
+            self.static_blocked, self.walls,
+        )
+        self._refresh_blockers()
 
         self._world_surface = None
 
-    def _build_tile_map(self):
-        """(Re)derive the walkability grid from bounds, static scenery and the
-        current object list. Call after mutating self.objects so vacated tiles
-        (e.g. NPCs that joined the follower party) become walkable again."""
-        col0, col1 = self.walkable_cols
-        row0, row1 = self.walkable_rows
-        self._tile_map = [[0] * self._map_cols for _ in range(MAP_ROWS)]
-        for row in range(row0, row1 + 1):
-            for col in range(col0, col1 + 1):
-                self._tile_map[row][col] = 1
-
-        # Static scenery that isn't walkable (declared by the subclass)
-        for tx, ty in self.static_blocked:
-            if 0 <= ty < MAP_ROWS and 0 <= tx < self._map_cols:
-                self._tile_map[ty][tx] = 0
-
+    def _refresh_blockers(self):
+        """Re-derive the dynamic blocker layer from the current object list.
+        Call after mutating self.objects (e.g. NPCs that joined the follower
+        party) so vacated tiles become walkable again."""
+        blocked = []
         for obj in self.objects:
-            for tx, ty in obj.blocked_tiles():
-                if 0 <= ty < MAP_ROWS and 0 <= tx < self._map_cols:
-                    self._tile_map[ty][tx] = 0
+            blocked.extend(obj.blocked_tiles())
+        self._tile_map.set_blockers(blocked)
+
+    def despawn(self, types) -> None:
+        """Remove objects of the given type(s) and rebuild walkability. Owns the
+        invariant that mutating the object list requires a tile-map rebuild, so
+        callers never touch the grid directly."""
+        self.objects = [o for o in self.objects if not isinstance(o, types)]
+        self._refresh_blockers()
 
     @property
     def world_width(self) -> int:
@@ -76,12 +77,10 @@ class Scene:
         return max(0, min(cam_x, max_cam))
 
     def is_walkable(self, tile_x: int, tile_y: int) -> bool:
-        if tile_x < 0 or tile_x >= self._map_cols or tile_y < 0 or tile_y >= MAP_ROWS:
-            return False
-        return self._tile_map[tile_y][tile_x] == 1
+        return self._tile_map.is_walkable(tile_x, tile_y)
 
     def has_wall(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
-        return ((from_x, from_y), (to_x, to_y)) in self.walls
+        return self._tile_map.has_wall(from_x, from_y, to_x, to_y)
 
     def enter(self, player):
         """Hook called when this scene becomes active (no-op by default)."""
