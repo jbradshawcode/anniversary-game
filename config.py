@@ -44,7 +44,17 @@ CHARACTER_MUSIC = {'Matt': MATT_MUSIC}
 VB_NET_Y           = 240     # net line (centre of the 2:1 court, screen mid-height)
 VB_ACTOR_SPEED     = 204     # px/s — AI free movement (player uses momentum below)
 VB_CONTACT_RADIUS  = 34      # px the actor must be within (ball ground position)
-VB_TIMING_WINDOW   = 0.24    # s — "ok" contact window either side of ideal time
+VB_TIMING_WINDOW   = 0.24    # s — "ok" contact window either side of ideal time (spike/set)
+# Dig timing (receive): you can contact from EARLY_EDGE before landing through a short
+# GRACE after it; IDEAL is the sweet spot; off-timing scales the pass quality down to
+# TIME_FLOOR; within GOOD_TOL of ideal the label reflects pass quality, else EARLY/LATE.
+VB_DIG_EARLY_EDGE  = 0.40    # s before landing you can first scrape a dig (early = poor pass)
+VB_DIG_IDEAL       = 0.12    # s before landing = the timing sweet spot
+VB_DIG_GRACE       = 0.12    # s after the ball lands you can still dig it up (a late pass)
+VB_DIG_TOL         = 0.20    # quality falls to the floor this far off ideal
+VB_DIG_TIME_FLOOR  = 0.62    # worst timing still yields this fraction of the positional pass
+VB_DIG_GOOD_TOL    = 0.09    # within this of ideal = "on time" (label by pass quality)
+VB_DIG_SWITCH_MARGIN = 26    # px a new digger must be closer than the current one to take over (hysteresis, no thrash)
 VB_PERFECT_WINDOW  = 0.10    # s — tighter "perfect" window (full power/accuracy)
 VB_SCORE_TO_WIN    = 7       # first to 7, win by 2
 
@@ -67,23 +77,29 @@ VB_OOS_RANGE       = 0.42    # fraction of court width the reticle may roam (cen
 
 # AI attack — when attacking the human, bias the set away from the blocker.
 VB_AI_AVOID_BLOCK  = 0.6     # chance the AI setter picks the hitter away from your x
-VB_AI_BLOCK_CHANCE = 0.85    # chance the defending setter puts up a block
+VB_AI_BLOCK_CHANCE = 0.58    # chance the defending setter puts up a block (both sides block now)
 VB_AI_TIP_CHANCE   = 0.16    # chance an in-system AI attack is a tip into the open front
+VB_AI_ATTACK_ERR   = 0.04    # chance a 'hard' AI swing is an unforced error (net/out -> point)
+VB_OOS_ERROR_MULT  = 1.8     # out-of-system swings miss more often
+VB_RALLY_MAX       = 36      # safety cap on touches in a rally: forces it to end (no soft loop)
 
 # Difficulty — scales the OPPONENT (far team) only; your teammates always play at full
 # strength. 'hard' == the tuned constants above. Higher dig/block/tip + tighter attack
 # spread + more reach = a tougher opponent. Chosen per match (Dan asks before you play).
 VB_DIFFICULTY = {
     'easy':   {'dig_base': 0.80, 'dig_hard': 0.28, 'error_frac': 0.65,
-               'avoid_block': 0.15, 'block_chance': 0.30, 'tip_chance': 0.06,
-               'reach_bonus': 0,  'attack_spread': 2.4, 'serve_aggr': 0.2},
+               'avoid_block': 0.15, 'block_chance': 0.18, 'tip_chance': 0.06,
+               'reach_bonus': 0,  'attack_spread': 2.4, 'serve_aggr': 0.2,
+               'attack_err': 0.14},
     'medium': {'dig_base': 0.90, 'dig_hard': 0.46, 'error_frac': 0.55,
-               'avoid_block': 0.40, 'block_chance': 0.62, 'tip_chance': 0.14,
-               'reach_bonus': 6,  'attack_spread': 1.5, 'serve_aggr': 0.55},
+               'avoid_block': 0.40, 'block_chance': 0.40, 'tip_chance': 0.14,
+               'reach_bonus': 6,  'attack_spread': 1.5, 'serve_aggr': 0.55,
+               'attack_err': 0.08},
     'hard':   {'dig_base': VB_AI_DIG_BASE, 'dig_hard': VB_AI_DIG_HARD,
                'error_frac': VB_AI_ERROR_FRAC, 'avoid_block': VB_AI_AVOID_BLOCK,
                'block_chance': VB_AI_BLOCK_CHANCE, 'tip_chance': VB_AI_TIP_CHANCE,
-               'reach_bonus': VB_AI_REACH_BONUS, 'attack_spread': 1.0, 'serve_aggr': 1.0},
+               'reach_bonus': VB_AI_REACH_BONUS, 'attack_spread': 1.0, 'serve_aggr': 1.0,
+               'attack_err': VB_AI_ATTACK_ERR},
 }
 
 # Defence — who takes the first ball (agency: you take balls near you).
@@ -123,7 +139,7 @@ VB_SERVE_NET_MAX     = 0.22  # power below this drops into the net (fault)
 VB_SERVE_OUT_MIN     = 0.88  # power above this sails long (fault)
 VB_SERVE_GREEN       = (0.50, 0.74) # power band for a fast, aggressive serve (the green zone)
 VB_SERVE_PEAK        = (190, 96)    # arc peak: floaty (orange edge) .. flat & fast (green)
-VB_SERVE_DUR         = (1.55, 0.74) # arc duration: floaty slow (edge) .. fast bomb (green)
+VB_SERVE_DUR         = (1.55, 0.95) # arc duration: floaty slow (edge) .. fast (green); slowed so serves are receivable (fewer aces)
 
 # Tutorial pacing — see the ball/players finish each rep before "Nice!"
 VB_TUT_RESOLVE       = 2.0   # s cap the action plays out (ends early once the ball settles)

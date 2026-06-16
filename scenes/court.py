@@ -20,6 +20,8 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_SCORE_TO_WIN,
                     VB_DIG_CLEAN, VB_DIG_SHANK, VB_DIG_MOVE_PEN, VB_DIG_OFFSET_PEN,
                     VB_DIG_DIFF_PEN, VB_OOS_POWER_CAP, VB_OOS_RANGE,
+                    VB_DIG_EARLY_EDGE, VB_DIG_IDEAL, VB_DIG_GRACE, VB_DIG_TOL,
+                    VB_DIG_TIME_FLOOR, VB_DIG_GOOD_TOL, VB_DIG_SWITCH_MARGIN,
                     VB_TOP_SPEED, VB_ACCEL, VB_DECEL,
                     VB_AIMSTEP_SLOWMO, VB_AIMSTEP_WINDOW, VB_RETICLE_SPEED,
                     VB_SPIKE_METER_SPEED, VB_SPIKE_SWEET_LO, VB_SPIKE_SWEET_HI,
@@ -32,6 +34,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_BLOCK_DURATION, VB_TUT_BLOCK_DURATION, VB_BLOCK_COOLDOWN, VB_BLOCK_REACH,
                     VB_BLOCK_NET_DIST, VB_BLOCK_SQUARE, VB_BLOCK_SAVE_CHANCE,
                     VB_BLOCK_DEFLECT_ROOF, VB_BLOCK_OUT_CHANCE, VB_BLOCK_Y_BAND,
+                    VB_OOS_ERROR_MULT, VB_RALLY_MAX,
                     VB_DIFFICULTY)
 from systems.input_handler import Action
 from systems.fx import FX
@@ -87,7 +90,7 @@ _CW = {Role.SETTER: Role.HITTER_R, Role.HITTER_R: Role.HITTER_L, Role.HITTER_L: 
 # arc tuning: (peak height px, duration s)
 _DIG = (120, 1.00)
 _SET = (115, 0.95)
-_SPIKE_AI = (64, 0.85)
+_SPIKE_AI = (56, 0.68)        # flatter/faster -> digs sometimes fail, so kills actually land
 
 
 def _lerp(a: float, b: float, t: float) -> float:
@@ -191,6 +194,7 @@ class VolleyCourt(Scene):
         self._serve_fault = False
         self._serve_outcome: Optional[Tuple[str, int, str]] = None
         self._rally_touches = 0
+        self._dig_grace = 0.0
         self._hit_feedback: Optional[Tuple[str, float]] = None
         self._banner = ""
         self._timer = 0.0
@@ -262,6 +266,26 @@ class VolleyCourt(Scene):
         if setter.dist_to(*pt) <= reach:                    # short/quick -> setter covers
             return setter
         return min(backs, key=lambda a: a.dist_to(*pt))
+
+    def _best_digger(self, team: int) -> Optional[VBActor]:
+        # who should take the first ball RIGHT NOW: you if it's near you, else the
+        # closest AI back that can reach, else the setter (out of system). Re-evaluated
+        # each frame so the nearest player actually breaks for the ball.
+        pt = self.ball.end
+        members = self._team(team)
+        human = next((a for a in members if a.is_player), None)
+        if (human is not None and human.role != Role.SETTER
+                and human.dist_to(*pt) <= VB_PLAYER_TAKE_RADIUS):
+            return human
+        reach = VB_ACTOR_SPEED * max(0.05, self.ball.remaining()) + VB_CONTACT_RADIUS
+        backs = [a for a in members if a.role != Role.SETTER and not a.is_player]
+        reachable = [a for a in backs if a.dist_to(*pt) <= reach]
+        if reachable:
+            return min(reachable, key=lambda a: a.dist_to(*pt))
+        setter = self._role(team, Role.SETTER)
+        if not setter.is_player and setter.dist_to(*pt) <= reach:
+            return setter
+        return min(backs, key=lambda a: a.dist_to(*pt)) if backs else setter
 
     def _current_contactor(self) -> Optional[VBActor]:
         if not self._await:
@@ -343,7 +367,7 @@ class VolleyCourt(Scene):
         net_side, base = (y1, y0) if self.serving == 0 else (y0, y1)
         # aim at the back of the court (away from the net / setter), with some spread
         target = (_lerp(cx, random.uniform(x0 + 40, x1 - 40), aggr),
-                  _lerp(net_side, base, random.uniform(0.58, 0.92)))
+                  _lerp(net_side, base, random.uniform(0.45, 0.78)))   # less deep -> reachable
         peak = _lerp(VB_SERVE_PEAK[0], VB_SERVE_PEAK[1], 0.5)
         dur = _lerp(VB_SERVE_DUR[0], VB_SERVE_DUR[1], 0.5)
         self.ball.launch(_SERVE_POS[self.serving], target, peak, dur)
@@ -412,18 +436,19 @@ class VolleyCourt(Scene):
         self._await = ('receive', self._receiver(self.ball.team))
 
     def _check_block(self) -> bool:
-        # a front-row blocker on YOUR side (team 0), airborne at the net and in the
-        # crossing ball's lane, stuffs an incoming attack. The human free-jumps; the
-        # AI setter auto-blocks; either (or both) can be up. (Team 1's block of your
-        # attack is resolved in the aim-step.)
+        # a front-row blocker on the DEFENDING side (1 - attacker), airborne at the net
+        # and in the crossing ball's lane, stuffs the attack. Works both ways: the human
+        # free-jumps, and either team's AI setter auto-blocks (its jump is armed in
+        # _ai_setter_block). The human's OWN spike is resolved in the aim-step instead —
+        # _enter_aimstep clears _ai_block_jump so it can't double-resolve here.
         attacker = self.ball.team
-        if (1 - attacker) != 0:
-            return False
+        defteam = 1 - attacker
         candidates = []
         human = self._player()
-        if self._block_jump > 0 and abs(human.y - VB_NET_Y) < VB_BLOCK_NET_DIST + 8:
+        if (human.team == defteam and self._block_jump > 0
+                and abs(human.y - VB_NET_Y) < VB_BLOCK_NET_DIST + 8):
             candidates.append(human)
-        setter = self._role(0, Role.SETTER)
+        setter = self._role(defteam, Role.SETTER)
         if (not setter.is_player and self._ai_block_jump > 0
                 and abs(setter.y - VB_NET_Y) < VB_BLOCK_NET_DIST + 8):
             candidates.append(setter)
@@ -542,6 +567,29 @@ class VolleyCourt(Scene):
         # play at full strength — so picking Easy never makes your own side flub.
         return self._opp if team == 1 else VB_DIFFICULTY['hard']
 
+    def _dig_timing_factor(self, rem: float) -> float:
+        # full quality inside the sweet spot, easing to TIME_FLOOR only for notably
+        # early/late presses — timing nudges the pass, body position still leads.
+        off = abs(rem - VB_DIG_IDEAL)
+        if off <= VB_DIG_GOOD_TOL:
+            return 1.0
+        return _clamp(1.0 - (off - VB_DIG_GOOD_TOL) / VB_DIG_TOL, VB_DIG_TIME_FLOOR, 1.0)
+
+    def _dig_feedback(self, rem: float, outcome: str, late: bool) -> None:
+        # hybrid label: a clear EARLY/LATE when timing is the problem; otherwise the
+        # honest pass quality (so good timing + bad position still reads as a shank).
+        if late:
+            label = "LATE!"
+        elif rem - VB_DIG_IDEAL > VB_DIG_GOOD_TOL:
+            label = "EARLY"
+        elif rem - VB_DIG_IDEAL < -VB_DIG_GOOD_TOL:
+            label = "LATE"
+        elif outcome == 'clean':
+            label = "PERFECT"
+        else:
+            label = "SHANK"
+        self._hit_feedback = (label, 0.7)
+
     def _player_dig_quality(self, c: VBActor) -> float:
         spd = (self._vel[0] ** 2 + self._vel[1] ** 2) ** 0.5 / VB_TOP_SPEED
         offset = c.dist_to(*self.ball.end) / max(1.0, self._player_radius())
@@ -636,6 +684,12 @@ class VolleyCourt(Scene):
             self._commit_block(hitter)
         else:  # AI spike
             c.set_pose(Pose.JUMP)
+            err = self._team_diff(team)['attack_err']
+            if not self._in_system:
+                err *= VB_OOS_ERROR_MULT          # a scrambled swing misses more
+            if self._rally_touches >= VB_RALLY_MAX or random.random() < err:
+                self._ai_attack_error(team, c)    # unforced error / cap -> point, rally ends
+                return
             if self._in_system and random.random() < self._opp['tip_chance']:
                 self._ai_tip(team, c)          # mix in a tip into the open front
             elif self._in_system:
@@ -643,7 +697,7 @@ class VolleyCourt(Scene):
                 self.fx.shake(3, 0.14)
             else:                              # out of system -> a driven down-ball (still a hit)
                 tx, ty = self._spike_target_ai(team, False)
-                self.ball.launch((c.x, c.y), (tx, ty), 90, 1.05)
+                self.ball.launch((c.x, c.y), (tx, ty), 76, 0.88)
                 self.fx.shake(2, 0.12)
             self.ball.team = team
             self._await = None
@@ -659,6 +713,25 @@ class VolleyCourt(Scene):
         rsetter.set_pose(Pose.BLOCK)
         self._ai_block_jump = VB_BLOCK_DURATION
 
+    def _ai_attack_error(self, team: int, c: VBActor) -> None:
+        # an unforced attacking error -> point to the other side (same award path as a
+        # player fault). Net errors are the rare kind; most misses sail long/out.
+        if random.random() < 0.20:                          # into the net (uncommon)
+            ny = float(VB_NET_Y - 8 if team == 0 else VB_NET_Y + 8)
+            self.ball.launch((c.x, c.y), (c.x, ny), 44, 0.5)
+            msg = "Into the net!"
+        else:                                               # long over the baseline
+            cx = _clamp(c.x + random.uniform(-50, 50), _COURT.left, _COURT.right)
+            base = _COURT.top - VB_OUT_LAND if team == 0 else _COURT.bottom + VB_OUT_LAND
+            ox, oy = self._out_landing(cx, float(base), team)
+            self.ball.launch((c.x, c.y), (ox, oy), 72, 0.8)
+            msg = "Out!"
+        self.ball.team = team
+        self._await = None
+        self._crossing = False
+        self._serve_fault = True
+        self._serve_outcome = ('fault', 1 - team, msg)
+
     # ── Aim-step (player spike) ──────────────────────────────────────────────
     def _set_quality(self, hitter: VBActor) -> float:
         # how good the set was to attack: in-system + met cleanly (planted, centred)
@@ -670,6 +743,7 @@ class VolleyCourt(Scene):
         return _clamp(base, 0.0, 1.0)
 
     def _enter_aimstep(self, c: VBActor) -> None:
+        self._ai_block_jump = 0.0       # the human's block is the aim-step's job, not _check_block
         _, _, y0, y1 = self._opp_half(c.team)
         sq = self._set_quality(c)
         # in-court reach narrows out of system; the wide-out margin is constant so a
@@ -983,6 +1057,17 @@ class VolleyCourt(Scene):
         kind = self._await[0]
         c = self._current_contactor()
         reach_bonus = self._team_diff(c.team)['reach_bonus']   # your side gets full reach
+        # If the tasked AI clearly can't reach the ball, commit the nearest mate who can
+        # (stable: only fires when the tasked one is out of range, so it doesn't thrash).
+        if (c is not None and not c.is_player and b.in_flight
+                and kind in ('receive', 'set', 'spike')):
+            creach = VB_ACTOR_SPEED * max(0.05, b.remaining()) + _AI_RADIUS + reach_bonus
+            if c.dist_to(*b.end) > creach:
+                cand = min((a for a in self._team(c.team) if not a.is_player),
+                           key=lambda a: a.dist_to(*b.end))
+                if cand is not c and cand.dist_to(*b.end) + 1.0 < c.dist_to(*b.end):
+                    self._await = (kind, cand)
+                    c = cand
         radius = self._player_radius() if c.is_player else _AI_RADIUS + reach_bonus
         in_range = c.dist_to(*b.end) <= radius
         if c.is_player:
@@ -1006,13 +1091,28 @@ class VolleyCourt(Scene):
                 elif not b.in_flight:
                     self.fx.emit_dust(b.end[0], b.end[1])
                     self._point(1 - c.team)
-            else:  # receive (dig) — quality varies with motion / centring / pace
-                if self._action and b.in_flight and b.remaining() <= VB_TIMING_WINDOW and in_range:
-                    q = self._player_dig_quality(c)
-                    outcome = ('clean' if q >= VB_DIG_CLEAN
-                               else 'shank' if q >= VB_DIG_SHANK else 'error')
-                    self._do_receive(c, outcome)
-                elif not b.in_flight:
+            else:  # receive (dig) — timing AND body position both shape the pass
+                if b.in_flight:
+                    self._dig_grace = VB_DIG_GRACE          # arm the after-landing window
+                    rem = b.remaining()
+                    if self._action and in_range and rem <= VB_DIG_EARLY_EDGE:
+                        q = self._player_dig_quality(c) * self._dig_timing_factor(rem)
+                        outcome = ('clean' if q >= VB_DIG_CLEAN
+                                   else 'shank' if q >= VB_DIG_SHANK else 'error')
+                        self._dig_feedback(rem, outcome, late=False)
+                        self._do_receive(c, outcome)
+                elif self._dig_grace > 0:                   # ball down — brief late window
+                    if self._action and in_range:
+                        q = self._player_dig_quality(c) * VB_DIG_TIME_FLOOR
+                        outcome = 'shank' if q >= VB_DIG_SHANK else 'error'
+                        self._dig_feedback(0.0, outcome, late=True)
+                        self._do_receive(c, outcome)
+                        self._dig_grace = 0.0
+                    else:
+                        self._dig_grace -= dt
+                else:                                       # missed it
+                    if self._action:                        # they swung, just too late
+                        self._hit_feedback = ("LATE!", 0.8)
                     self.fx.emit_dust(b.end[0], b.end[1])
                     self._point(1 - c.team)
         elif self._tut is not None:
@@ -1023,11 +1123,18 @@ class VolleyCourt(Scene):
                 self.fx.emit_dust(b.end[0], b.end[1])
                 self._point(1 - c.team)
         else:
-            if b.in_flight and b.remaining() <= 0.05 and in_range:
-                if kind == 'receive':
-                    self._ai_receive(c)
-                else:
-                    self._contact_success(kind, c, True)
+            if b.in_flight and b.remaining() <= 0.05:
+                actor = c if in_range else None
+                if actor is None:                    # tasked one isn't there — does a mate cover?
+                    mate = min((a for a in self._team(c.team) if not a.is_player),
+                               key=lambda a: a.dist_to(*b.end))
+                    if mate.dist_to(*b.end) <= _AI_RADIUS + reach_bonus:
+                        actor = mate
+                if actor is not None:
+                    if kind == 'receive':
+                        self._ai_receive(actor)
+                    else:
+                        self._contact_success(kind, actor, True)
             elif not b.in_flight:
                 self.fx.emit_dust(b.end[0], b.end[1])
                 self._point(1 - c.team)
@@ -1327,6 +1434,24 @@ class VolleyCourt(Scene):
             cross_x = _clamp(_CX + 62, _COURT.left + 34, _COURT.right - 34)
         return [(line_x, dig_y), (cross_x, dig_y)]
 
+    def _defend_zone(self, a: VBActor, recv: int) -> Tuple[float, float]:
+        # off-ball defence: the setter releases to the net to set ball 2; the non-digging
+        # back holds its OWN wide sideline lane (covering the gap the digger leaves),
+        # rather than collapsing onto the ball with the digger.
+        if a.role == Role.SETTER:
+            side = -1.0 if self.ball.end[0] > _CX else 1.0
+            return (_clamp(_CX + side * 46, _COURT.left + 18, _COURT.right - 18),
+                    float(VB_NET_Y + 48 if recv == 0 else VB_NET_Y - 48))
+        wing = 1.0 if a.home[0] >= _CX else -1.0
+        return (_clamp(_CX + wing * 104, _COURT.left + 30, _COURT.right - 30),
+                float(VB_NET_Y + 120 if recv == 0 else VB_NET_Y - 120))
+
+    def _attack_wing(self, a: VBActor) -> Tuple[float, float]:
+        # a hitter climbs onto its pin near the net, so the setter can swing the ball wide
+        wing = 1.0 if a.home[0] >= _CX else -1.0
+        return (_clamp(_CX + wing * 96, _COURT.left + 24, _COURT.right - 24),
+                float(VB_NET_Y + 44 if a.team == 0 else VB_NET_Y - 44))
+
     def _crossing_receiver(self, recv_team: int) -> VBActor:
         # pick the digger once per flight (keyed on the ball's arc) so two players
         # don't keep swapping who chases the ball as it comes over
@@ -1391,6 +1516,19 @@ class VolleyCourt(Scene):
             receiver = self._crossing_receiver(recv)     # commit one digger, don't thrash
         else:
             recv, receiver = None, None
+        # re-commit the digger to the closest reachable team-mate as the ball develops,
+        # switching only when a candidate is clearly closer (hysteresis -> no thrash), so
+        # the nearest player actually breaks for the ball instead of holding its shape.
+        if receiver is not None and recv is not None and self.ball.in_flight:
+            best = self._best_digger(recv)
+            if (best is not None and best is not receiver
+                    and receiver.dist_to(*self.ball.end)
+                        > best.dist_to(*self.ball.end) + VB_DIG_SWITCH_MARGIN):
+                receiver = best
+                if self._await and self._await[0] == 'receive':
+                    self._await = ('receive', best)
+                else:
+                    self._recv_cache = ((self.ball.start, self.ball.end), best)
         stored = self._await[1] if (self._await and self._await[0] in ('set', 'spike')) else None
         aim_block = (self._aimstep is not None and self._aimstep.get('block_x') is not None)
         bt = self._block_target
@@ -1422,21 +1560,12 @@ class VolleyCourt(Scene):
             if a is receiver or a is stored:
                 target = self.ball.end                       # commit to the ball
             elif recv is not None and a.team == recv:
-                if a.role == Role.SETTER:                     # clear the lane early + decisively
-                    side = -1.0 if self.ball.end[0] > _CX else 1.0
-                    target = (_clamp(_CX + side * 96, _COURT.left + 18, _COURT.right - 18),
-                              a.home[1])
-                else:                                         # cover the open gap, stay hungry
-                    deep = abs(self.ball.end[1] - VB_NET_Y) > 120   # is the attack going deep?
-                    near_y = float(VB_NET_Y + 72 if recv == 0 else VB_NET_Y - 72)
-                    far_y = float(VB_NET_Y + 150 if recv == 0 else VB_NET_Y - 150)
-                    cover_y = near_y if deep else far_y       # guard whichever gap the attack leaves
-                    cover_x = _clamp((2.0 * self.ball.end[0] + a.home[0]) / 3.0,
-                                     _COURT.left + 18, _COURT.right - 18)
-                    target = (cover_x, cover_y)
+                target = self._defend_zone(a, recv)          # hold a wide zone, don't crowd the ball
+            elif (stored is not None and self._await[0] == 'set'
+                  and a.team == stored.team and a.role != Role.SETTER):
+                target = self._attack_wing(a)                # hitters climb onto the pins for a wide set
             elif self._tut is not None:
-                target = (a.x, a.y)                            # tutorial: only the designated
-                                                               # player chases; mates hold shape
+                target = (a.x, a.y)                            # tutorial: mates hold shape
             elif (self.ball.in_flight and a.role != Role.SETTER
                   and self._ball_to_side(a.team)
                   and a.dist_to(*self.ball.end) < _AI_RADIUS * 1.6):
@@ -1891,7 +2020,12 @@ class VolleyCourt(Scene):
 
     def _draw_hit_feedback(self, screen: pygame.Surface) -> None:
         label, t = self._hit_feedback
-        col = (255, 224, 90) if label == 'PERFECT' else (245, 180, 120)
+        if label == 'PERFECT':
+            col = (255, 224, 90)
+        elif label in ('SHANK', 'LATE', 'LATE!', 'EARLY'):
+            col = (240, 150, 150)            # off-timing / poor pass reads red
+        else:
+            col = (245, 180, 120)
         txt = self._huge.render(label + ("!" if label == 'PERFECT' else ""), True, col)
         a = max(0.0, min(1.0, t / 0.7))
         y = int(SCREEN_HEIGHT * 0.30) - int((1.0 - a) * 10)
