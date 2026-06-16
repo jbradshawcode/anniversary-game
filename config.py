@@ -43,6 +43,7 @@ CHARACTER_MUSIC = {'Matt': MATT_MUSIC}
 # ── Volleyball minigame (scene 11) ──────────────────────────────────────────
 VB_NET_Y           = 240     # net line (centre of the 2:1 court, screen mid-height)
 VB_ACTOR_SPEED     = 204     # px/s — AI free movement (player uses momentum below)
+VB_BACKPEDAL_FACTOR = 0.6    # speed multiplier for movement AWAY from the net (backpedalling is slow)
 VB_CONTACT_RADIUS  = 34      # px the actor must be within (ball ground position)
 VB_TIMING_WINDOW   = 0.24    # s — "ok" contact window either side of ideal time (spike/set)
 # Dig timing (receive): you can contact from EARLY_EDGE before landing through a short
@@ -77,7 +78,7 @@ VB_OOS_RANGE       = 0.42    # fraction of court width the reticle may roam (cen
 
 # AI attack — when attacking the human, bias the set away from the blocker.
 VB_AI_AVOID_BLOCK  = 0.6     # chance the AI setter picks the hitter away from your x
-VB_AI_BLOCK_CHANCE = 0.58    # chance the defending setter puts up a block (both sides block now)
+VB_AI_BLOCK_CHANCE = 0.46    # chance the defending setter puts up a block (recompensed after the block-realism pass)
 VB_AI_TIP_CHANCE   = 0.16    # chance an in-system AI attack is a tip into the open front
 VB_AI_ATTACK_ERR   = 0.04    # chance a 'hard' AI swing is an unforced error (net/out -> point)
 VB_OOS_ERROR_MULT  = 1.8     # out-of-system swings miss more often
@@ -90,16 +91,16 @@ VB_DIFFICULTY = {
     'easy':   {'dig_base': 0.80, 'dig_hard': 0.28, 'error_frac': 0.65,
                'avoid_block': 0.15, 'block_chance': 0.18, 'tip_chance': 0.06,
                'reach_bonus': 0,  'attack_spread': 2.4, 'serve_aggr': 0.2,
-               'attack_err': 0.14},
+               'attack_err': 0.14, 'read': 0.25},
     'medium': {'dig_base': 0.90, 'dig_hard': 0.46, 'error_frac': 0.55,
-               'avoid_block': 0.40, 'block_chance': 0.40, 'tip_chance': 0.14,
+               'avoid_block': 0.40, 'block_chance': 0.32, 'tip_chance': 0.14,
                'reach_bonus': 6,  'attack_spread': 1.5, 'serve_aggr': 0.55,
-               'attack_err': 0.08},
+               'attack_err': 0.08, 'read': 0.55},
     'hard':   {'dig_base': VB_AI_DIG_BASE, 'dig_hard': VB_AI_DIG_HARD,
                'error_frac': VB_AI_ERROR_FRAC, 'avoid_block': VB_AI_AVOID_BLOCK,
                'block_chance': VB_AI_BLOCK_CHANCE, 'tip_chance': VB_AI_TIP_CHANCE,
                'reach_bonus': VB_AI_REACH_BONUS, 'attack_spread': 1.0, 'serve_aggr': 1.0,
-               'attack_err': VB_AI_ATTACK_ERR},
+               'attack_err': VB_AI_ATTACK_ERR, 'read': 0.80},
 }
 
 # Defence — who takes the first ball (agency: you take balls near you).
@@ -158,11 +159,22 @@ VB_TUT_BLOCK_DURATION = 0.40 # slightly more forgiving block window in the tutor
 VB_BLOCK_Y_BAND      = 26    # px band around the net where an airborne blocker can stuff the ball
 VB_BLOCK_COOLDOWN    = 0.4   # cooldown after a block jump
 VB_BLOCK_REACH       = 28    # horizontal reach at the net
-VB_BLOCK_NET_DIST    = 46    # how close to the net you must be to jump a block
-VB_BLOCK_SQUARE      = 0.30  # within this fraction of reach -> a clean stuff
-VB_BLOCK_SAVE_CHANCE = 0.25  # chance the attacker digs up a stuffed ball (rally on)
-VB_BLOCK_DEFLECT_ROOF = 0.4  # of glancing blocks, fraction that roof onto your court
-VB_BLOCK_OUT_CHANCE  = 0.3   # of glancing blocks, fraction that deflect out (attacker's point)
+VB_BLOCK_NET_DIST    = 46    # net band used to resolve a block (the jump's reach window)
+VB_BLOCK_ELIGIBLE    = 20    # how close to the net you must actually be to START a block (else not allowed)
+VB_BLOCK_SQUARE      = 0.30  # within this fraction of reach -> a "square" (well-formed) block
+# A single block mostly slows/channels; a clean stuff is a minority outcome (realism).
+# Square (well-positioned/timed) block outcome split:
+VB_BLOCK_SQ_STUFF  = 0.38    # clean stuff -> point
+VB_BLOCK_SQ_SOFT   = 0.30    # soft block -> ball slowed over to the blocker's side, playable
+VB_BLOCK_SQ_TOOL   = 0.10    # hitter tools it off the block, out -> attacker's point
+#                              (remainder 0.22 -> rebound back to the attacker's side, playable)
+# Glancing / off-centre block split (stuff collapses, tooling rises):
+VB_BLOCK_GL_STUFF  = 0.10
+VB_BLOCK_GL_TOOL   = 0.34
+VB_BLOCK_GL_SOFT   = 0.20
+VB_BLOCK_GL_ROOF   = 0.16
+#                              (remainder 0.20 -> rebound to the attacker's side)
+VB_AI_TIP_BIAS     = 0.35    # when the AI reads a block, chance it tips (else places around + powers down)
 
 # Scene configs — scenes are defined in tile coordinates.
 # walkable_cols / walkable_rows are inclusive ranges.

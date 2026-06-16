@@ -22,7 +22,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_DIG_DIFF_PEN, VB_OOS_POWER_CAP, VB_OOS_RANGE,
                     VB_DIG_EARLY_EDGE, VB_DIG_IDEAL, VB_DIG_GRACE, VB_DIG_TOL,
                     VB_DIG_TIME_FLOOR, VB_DIG_GOOD_TOL, VB_DIG_SWITCH_MARGIN,
-                    VB_TOP_SPEED, VB_ACCEL, VB_DECEL,
+                    VB_TOP_SPEED, VB_ACCEL, VB_DECEL, VB_BACKPEDAL_FACTOR,
                     VB_AIMSTEP_SLOWMO, VB_AIMSTEP_WINDOW, VB_RETICLE_SPEED,
                     VB_SPIKE_METER_SPEED, VB_SPIKE_SWEET_LO, VB_SPIKE_SWEET_HI,
                     VB_SPIKE_MIN_POWER, VB_AIM_OUT, VB_OUT_LAND,
@@ -32,8 +32,10 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_TUT_RESOLVE, VB_TUT_SUCCESS, VB_TUT_FAIL,
                     VB_NET_CONTACT, VB_TIP_PEAK, VB_TIP_DUR, VB_TIP_DROP,
                     VB_BLOCK_DURATION, VB_TUT_BLOCK_DURATION, VB_BLOCK_COOLDOWN, VB_BLOCK_REACH,
-                    VB_BLOCK_NET_DIST, VB_BLOCK_SQUARE, VB_BLOCK_SAVE_CHANCE,
-                    VB_BLOCK_DEFLECT_ROOF, VB_BLOCK_OUT_CHANCE, VB_BLOCK_Y_BAND,
+                    VB_BLOCK_NET_DIST, VB_BLOCK_ELIGIBLE, VB_BLOCK_SQUARE, VB_BLOCK_Y_BAND,
+                    VB_BLOCK_SQ_STUFF, VB_BLOCK_SQ_SOFT, VB_BLOCK_SQ_TOOL,
+                    VB_BLOCK_GL_STUFF, VB_BLOCK_GL_TOOL, VB_BLOCK_GL_SOFT, VB_BLOCK_GL_ROOF,
+                    VB_AI_TIP_BIAS,
                     VB_OOS_ERROR_MULT, VB_RALLY_MAX,
                     VB_DIFFICULTY)
 from systems.input_handler import Action
@@ -462,30 +464,46 @@ class VolleyCourt(Scene):
         p.set_pose(Pose.BLOCK)
         self.fx.emit_burst(p.x, p.y - 24, (255, 240, 150), 16, 220)
         start = (float(self.ball.x), float(VB_NET_Y))
-        if offset <= VB_BLOCK_REACH * VB_BLOCK_SQUARE:
-            if random.random() < VB_BLOCK_SAVE_CHANCE:    # they dig up the stuff (rally on)
-                self._block_outcome(attacker, deep=False)
-                self.fx.shake(3, 0.16)
-            else:                                          # clean stuff -> driven down on their side
+        r = random.random()
+        if offset <= VB_BLOCK_REACH * VB_BLOCK_SQUARE:     # square block: stuff / soft / tool / rebound
+            if r < VB_BLOCK_SQ_STUFF:                       # clean stuff -> driven down, point
                 ax = _clamp(self.ball.x, _COURT.left + 16, _COURT.right - 16)
                 ay = float(VB_NET_Y - 38 if attacker == 1 else VB_NET_Y + 38)
                 self.fx.shake(7, 0.26)
                 self._block_send(1 - attacker, start, (ax, ay), 30, 0.42, "Block!")
+            elif r < VB_BLOCK_SQ_STUFF + VB_BLOCK_SQ_SOFT:  # soft block -> slowed over to our side
+                self.fx.shake(3, 0.16)
+                self._block_outcome(1 - attacker, deep=False)
+            elif r < VB_BLOCK_SQ_STUFF + VB_BLOCK_SQ_SOFT + VB_BLOCK_SQ_TOOL:  # tooled out -> their point
+                self._tool_out(attacker, start, self.ball.end[1])
+            else:                                           # rebounds back to the attacker's side
+                self.fx.shake(4, 0.18)
+                self._block_outcome(attacker, deep=True)
             return True
-        # glancing block -> deflect out (point), rebound to their side, or roof onto ours
-        r = random.random()
-        if r < VB_BLOCK_OUT_CHANCE:                        # off the block, out of bounds
-            side = float(_COURT.left - 36 if self.ball.x < _CX else _COURT.right + 36)
+        # glancing / off-centre block: stuff is rare, tooling and soft touches dominate
+        if r < VB_BLOCK_GL_STUFF:
+            ax = _clamp(self.ball.x, _COURT.left + 16, _COURT.right - 16)
+            ay = float(VB_NET_Y - 38 if attacker == 1 else VB_NET_Y + 38)
+            self.fx.shake(6, 0.22)
+            self._block_send(1 - attacker, start, (ax, ay), 30, 0.42, "Block!")
+        elif r < VB_BLOCK_GL_STUFF + VB_BLOCK_GL_TOOL:
+            self._tool_out(attacker, start, self.ball.end[1])
+        elif r < VB_BLOCK_GL_STUFF + VB_BLOCK_GL_TOOL + VB_BLOCK_GL_SOFT:
+            self.fx.shake(3, 0.16)
+            self._block_outcome(1 - attacker, deep=False)   # soft over to our side
+        elif r < VB_BLOCK_GL_STUFF + VB_BLOCK_GL_TOOL + VB_BLOCK_GL_SOFT + VB_BLOCK_GL_ROOF:
             self.fx.shake(4, 0.18)
-            self._block_send(attacker, start, (side, float(self.ball.end[1])), 80, 0.7,
-                             "Off the block!")
-        elif r < VB_BLOCK_OUT_CHANCE + VB_BLOCK_DEFLECT_ROOF:
-            self._block_outcome(1 - attacker, deep=True)   # off the top, our chase
-            self.fx.shake(4, 0.18)
+            self._block_outcome(1 - attacker, deep=True)    # roofs deep onto our side
         else:
-            self._block_outcome(attacker, deep=True)       # rebounds to their side
             self.fx.shake(4, 0.18)
+            self._block_outcome(attacker, deep=True)        # rebounds to their side
         return True
+
+    def _tool_out(self, attacker: int, start: Tuple[float, float], ry: float) -> None:
+        # the hitter tools the ball off the block and out of bounds -> attacker's point
+        side = float(_COURT.left - 36 if start[0] < _CX else _COURT.right + 36)
+        self.fx.shake(4, 0.18)
+        self._block_send(attacker, start, (side, float(ry)), 80, 0.7, "Off the block!")
 
     def _block_send(self, winner: int, start: Tuple[float, float], end: Tuple[float, float],
                     peak: float, dur: float, msg: str) -> None:
@@ -499,10 +517,10 @@ class VolleyCourt(Scene):
 
     def _block_outcome(self, recv_team: int, deep: bool) -> None:
         # pop the ball up for recv_team to chase; rally continues (no point)
-        net_off = 90 if deep else 50
+        net_off = 90 if deep else 56
         ty = VB_NET_Y - net_off if recv_team == 1 else VB_NET_Y + net_off
         tx = _clamp(self.ball.x + random.uniform(-60, 60), _COURT.left + 16, _COURT.right - 16)
-        peak = 150 if deep else 110
+        peak = 150 if deep else 125               # more hang on the short pop -> the digger can reach it
         self.ball.launch((self.ball.x, float(VB_NET_Y)), (tx, ty), peak, _hang(peak))
         self.ball.team = recv_team
         self._crossing = False
@@ -671,6 +689,16 @@ class VolleyCourt(Scene):
         ey = self.ball.end[1]
         return ey > VB_NET_Y if team == 0 else ey < VB_NET_Y
 
+    def _read_block(self, c: VBActor) -> bool:
+        # the hitter reads a block committed in its lane and (with the level's reaction
+        # skill) adjusts the swing. A block parked squarely ahead is easy to read; a
+        # disguised seam/cross block is hard. The set's flight is the reaction window.
+        bt = self._block_target
+        if bt is None:
+            return False
+        squareness = _clamp(1.0 - abs(float(bt['lane_x']) - c.x) / (VB_BLOCK_REACH * 4.0), 0.0, 1.0)
+        return random.random() < self._opp.get('read', 0.0) * (0.5 + 0.5 * squareness)
+
     def _contact_success(self, kind: str, c: VBActor, perfect: bool) -> None:
         team = c.team
         self._rally_touches += 1
@@ -690,7 +718,14 @@ class VolleyCourt(Scene):
             if self._rally_touches >= VB_RALLY_MAX or random.random() < err:
                 self._ai_attack_error(team, c)    # unforced error / cap -> point, rally ends
                 return
-            if self._in_system and random.random() < self._opp['tip_chance']:
+            if self._read_block(c):               # read a committed block -> tip over or place around it
+                if random.random() < VB_AI_TIP_BIAS:
+                    self._ai_tip(team, c)
+                else:                             # place into a gap, powered down (lost the crush)
+                    tx, ty = self._spike_target_ai(team, False)
+                    self.ball.launch((c.x, c.y), (tx, ty), 72, 0.80)
+                    self.fx.shake(2, 0.12)
+            elif self._in_system and random.random() < self._opp['tip_chance']:
                 self._ai_tip(team, c)          # mix in a tip into the open front
             elif self._in_system:
                 self.ball.launch((c.x, c.y), self._spike_target_ai(team, perfect), *_SPIKE_AI)
@@ -752,13 +787,8 @@ class VolleyCourt(Scene):
         block_x = None
         blocker = self._role(1 - c.team, Role.SETTER)   # block is where the setter actually got to
         if not blocker.is_player and self._at_net(blocker):
-            block_x = blocker.x
-            blocker.set_pose(Pose.BLOCK)
-        elif not blocker.is_player and random.random() < self._opp['block_chance']:
-            # fast attack (e.g. on 2) — the setter jumps a quick block at its own x
-            blocker.y = float(VB_NET_Y - VB_NET_CONTACT if c.team == 0 else VB_NET_Y + VB_NET_CONTACT)
-            block_x = blocker.x
-            blocker.set_pose(Pose.BLOCK)
+            block_x = blocker.x                          # only a blocker already at the net can stuff
+            blocker.set_pose(Pose.BLOCK)                 # (it slid there legally via _commit_block; no snap)
         self._aimstep = {
             'contactor': c, 'power_cap': _lerp(VB_OOS_POWER_CAP, 1.0, sq),
             'sq': sq, 'xmin': _CX - half, 'xmax': _CX + half, 'block_x': block_x,
@@ -904,15 +934,25 @@ class VolleyCourt(Scene):
             return False
         self.fx.emit_burst(float(bx), float(VB_NET_Y), (255, 240, 150), 12, 220)
         start = (float(bx), float(VB_NET_Y))
-        if random.random() < VB_BLOCK_SAVE_CHANCE:        # tooled off the block -> flies out, your point
-            self.fx.shake(5, 0.20)
-            side = float(_COURT.left - 36 if a['rx'] < _CX else _COURT.right + 36)
-            self._block_send(c.team, start, (side, float(a['ry'])), 70, 0.6, "Off the block!")
-        else:                                             # stuffed straight down -> their point
+        attacker = c.team
+        offset = abs(a['rx'] - float(bx))
+        if offset <= VB_BLOCK_REACH * VB_BLOCK_SQUARE:    # same stuff/tool/soft/rebound split as a defence
+            stuff, tool, soft = VB_BLOCK_SQ_STUFF, VB_BLOCK_SQ_TOOL, VB_BLOCK_SQ_SOFT
+        else:
+            stuff, tool, soft = VB_BLOCK_GL_STUFF, VB_BLOCK_GL_TOOL, VB_BLOCK_GL_SOFT
+        r = random.random()
+        if r < stuff:                                     # stuffed straight down -> their point
             self.fx.shake(7, 0.26)
             px = _clamp(c.x, _COURT.left + 16, _COURT.right - 16)
             py = float(VB_NET_Y + 40 if c.team == 0 else VB_NET_Y - 40)
             self._block_send(1 - c.team, start, (px, py), 30, 0.42, "Stuffed!")
+        elif r < stuff + tool:                            # tooled off the block, out -> your point
+            self.fx.shake(5, 0.20)
+            self._tool_out(attacker, start, a['ry'])
+        elif r < stuff + tool + soft:                     # soft block -> drops on their side, playable
+            self._block_outcome(1 - attacker, deep=False)
+        else:                                             # rebounds back to you -> swing again
+            self._block_outcome(attacker, deep=True)
         return True
 
     def _fire_tip(self) -> None:
@@ -1012,8 +1052,7 @@ class VolleyCourt(Scene):
     def _start_block(self) -> None:
         p = self._player()
         p.set_pose(Pose.BLOCK)
-        p.facing = 'up'                  # square up to the net
-        p.y = float(VB_NET_Y + 18)
+        p.facing = 'up'                  # square up to the net (block from where you stand — no snap)
         dur = VB_TUT_BLOCK_DURATION if self._tut_is('block') else VB_BLOCK_DURATION
         self._block_jump = dur
         self._block_cd = dur + VB_BLOCK_COOLDOWN
@@ -1026,7 +1065,7 @@ class VolleyCourt(Scene):
         # a free jump: near the net, ball on the opponent's side / incoming
         p = self._player()
         return (self._block_cd <= 0 and self._block_jump <= 0
-                and abs(p.y - VB_NET_Y) < VB_BLOCK_NET_DIST
+                and abs(p.y - VB_NET_Y) < VB_BLOCK_ELIGIBLE   # must actually be at the net
                 and self.ball.team == 1 and self.ball.in_flight)
 
     # ── Resolve ──────────────────────────────────────────────────────────────
@@ -1410,8 +1449,11 @@ class VolleyCourt(Scene):
         if self.phase == Phase.SERVE and p is self._server():
             p.x, p.y = _SERVE_POS[self.serving]
             return
+        ty_target = self._move[1] * VB_TOP_SPEED
+        if ty_target > 0:                       # +y = away from the net (near team) -> backpedal is slow
+            ty_target *= VB_BACKPEDAL_FACTOR
         self._vel[0] = self._approach(self._vel[0], self._move[0] * VB_TOP_SPEED, dt)
-        self._vel[1] = self._approach(self._vel[1], self._move[1] * VB_TOP_SPEED, dt)
+        self._vel[1] = self._approach(self._vel[1], ty_target, dt)
         if p.pose in (Pose.READY, Pose.RUN):
             spd = abs(self._vel[0]) + abs(self._vel[1])
             p.set_pose(Pose.RUN if spd > 24 else Pose.READY)
@@ -1426,7 +1468,7 @@ class VolleyCourt(Scene):
     def _defense_base(self, d_team: int, hitter: VBActor) -> List[Tuple[float, float]]:
         # base back-court defence: one in the line lane, one in the cross lane, at a
         # dig depth that's close enough to still run in for a short ball / tip.
-        dig_y = float(VB_NET_Y + 118 if d_team == 0 else VB_NET_Y - 118)
+        dig_y = float(VB_NET_Y + 138 if d_team == 0 else VB_NET_Y - 138)   # start deep (backpedal is slow)
         line_x = _clamp(hitter.x, _COURT.left + 34, _COURT.right - 34)
         cross_x = _clamp(2 * _CX - hitter.x, _COURT.left + 34, _COURT.right - 34)
         if abs(line_x - cross_x) < 80:           # centred attack: split the seam, don't stack
@@ -1444,7 +1486,7 @@ class VolleyCourt(Scene):
                     float(VB_NET_Y + 48 if recv == 0 else VB_NET_Y - 48))
         wing = 1.0 if a.home[0] >= _CX else -1.0
         return (_clamp(_CX + wing * 104, _COURT.left + 30, _COURT.right - 30),
-                float(VB_NET_Y + 120 if recv == 0 else VB_NET_Y - 120))
+                float(VB_NET_Y + 138 if recv == 0 else VB_NET_Y - 138))   # start deep (backpedal is slow)
 
     def _attack_wing(self, a: VBActor) -> Tuple[float, float]:
         # a hitter climbs onto its pin near the net, so the setter can swing the ball wide
@@ -1474,10 +1516,11 @@ class VolleyCourt(Scene):
             return c if not c.is_player else None
         return None
 
-    def _separate(self) -> None:
-        # keep teammates from stacking: push any two that are too close apart (the
-        # human player is immovable here — the AI gives way instead)
+    def _separate(self, dt: float) -> None:
+        # keep teammates from stacking: the AI gives way, but only by a legal step per
+        # frame (it drifts apart at movement speed — never an instant un-stacking teleport).
         min_d = 42.0
+        cap = VB_ACTOR_SPEED * dt
         protected = self._ball_player()
         for team in (self.near, self.far):
             for i, a in enumerate(team):
@@ -1491,20 +1534,34 @@ class VolleyCourt(Scene):
                     d2 = dx * dx + dy * dy
                     if d2 >= min_d * min_d or d2 < 1e-6:
                         continue
-                    push = (min_d - d2 ** 0.5) / d2 ** 0.5
+                    d = d2 ** 0.5
+                    shove = min(min_d - d, cap)         # at most one legal step of give-way
+                    ux, uy = dx / d, dy / d
                     if a.is_player:
-                        b.x, b.y = b.x + dx * push, b.y + dy * push
+                        b.x, b.y = b.x + ux * shove, b.y + uy * shove
                     elif b.is_player:
-                        a.x, a.y = a.x - dx * push, a.y - dy * push
+                        a.x, a.y = a.x - ux * shove, a.y - uy * shove
                     else:
-                        a.x, a.y = a.x - dx * push * 0.5, a.y - dy * push * 0.5
-                        b.x, b.y = b.x + dx * push * 0.5, b.y + dy * push * 0.5
+                        a.x, a.y = a.x - ux * shove * 0.5, a.y - uy * shove * 0.5
+                        b.x, b.y = b.x + ux * shove * 0.5, b.y + uy * shove * 0.5
             for a in team:
                 if a.is_player:
                     continue
                 a.x = _clamp(a.x, _X_MIN, _X_MAX)
                 a.y = (_clamp(a.y, VB_NET_Y + 10, _NEAR_MAX_Y) if a.team == 0
                        else _clamp(a.y, _FAR_MIN_Y, VB_NET_Y - 10))
+
+    def _ai_step(self, a: VBActor, tx: float, ty: float, dt: float) -> None:
+        # like move_toward, but the component AWAY from the net is slow (backpedalling is
+        # hard): lateral and stepping-in stay quick, retreating to your own baseline drags.
+        dx, dy = tx - a.x, ty - a.y
+        away = dy > 0 if a.team == 0 else dy < 0
+        sy = VB_ACTOR_SPEED * (VB_BACKPEDAL_FACTOR if away else 1.0)
+        if abs(dx) <= 1.0 and abs(dy) <= 1.0:
+            a.x, a.y = tx, ty
+            return
+        a.x += max(-VB_ACTOR_SPEED * dt, min(VB_ACTOR_SPEED * dt, dx))
+        a.y += max(-sy * dt, min(sy * dt, dy))
 
     def _move_ai(self, dt: float) -> None:
         # react during the crossing too (not only once a receive is queued), so the
@@ -1555,7 +1612,7 @@ class VolleyCourt(Scene):
                 a.move_toward(float(bt['lane_x']), ny, dt, VB_ACTOR_SPEED)
                 continue
             if a in base:                                    # take your base dig position
-                a.move_toward(base[a][0], base[a][1], dt, VB_ACTOR_SPEED)
+                self._ai_step(a, base[a][0], base[a][1], dt)
                 continue
             if a is receiver or a is stored:
                 target = self.ball.end                       # commit to the ball
@@ -1572,8 +1629,8 @@ class VolleyCourt(Scene):
                 target = self.ball.end                        # a ball's dropping near you — go!
             else:
                 target = a.home
-            a.move_toward(target[0], target[1], dt, VB_ACTOR_SPEED)
-        self._separate()
+            self._ai_step(a, target[0], target[1], dt)
+        self._separate(dt)
 
     def update(self, dt: float) -> None:
         raw_dt = dt
