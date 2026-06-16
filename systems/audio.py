@@ -43,6 +43,11 @@ class MusicPlayer:
         except pygame.error:
             self._current = None
 
+    def restart(self, path: str, loop: bool = True, fade_ms: int = MUSIC_FADE_MS) -> None:
+        """Play `path` from the beginning even if it's already the current track."""
+        self._current = None        # clear the same-track guard so play() restarts it
+        self.play(path, loop, fade_ms)
+
     def stop(self, fade_ms: int = MUSIC_FADE_MS) -> None:
         self._current = None
         if not self._ok:

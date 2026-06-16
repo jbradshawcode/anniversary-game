@@ -8,13 +8,13 @@ the player. Presence is derived from the story beat, so nothing here is saved.
 import pygame
 from typing import List, Optional, Tuple, TYPE_CHECKING
 from config import TILE_SIZE, TILE_MOVE_SPEED
-from entities import James, Dan, Matt, Nat, Leonard
+from entities import James, Dan, Matt, Nat, Leonard, Bailey, Mayu, Wallace
 
 if TYPE_CHECKING:
     from entities.characters.player import Player
 
 # The Saturday gym cast, in conga order behind the player.
-WEEK1_CREW = [James, Dan, Matt, Nat, Leonard]
+WEEK1_CREW = [James, Dan, Matt, Nat, Leonard, Bailey, Mayu, Wallace]
 
 _Pt = Tuple[float, float]
 

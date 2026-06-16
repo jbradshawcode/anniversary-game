@@ -2,7 +2,7 @@
 import pygame
 import sys
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
-                    PHONE_THREAD)
+                    GYM_MUSIC, CHARACTER_MUSIC, CHAPTER_END_MUSIC, PHONE_THREAD)
 from entities import Player
 from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
                     Courtyard, Passage, Courts, WilliamMorris, VolleyCourt)
@@ -35,7 +35,8 @@ class Game:
         self.running = True
         self.music = MusicPlayer()
         self.sfx = SoundBank()                   # shared UI/overworld SFX (dialogue blip, etc.)
-        self._scene_music = {2: KING_ST_MUSIC}   # scene_id -> looping track (else silence)
+        self._scene_music = {1: GYM_MUSIC, 2: KING_ST_MUSIC}   # scene_id -> loop (else silence)
+        self._speaker_music = None                # character theme overriding scene music
         self.dialogue = DialogueBox(self.sfx)
         self.lighting = Lighting()
 
@@ -181,6 +182,20 @@ class Game:
         else:
             self.music.stop()
 
+    def update_speaker_music(self):
+        """While a character with a theme is talking, play it (from the start each
+        time they begin); restore the scene's track once they stop. Called each
+        play frame from PlayMode."""
+        speaker = self.dialogue.speaker if self.dialogue.active else None
+        theme = CHARACTER_MUSIC.get(speaker) if speaker else None
+        if theme is not None:
+            if speaker != self._speaker_music:
+                self.music.restart(theme)
+                self._speaker_music = speaker
+        elif self._speaker_music is not None:
+            self._speaker_music = None
+            self.update_scene_music(self.scene_manager.current_id)
+
     def poll_vb_retry(self) -> bool:
         if self._vb_retry:
             self._vb_retry = False
@@ -204,10 +219,11 @@ class Game:
         self.scene_manager.jump_to(11, self.player)
 
     def _launch_tutorial(self, level):
-        """The warm-up: the 5-step controls tutorial, then straight into the match."""
+        """The warm-up: the 5-step controls tutorial, then straight into the match.
+        No vball theme here — that's reserved for the real match; the gym theme
+        carries over from the overworld."""
         self.court.configure('tutorial', level)
         self.court.on_finish = self._end_tutorial
-        self.music.play(VB_MUSIC)
         self.scene_manager.jump_to(11, self.player)
 
     def _end_tutorial(self):
@@ -217,13 +233,14 @@ class Game:
     def _end_volleyball(self):
         won = self.court.score[0] > self.court.score[1]
         self.story.vb_attempts += 1
-        self.music.stop()
         if won:
             self.scene_manager.jump_to(1, self.player)
             self.play.mark_scene_synced()
+            self.update_scene_music(1)              # back in the gym -> gym theme
             self.story.set_flag('w1_won_vb')        # -> Dan asks about the pub
         else:
-            self._vb_retry = True                   # relaunch next frame
+            self.music.stop()
+            self._vb_retry = True                   # relaunch -> _launch_match plays VB theme
 
     # ---- story interludes --------------------------------------------------
     def _game_over(self, lines):
@@ -236,6 +253,7 @@ class Game:
     def _week_end(self):
         self.active = ResultsMode(self, screens.Results(
             self.story.stars(), max(1, self.story.vb_attempts)))
+        self.music.play(CHAPTER_END_MUSIC)         # end-of-chapter screen theme
 
     def enter_phone(self):
         self.active = PhoneMode(self, screens.Phone(PHONE_THREAD))
@@ -243,6 +261,7 @@ class Game:
     def finish_week(self):
         self.resume()
         self.story.set_flag('w1_left')
+        self.update_scene_music(self.scene_manager.current_id)   # end chapter-end theme
 
     def run(self):
         while self.running:

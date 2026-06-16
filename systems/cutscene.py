@@ -10,6 +10,10 @@ Steps:
   ('say', [lines])                  dialogue, no speaker tag
   ('say', [lines], 'Name')          dialogue with a speaker tag
   ('ask', text, {label: outcome})   a choice; ('ask', text, outcomes, 'Name')
+  ('hub', text, {label: [steps]})   explore-all menu: pick a topic, run its
+                                    steps, return to the menu with that topic
+                                    removed; once all are explored, continue.
+                                    ('hub', text, topics, 'Name') for a speaker.
   ('walk', who, (col, row))         tween one actor to a tile; wait until arrived
   ('move', {who: (col, row), ...})  tween several actors in parallel; wait for all
   ('face', who, 'down'|'up'|...)    set facing (player only draws facing)
@@ -21,7 +25,8 @@ Steps:
 
 An `outcome` (for 'ask') is one of: ('flag', name) sets a story flag;
 ('game_over', [lines]) shows the game-over screen (the beat replays on retry);
-or a list of further steps spliced in at the current point.
+or a list of further steps spliced in at the current point (an empty list just
+continues). A 'hub' topic value is always a list of steps.
 
 `who` is a case-insensitive name: 'sarah'/'player'/'you' -> the player, else a
 party follower or current-scene object matched on its class/display name.
@@ -65,6 +70,10 @@ class Cutscene:
         self._await_dialogue = False
         self._ask_outcomes: dict = {}
         self._ask_choice = None
+        self._hub_explored: set = set()    # labels seen in the current hub
+        self._hub_key = None               # identity of the active hub's topic dict
+        self._hub_outcomes: dict = {}
+        self._hub_choice = None
 
     def bind(self, dialogue, scenes, player, party, story) -> None:
         self._dialogue = dialogue
@@ -82,6 +91,8 @@ class Cutscene:
         self._wait = 0.0
         self._movers = []
         self._await_dialogue = False
+        self._hub_explored = set()
+        self._hub_key = None
         self._begin_step()
 
     def _finish(self) -> None:
@@ -124,6 +135,9 @@ class Cutscene:
                 return
             if verb == 'ask':
                 self._begin_ask(step)
+                return
+            if verb == 'hub':
+                self._begin_hub(step)
                 return
             if verb in ('walk', 'move'):
                 self._setup_move(step)
@@ -182,7 +196,7 @@ class Cutscene:
         self._await_dialogue = False
         gen = self._gen
         outcome = self._ask_outcomes.get(self._ask_choice)
-        if outcome is None:
+        if not outcome:                    # unknown label or empty branch: continue
             self._begin_step()
             return
         kind = outcome[0]
@@ -198,6 +212,38 @@ class Cutscene:
         else:                                  # a list of spliced steps
             self._steps[self._i:self._i] = list(outcome)
             self._begin_step()
+
+    # ── hub (explore-all menu) ───────────────────────────────────────────────
+    def _begin_hub(self, step) -> None:
+        text, outcomes = step[1], step[2]
+        speaker = step[3] if len(step) > 3 else None
+        if id(outcomes) != self._hub_key:        # a fresh hub -> reset exploration
+            self._hub_key = id(outcomes)
+            self._hub_explored = set()
+        remaining = [label for label in outcomes if label not in self._hub_explored]
+        if not remaining:                        # every topic seen -> move on
+            self._i += 1
+            self._begin_step()
+            return
+        self._hub_outcomes = outcomes
+        self._hub_choice = None
+        page = {'text': text, 'choices': {label: [] for label in remaining}}
+        self._await_dialogue = True
+        if self._dialogue is not None:
+            self._dialogue.start([page], speaker=speaker,
+                                 on_choice=self._on_hub_choice,
+                                 on_done=self._on_hub_done)
+
+    def _on_hub_choice(self, label: str) -> None:
+        self._hub_choice = label
+
+    def _on_hub_done(self) -> None:
+        self._await_dialogue = False
+        self._hub_explored.add(self._hub_choice)
+        branch = self._hub_outcomes.get(self._hub_choice) or []
+        # Run the chosen topic, then fall back into the hub (still ahead at _i).
+        self._steps[self._i:self._i] = list(branch)
+        self._begin_step()
 
     def _setup_move(self, step) -> None:
         targets = {step[1]: step[2]} if step[0] == 'walk' else step[1]

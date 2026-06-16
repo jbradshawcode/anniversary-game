@@ -52,6 +52,10 @@ class DialogueBox:
     def choosing(self) -> bool:
         return self._choosing
 
+    @property
+    def speaker(self) -> Optional[str]:
+        return self._speaker
+
     def start(self, pages: list, on_done: Optional[Callable[[], None]] = None,
               speaker: Optional[str] = None,
               on_choice: Optional[Callable[[str], None]] = None):
@@ -191,11 +195,14 @@ class DialogueBox:
             count += len(sub) + 1
 
         if self._choosing and not self._typing:
-            choice_y = _BOX.y + _PAD_Y + len(display) * _LINE_H
-            cx = text_x + 16
+            left = text_x + 16
+            right = _BOX.right - 14
+            cx, cy = left, _BOX.y + _PAD_Y + len(display) * _LINE_H
             for i, key in enumerate(self._choice_keys):
-                if i == self._choice_index:
-                    screen.blit(font.render(">", True, _SEL), (cx, choice_y))
                 surf = font.render(key, True, _TEXT)
-                screen.blit(surf, (cx + 16, choice_y))
+                if cx > left and cx + 16 + surf.get_width() > right:
+                    cx, cy = left, cy + _LINE_H    # wrap so long lists don't overflow
+                if i == self._choice_index:
+                    screen.blit(font.render(">", True, _SEL), (cx, cy))
+                screen.blit(surf, (cx + 16, cy))
                 cx += 16 + surf.get_width() + 40   # advance past this label (no overlap)

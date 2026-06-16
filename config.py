@@ -31,8 +31,14 @@ ASSET_DIR     = os.path.join(os.path.dirname(__file__), 'assets')
 MUSIC_VOLUME  = 0.5     # 0..1 background-music level
 MUSIC_FADE_MS = 600     # fade applied on play-in / stop, in ms
 SFX_VOLUME    = 0.55    # 0..1 sound-effects level
-VB_MUSIC      = os.path.join(ASSET_DIR, 'vb_theme.ogg')   # volleyball theme (add this file)
-KING_ST_MUSIC = os.path.join(ASSET_DIR, 'king_street.ogg')  # plays while on King Street (scene 2)
+VB_MUSIC      = os.path.join(ASSET_DIR, 'vball_theme.ogg')  # volleyball match theme (not the tutorial)
+KING_ST_MUSIC = os.path.join(ASSET_DIR, 'king_st.ogg')     # plays while on King Street (scene 2)
+GYM_MUSIC     = os.path.join(ASSET_DIR, 'gym_theme.ogg')   # plays while in the gym overworld (scene 1)
+MATT_MUSIC    = os.path.join(ASSET_DIR, 'matt_theme.ogg')  # Matt's theme, while he's speaking
+CHAPTER_END_MUSIC = os.path.join(ASSET_DIR, 'chapter_end.ogg')  # the end-of-chapter results screen
+
+# Speaker name -> theme that plays (restarted) while that character is talking.
+CHARACTER_MUSIC = {'Matt': MATT_MUSIC}
 
 # ── Volleyball minigame (scene 11) ──────────────────────────────────────────
 VB_NET_Y           = 240     # net line (centre of the 2:1 court, screen mid-height)
@@ -160,6 +166,9 @@ SCENE_CONFIGS = {
             'matt': [(3, 4)],
             'nat': [(16, 4)],
             'leonard': [(3, 10)],
+            'bailey': [(6, 4)],
+            'mayu': [(15, 10)],
+            'wallace': [(8, 10)],
             'benches': [(1, 2, 5), (1, 8, 5), (18, 2, 5), (18, 8, 5)],
         },
     },
@@ -461,8 +470,9 @@ STORY_WEEKS = [
                 'cutscene': [
                     ('say', ["The whole gang piles into The Salutation."]),
                     ('move', {'james': (5, 9), 'dan': (6, 9),
-                              'matt': (5, 10), 'leonard': (6, 10), 'nat': (6, 11)}),
-                    ('say', ["Six pints and whatever they're having!"], "Dan"),
+                              'matt': (5, 10), 'leonard': (6, 10), 'nat': (6, 11),
+                              'bailey': (4, 9), 'mayu': (4, 10), 'wallace': (4, 11)}),
+                    ('say', ["Pints all round — and whatever they're having!"], "Dan"),
                     ('walk', 'leonard', (4, 8)),
                     ('walk', 'leonard', (7, 8)),
                     ('walk', 'matt', (4, 8)),
@@ -472,6 +482,8 @@ STORY_WEEKS = [
                     ('walk', 'dan', (11, 8)),
                     ('walk', 'james', (4, 8)),
                     ('walk', 'james', (13, 8)),
+                    ('say', ["...and squeeze in, you lot!"], "Dan"),
+                    ('move', {'bailey': (11, 11), 'mayu': (13, 11), 'wallace': (10, 10)}),
                     ('say', ["Just you two left."], "Dan"),
                     ('walk', 'sarah', (4, 8)),
                     ('say', ["Two more over here, please."], "Sarah"),
@@ -488,17 +500,25 @@ STORY_WEEKS = [
                 'objective': None,
                 'locked_exits': {3: ['down', 'up']},
                 'cutscene': [
-                    ('say', ["Matt rummages around in his bag.",
-                             "Hey — I got you guys stuff from Comic Con!"], "Matt"),
-                    ('say', ["(oh yeah)", "(uh oh)"], "James"),
-                    ('say', ["I got two of your fave characters —",
-                             "Denji AND Luffy figures!"], "Matt"),
-                    ('say', ["(Is this guy tryna set me up or what)",
-                             "...hey, thanks man."], "James"),
-                    ('say', ["And for you, Dan, I found some really cool art..."], "Matt"),
-                    ('say', ["Matt unfurls a HUGE poster of Levi Ackerman."]),
+                    ('say', ["Hey guys.", "I got you guys stuff...",
+                             "From Comic Con!"], "Matt"),
+                    ('say', ["(oh yeah)", "...", "(uh oh)",
+                             "(...I forgot about this)"], "James"),
+                    ('say', ["For you, James..."], "Matt"),
+                    ('say', ["Matt rummages around in his bag."]),
+                    ('say', ["Here ya go!"], "Matt"),
+                    ('say', ["Matt hands over two large anime figurines."]),
+                    ('say', ["...", "(Is this guy tryna set me up or what)",
+                             "...hey, thanks man.", "This is really cool."], "James"),
+                    ('say', ["No worries, dude!",
+                             "And I got something for you too, Dan!"], "Matt"),
+                    ('say', ["(In front of da hoes??????)"], "Dan"),
+                    ('say', ["Matt pulls out a large anime poster."]),
+                    ('say', ["Kay, here ya go!"], "Matt"),
                     ('say', ["(LMAO ok — coulda been worse)"], "James"),
-                    ('say', ["Dude... ... ...", "...thanks!"], "Dan"),
+                    ('say', ["Dude... ... ..."], "Dan"),
+                    ('say', ["Dan looks to James, then back."]),
+                    ('say', ["...thanks!"], "Dan"),
                     ('say', ["..."]),
                     ('flag', 'w1_gifts'),
                 ],
@@ -509,15 +529,42 @@ STORY_WEEKS = [
                 'objective': None,
                 'locked_exits': {3: ['down', 'up']},
                 'cutscene': [
-                    ('ask', "So... where are you from?", {
-                        'MI babyyyy': [
-                            ('say', ["oh that's cool", "...where the hell is that?"],
-                             "James")],
-                        'I have an inground pool': [
-                            ('say', ["I definitely didn't ask you that.",
-                                     "What does that even mean — like it's in the ground?",
-                                     "That's just a normal pool, right?"], "James")],
-                    }, "James"),
+                    ('say', ["There's a brief lull in conversation...",
+                             "You feel a strong urge to fill it."]),
+                    ('hub', "", {
+                        'In-ground pool': [
+                            ('say', ["What the hell is that?"], "James"),
+                            ('ask', "Aren't all pools in the ground?",
+                             {'Yes': [], 'No': []}, "James"),
+                            ('say', ["Somehow that didn't really answer my question.",
+                                     "Can I see a picture?"], "James"),
+                        ],
+                        'Family': [
+                            ('say', ["I'm the youngest of 5.",
+                                     "My siblings are wayyy older — and I've got "
+                                     "5 nieces and nephews."], "Sarah"),
+                            ('ask', "Damn — what's that like?",
+                             {'Fun': [], 'Not fun': []}, "James"),
+                            ('say', ["I can see that.",
+                                     "(...man, I suck at socializing)"], "James"),
+                        ],
+                        'Crazy family': [
+                            ('say', ["My sister's in a legal battle with her ex-husband...",
+                                     "...and her new boyfriend is #!$%."], "Sarah"),
+                            ('say', ["Wow.",
+                                     "(I have no idea how to respond to that)"], "James"),
+                        ],
+                        'Bridge to Canada': [
+                            ('say', ["Did you know there's a bridge to Canada you "
+                                     "can turn onto by accident...",
+                                     "...and then you can't turn off?"], "Sarah"),
+                            ('say', ["LMAO that's hilarious.",
+                                     "Have you ever taken it?"], "James"),
+                            ('say', ["Nah — but my family did, once.",
+                                     "They got detained for like 3 hours lol."], "Sarah"),
+                            ('say', ["That's pretty funny... (I hope)"], "James"),
+                        ],
+                    }),
                     ('flag', 'w1_chat'),
                 ],
                 'advance_when': 'w1_chat',

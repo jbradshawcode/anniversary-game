@@ -33,9 +33,11 @@ def _flatten(weeks) -> List[dict]:
 
 _BEATS = _flatten(STORY_WEEKS)
 
-# Pub seats in WEEK1_CREW order [James, Dan, Matt, Nat, Leonard] — must match the
-# final tiles the 'pub_queue' cutscene walks them to (config.STORY_WEEKS).
-PUB_SEATS = [(13, 8), (11, 8), (9, 8), (7, 11), (7, 8)]
+# Pub seats in WEEK1_CREW order — must match the final tiles the 'pub_queue'
+# cutscene walks them to (config.STORY_WEEKS).
+# James, Dan, Matt, Nat, Leonard, Bailey, Mayu, Wallace
+PUB_SEATS = [(13, 8), (11, 8), (9, 8), (7, 11), (7, 8),
+             (11, 11), (13, 11), (10, 10)]
 _SEATED_BEATS = {'pub_queue', 'gifts', 'where_from', 'wind_down'}
 
 

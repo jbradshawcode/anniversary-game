@@ -6,5 +6,9 @@ from .matt import Matt
 from .nat import Nat
 from .leonard import Leonard
 from .barkeep import Barkeep
+from .bailey import Bailey
+from .mayu import Mayu
+from .wallace import Wallace
 
-__all__ = ['Player', 'James', 'Dan', 'Matt', 'Nat', 'Leonard', 'Barkeep']
+__all__ = ['Player', 'James', 'Dan', 'Matt', 'Nat', 'Leonard', 'Barkeep',
+           'Bailey', 'Mayu', 'Wallace']

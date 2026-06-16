@@ -154,6 +154,7 @@ class PlayMode(Mode):
         if self._scene_fade > 0:
             self._scene_fade = max(0.0, self._scene_fade - dt / 0.22)
         g.dialogue.update(dt)
+        g.update_speaker_music()             # swap to a speaker's theme while they talk
         scene = g.scene_manager.current
         if getattr(scene, 'wants_raw_input', False):
             scene.handle_held(get_held_vector())
