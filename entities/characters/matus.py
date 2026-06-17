@@ -35,7 +35,7 @@ class Matus(Humanoid):
     def on_interact(self, game) -> None:
         """Talking to the ref earns a deafening overworld whistle."""
         if getattr(game, 'sfx', None) is not None:
-            game.sfx.play('whistle', WHISTLE_VOLUME)
+            game.sfx.play('whistle_loud', WHISTLE_VOLUME)
 
     def _draw_head_down(self, screen, px, py):
         def r(x, y, w, h, c):

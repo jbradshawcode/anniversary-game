@@ -188,10 +188,11 @@ class SoundBank:
         }
         quiet = {'cheer': 0.8, 'blip': 0.5}      # these play a lot / sit in the background
         self._snd = {k: self._sound(w, v * quiet.get(k, 1.0)) for k, w in waves.items()}
-        # Prefer a real recorded whistle (assets/whistle.ogg) over the synth one.
+        # The recorded whistle (assets/whistle.ogg) is the LOUD one — reserved for the
+        # overworld/plot (Matúš). The minigame keeps the unobtrusive synth 'whistle'.
         path = os.path.join(ASSET_DIR, 'whistle.ogg')
         if os.path.isfile(path):
             try:
-                self._snd['whistle'] = pygame.mixer.Sound(path)
+                self._snd['whistle_loud'] = pygame.mixer.Sound(path)
             except pygame.error:
                 pass

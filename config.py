@@ -31,8 +31,7 @@ ASSET_DIR     = os.path.join(os.path.dirname(__file__), 'assets')
 MUSIC_VOLUME  = 0.5     # 0..1 background-music level
 MUSIC_FADE_MS = 600     # fade applied on play-in / stop, in ms
 SFX_VOLUME    = 0.55    # 0..1 sound-effects level
-WHISTLE_VOLUME = 1.0    # Matúš's whistle in the overworld — loud and annoying (cranked)
-WHISTLE_GAME_VOLUME = 0.4  # eased right off while he lazily blows it during a match
+WHISTLE_VOLUME = 1.0    # the loud recorded whistle (whistle_loud) — overworld/plot only
 VB_MUSIC      = os.path.join(ASSET_DIR, 'vball_theme.ogg')  # volleyball match theme (not the tutorial)
 KING_ST_MUSIC = os.path.join(ASSET_DIR, 'king_st.ogg')     # plays while on King Street (scene 2)
 GYM_MUSIC     = os.path.join(ASSET_DIR, 'gym_theme.ogg')   # plays while in the gym overworld (scene 1)
@@ -44,7 +43,7 @@ CHARACTER_MUSIC = {'Matt': MATT_MUSIC}
 
 # ── Volleyball minigame (scene 11) ──────────────────────────────────────────
 VB_NET_Y           = 240     # net line (centre of the 2:1 court, screen mid-height)
-VB_ACTOR_SPEED     = 204     # px/s — AI free movement (player uses momentum below)
+VB_ACTOR_SPEED     = 224     # px/s — AI top speed; equals VB_TOP_SPEED (full player/AI parity)
 VB_BACKPEDAL_FACTOR = 0.6    # speed multiplier for movement AWAY from the net (backpedalling is slow)
 VB_CONTACT_RADIUS  = 34      # px the actor must be within (ball ground position)
 VB_TIMING_WINDOW   = 0.24    # s — "ok" contact window either side of ideal time (spike/set)
@@ -64,7 +63,6 @@ VB_SCORE_TO_WIN    = 7       # first to 7, win by 2
 # AI reliability — easy balls almost always come up; hard hits ~60-70%.
 VB_AI_DIG_BASE     = 0.97    # dig success on an easy (slow) ball in reach
 VB_AI_DIG_HARD     = 0.62    # dig success on the hardest (fastest) ball
-VB_AI_REACH_BONUS  = 12      # px extra reach so defenders rarely flub balls near them
 VB_AI_ERROR_FRAC   = 0.45    # of failed digs, this fraction are outright errors (point)
 
 # Receive quality — a dig's quality (0..1) decides clean vs shank vs error.
@@ -87,22 +85,26 @@ VB_OOS_ERROR_MULT  = 1.8     # out-of-system swings miss more often
 VB_RALLY_MAX       = 36      # safety cap on touches in a rally: forces it to end (no soft loop)
 
 # Difficulty — scales the OPPONENT (far team) only; your teammates always play at full
-# strength. 'hard' == the tuned constants above. Higher dig/block/tip + tighter attack
-# spread + more reach = a tougher opponent. Chosen per match (Dan asks before you play).
+# strength. 'hard' == the tuned constants above. The opponent only differs in skill
+# expression (dig success, reaction, attack accuracy, block/tip rates) — never in raw
+# capability: reach and movement speed are identical to yours. Chosen per match.
+# 'reaction' (s) — a human-like delay before a defender breaks for the read landing
+# spot, so a hard/well-placed ball into open court drops before they can cover it
+# (they hold their base/zone read until it elapses). Lower = sharper opponent.
 VB_DIFFICULTY = {
     'easy':   {'dig_base': 0.80, 'dig_hard': 0.28, 'error_frac': 0.65,
                'avoid_block': 0.15, 'block_chance': 0.18, 'tip_chance': 0.06,
-               'reach_bonus': 0,  'attack_spread': 2.4, 'serve_aggr': 0.2,
-               'attack_err': 0.14, 'read': 0.25},
+               'attack_spread': 2.4, 'serve_aggr': 0.2,
+               'attack_err': 0.14, 'read': 0.25, 'reaction': 0.42},
     'medium': {'dig_base': 0.90, 'dig_hard': 0.46, 'error_frac': 0.55,
                'avoid_block': 0.40, 'block_chance': 0.32, 'tip_chance': 0.14,
-               'reach_bonus': 6,  'attack_spread': 1.5, 'serve_aggr': 0.55,
-               'attack_err': 0.08, 'read': 0.55},
+               'attack_spread': 1.5, 'serve_aggr': 0.55,
+               'attack_err': 0.08, 'read': 0.55, 'reaction': 0.30},
     'hard':   {'dig_base': VB_AI_DIG_BASE, 'dig_hard': VB_AI_DIG_HARD,
                'error_frac': VB_AI_ERROR_FRAC, 'avoid_block': VB_AI_AVOID_BLOCK,
                'block_chance': VB_AI_BLOCK_CHANCE, 'tip_chance': VB_AI_TIP_CHANCE,
-               'reach_bonus': VB_AI_REACH_BONUS, 'attack_spread': 1.0, 'serve_aggr': 1.0,
-               'attack_err': VB_AI_ATTACK_ERR, 'read': 0.80},
+               'attack_spread': 1.0, 'serve_aggr': 1.0,
+               'attack_err': VB_AI_ATTACK_ERR, 'read': 0.80, 'reaction': 0.20},
 }
 
 # Defence — who takes the first ball (agency: you take balls near you).

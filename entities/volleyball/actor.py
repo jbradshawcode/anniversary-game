@@ -46,6 +46,8 @@ class VBActor:
         self.is_player = is_player
         self.facing = 'down'
         self.home: Tuple[float, float] = (float(x), float(y))
+        self.vx = 0.0         # momentum (same accel/top-speed model as the player)
+        self.vy = 0.0
         self.pose = Pose.READY
         self.anim_t = 0.0
         self.z = 0.0          # cosmetic jump height
