@@ -224,6 +224,18 @@ def _wood_table(surf, col, row):
         pygame.draw.line(surf, _OAK, (gx, cy - 8), (gx, cy + 8), 1)
 
 
+def _near_bench(surf):
+    """A long wooden bench on the near (front) side of the communal table."""
+    x, y = 8 * _TS, 9 * _TS + 9
+    w = 4 * _TS
+    pygame.draw.rect(surf, _OAK_LT, (x, y, w, 9))
+    pygame.draw.rect(surf, _OAK_DK, (x, y, w, 9), 1)
+    for lx in range(x + 6, x + w, 11):
+        pygame.draw.line(surf, _OAK, (lx, y + 1), (lx, y + 8), 1)
+    pygame.draw.rect(surf, _OAK_DK, (x + 5, y + 9, 3, 6))         # legs
+    pygame.draw.rect(surf, _OAK_DK, (x + w - 8, y + 9, 3, 6))
+
+
 def _draw_loose(surf):
     for tc, tr in [(2, 4), (2, 11)]:          # free tables in the pub-end foreground
         _wood_table(surf, tc, tr)
@@ -280,6 +292,7 @@ class Garden(Scene):
         _draw_perimeter(screen)
         _draw_booths(screen)
         _draw_communal(screen)
+        _near_bench(screen)
         _draw_loose(screen)
         _draw_baskets(screen)
         self._draw_objects(screen)

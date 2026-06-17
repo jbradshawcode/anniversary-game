@@ -26,7 +26,8 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_AIMSTEP_SLOWMO, VB_AIMSTEP_WINDOW, VB_RETICLE_SPEED,
                     VB_SPIKE_METER_SPEED, VB_SPIKE_SWEET_LO, VB_SPIKE_SWEET_HI,
                     VB_SPIKE_MIN_POWER, VB_AIM_OUT, VB_OUT_LAND,
-                    VB_PLAYER_TAKE_RADIUS, VB_SETTER_TAKE_RADIUS,
+                    VB_PLAYER_TAKE_RADIUS, VB_SETTER_TAKE_RADIUS, VB_SETTER_PLAYER_BIAS,
+                    WHISTLE_GAME_VOLUME,
                     VB_SERVE_METER_SPEED, VB_SERVE_LAT_SPEED, VB_SERVE_NET_MAX,
                     VB_SERVE_OUT_MIN, VB_SERVE_GREEN, VB_SERVE_PEAK, VB_SERVE_DUR,
                     VB_TUT_RESOLVE, VB_TUT_SUCCESS, VB_TUT_FAIL,
@@ -42,7 +43,18 @@ from systems.input_handler import Action
 from systems.fx import FX
 from systems.audio import SoundBank
 from entities.volleyball import VolleyBall, VBActor, Role, Pose
-from entities import Player, James, Dan, Matt, Nat, Leonard
+from entities import Player, James, Dan, Matt, Nat, Leonard, Bailey, Matus
+
+# 3v3 rosters by chapter (near = your side, far = opponents). HITTER_R near is always
+# the human. Leonard leaves after Ch1, so Week 2 reshuffles the sides.
+_ROSTERS = {
+    1: ({Role.HITTER_R: Player, Role.SETTER: Dan, Role.HITTER_L: Matt},
+        {Role.SETTER: James, Role.HITTER_L: Nat, Role.HITTER_R: Leonard}),
+    2: ({Role.HITTER_R: Player, Role.SETTER: James, Role.HITTER_L: Nat},
+        {Role.SETTER: Dan, Role.HITTER_L: Matt, Role.HITTER_R: Bailey}),
+    3: ({Role.HITTER_R: Player, Role.SETTER: James, Role.HITTER_L: Nat},
+        {Role.SETTER: Dan, Role.HITTER_L: Matt, Role.HITTER_R: Bailey}),
+}
 
 # ── Palette ──────────────────────────────────────────────────────────────────
 _CLAD     = (22, 26, 34)
@@ -143,24 +155,29 @@ class VolleyCourt(Scene):
         self.ball = VolleyBall()
         self.fx = FX()
         self.sfx = SoundBank()
+        self._ref = Matus(0, 0)                # Matúš, slumped on a stool by the sideline
+        self._ref.x, self._ref.y = float(_HALL.left + 26), float(VB_NET_Y + 6)
+        self._ref.facing = 'right'
         self._prev_y = self.ball.y
         self._mode = 'match'       # 'match' | 'tutorial'
         self._level = 'hard'       # difficulty; opponent strength
+        self._week = 1             # which chapter's roster to field
         self._opp = dict(VB_DIFFICULTY['hard'])
         self._tut: Optional[Dict[str, object]] = None
 
-    def configure(self, mode: str = 'match', level: str = 'hard') -> None:
-        """Set by game.py before entering: match vs tutorial, and difficulty."""
+    def configure(self, mode: str = 'match', level: str = 'hard', week: int = 1) -> None:
+        """Set by game.py before entering: match vs tutorial, difficulty, and which
+        chapter's roster to field."""
         self._mode = mode
         self._level = level if level in VB_DIFFICULTY else 'hard'
+        self._week = week if week in _ROSTERS else 1
 
     # ── Setup ────────────────────────────────────────────────────────────────
     def enter(self, player) -> None:
         # real characters; identity persists through role rotation (only .role changes)
-        near_sprites = {Role.HITTER_R: Player(0, 0), Role.SETTER: Dan(0, 0),
-                        Role.HITTER_L: Matt(0, 0)}
-        far_sprites = {Role.SETTER: James(0, 0), Role.HITTER_L: Nat(0, 0),
-                       Role.HITTER_R: Leonard(0, 0)}
+        near_cls, far_cls = _ROSTERS.get(self._week, _ROSTERS[1])
+        near_sprites = {r: near_cls[r](0, 0) for r in Role}
+        far_sprites = {r: far_cls[r](0, 0) for r in Role}
         self.near = [VBActor(*_HOME[0][r], 0, r, sprite=near_sprites[r]) for r in Role]
         self.far = [VBActor(*_HOME[1][r], 1, r, sprite=far_sprites[r]) for r in Role]
         for a in self.near:
@@ -533,6 +550,10 @@ class VolleyCourt(Scene):
     def _smart_hitter(self, team: int, exclude: Optional[VBActor] = None) -> VBActor:
         # the eligible attacker with the most open straight-ahead lane (excl. the setter)
         cands = self._attackers(team, exclude)
+        if team == 0:                      # your team's setter favours setting YOU the swing
+            human = next((h for h in cands if h.is_player), None)
+            if human is not None and random.random() < VB_SETTER_PLAYER_BIAS:
+                return human
         if random.random() < self._opp['avoid_block']:
             bx = self._player().x          # AI attacking you: bias away from your blocker
             return max(cands, key=lambda h: abs(h.x - bx))
@@ -1197,7 +1218,7 @@ class VolleyCourt(Scene):
         self._banner = "Your point!" if winner == 0 else "Their point"
         self._timer = 0.9
         self.fx.emit_burst(self.ball.end[0], self.ball.end[1], (250, 230, 120), 10, 140)
-        self.sfx.play('whistle')
+        self.sfx.play('whistle', WHISTLE_GAME_VOLUME)   # Matúš lazily blows it courtside
         if winner == 0:
             self.sfx.play('cheer')
         for a in self._team(winner):
@@ -1859,6 +1880,9 @@ class VolleyCourt(Scene):
         self._ensure_fonts()
         canvas = self._canvas()
         self._draw_court(canvas)
+        rx, ry = int(self._ref.x), int(self._ref.y)        # the ref on his stool
+        pygame.draw.rect(canvas, (60, 50, 40), (rx - 7, ry + 6, 14, 6))
+        self._ref.draw(canvas)
         if self.phase == Phase.SERVE and self._server().is_player:
             if self._serve_stage == 'power':
                 power, lat = self._serve_meter, 0.5

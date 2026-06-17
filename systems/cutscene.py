@@ -17,6 +17,7 @@ Steps:
   ('walk', who, (col, row))         tween one actor to a tile; wait until arrived
   ('move', {who: (col, row), ...})  tween several actors in parallel; wait for all
   ('face', who, 'down'|'up'|...)    set facing (player only draws facing)
+  ('pose', who, 'left'|'right'|None) sprawled dive/prone pose (None clears it)
   ('wait', seconds)                 hold
   ('fade_out', seconds)             fade screen to black
   ('fade_in', seconds)              fade screen up from black
@@ -147,6 +148,10 @@ class Cutscene:
                 actor = self._resolve(step[1])
                 if actor is not None and hasattr(actor, 'facing'):
                     actor.facing = step[2]
+            elif verb == 'pose':                  # ('pose', who, 'left'|'right'|None) — dive/prone
+                actor = self._resolve(step[1])
+                if actor is not None:
+                    actor.diving = step[2]
             elif verb == 'settle':
                 if self._party is not None:
                     self._party.stop_following()

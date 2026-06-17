@@ -5,10 +5,11 @@ from .dan import Dan
 from .matt import Matt
 from .nat import Nat
 from .leonard import Leonard
-from .barkeep import Barkeep
+from .milla import Milla
 from .bailey import Bailey
 from .mayu import Mayu
 from .wallace import Wallace
+from .matus import Matus
 
-__all__ = ['Player', 'James', 'Dan', 'Matt', 'Nat', 'Leonard', 'Barkeep',
-           'Bailey', 'Mayu', 'Wallace']
+__all__ = ['Player', 'James', 'Dan', 'Matt', 'Nat', 'Leonard', 'Milla',
+           'Bailey', 'Mayu', 'Wallace', 'Matus']

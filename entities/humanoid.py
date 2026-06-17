@@ -68,11 +68,28 @@ class Humanoid(GameObject):
     walking = False        # set by a mover to enable the walk bob
     walk_phase = 0.0       # advanced by distance moved
     facing = 'down'        # movers (party/cutscene) set this; statics stay 'down'
+    diving = None          # None | 'left' | 'right' — a sprawled, near-horizontal dive
 
     def __init__(self, tile_x: int, tile_y: int, blocking: bool = True):
         super().__init__(tile_x, tile_y, blocking=blocking)
 
+    def _draw_diving(self, screen: pygame.Surface):
+        """A dive/prone pose, reusing the upright art: render the body to a scratch
+        surface, then rotate it nearly flat in the dive direction."""
+        surf = pygame.Surface((40, 40), pygame.SRCALPHA)
+        cx, cy = 20, 18
+        self._draw_head_side(surf, cx, cy, self.diving == 'left')
+        self._draw_body(surf, cx, cy)
+        rot = pygame.transform.rotate(surf, 80 if self.diving == 'left' else -80)
+        sh = pygame.Surface((28, 8), pygame.SRCALPHA)        # wide grounded shadow
+        pygame.draw.ellipse(sh, (0, 0, 0, 70), (0, 0, 28, 8))
+        screen.blit(sh, (int(self.x) - 14, int(self.y) + 11))
+        screen.blit(rot, rot.get_rect(center=(int(self.x), int(self.y) + 5)))
+
     def draw(self, screen: pygame.Surface):
+        if self.diving:
+            self._draw_diving(screen)
+            return
         py = self.y
         if self.walking:
             py -= int(3 * abs(math.sin(self.walk_phase)))

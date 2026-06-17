@@ -2,7 +2,7 @@
 from typing import List
 from config import SCENE_CONFIGS
 from entities import (GameObject, Tree, Rock, BallBasket, James, Dan, Bench,
-                      Matt, Nat, Leonard, Barkeep, Bailey, Mayu, Wallace)
+                      Matt, Nat, Leonard, Milla, Bailey, Mayu, Wallace, Matus)
 
 _ENTITY_MAP = {
     'trees': Tree,
@@ -14,10 +14,11 @@ _ENTITY_MAP = {
     'matt': Matt,
     'nat': Nat,
     'leonard': Leonard,
-    'barkeep': Barkeep,
+    'milla': Milla,
     'bailey': Bailey,
     'mayu': Mayu,
     'wallace': Wallace,
+    'matus': Matus,
 }
 
 

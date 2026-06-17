@@ -8,7 +8,7 @@ from typing import Optional
 import os
 import pygame
 
-from config import MUSIC_VOLUME, MUSIC_FADE_MS, SFX_VOLUME
+from config import MUSIC_VOLUME, MUSIC_FADE_MS, SFX_VOLUME, ASSET_DIR
 
 try:
     import numpy as np
@@ -90,11 +90,13 @@ class SoundBank:
         except Exception:
             self._ok = False
 
-    def play(self, name: str) -> None:
+    def play(self, name: str, volume: Optional[float] = None) -> None:
         if not self._ok:
             return
         s = self._snd.get(name)
         if s is not None:
+            if volume is not None:
+                s.set_volume(max(0.0, min(1.0, volume)))
             s.play()
 
     # ── synthesis ────────────────────────────────────────────────────────────
@@ -186,3 +188,10 @@ class SoundBank:
         }
         quiet = {'cheer': 0.8, 'blip': 0.5}      # these play a lot / sit in the background
         self._snd = {k: self._sound(w, v * quiet.get(k, 1.0)) for k, w in waves.items()}
+        # Prefer a real recorded whistle (assets/whistle.ogg) over the synth one.
+        path = os.path.join(ASSET_DIR, 'whistle.ogg')
+        if os.path.isfile(path):
+            try:
+                self._snd['whistle'] = pygame.mixer.Sound(path)
+            except pygame.error:
+                pass

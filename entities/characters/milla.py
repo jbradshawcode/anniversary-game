@@ -1,4 +1,4 @@
-"""Barkeep — blonde woman behind the Salutation bar; her own sprite, wine top."""
+"""Milla — blonde woman behind the Salutation bar; her own sprite, wine top."""
 import pygame
 from ..humanoid import Humanoid, Palette
 
@@ -18,9 +18,9 @@ _GLINT    = (245, 248, 240)
 _PALETTE = Palette(skin=_SKIN, skin_sh=_SKIN_SH, tee=_TEE, tee_sh=_TEE_SH)
 
 
-class Barkeep(Humanoid):
+class Milla(Humanoid):
     _palette = _PALETTE
-    name = "Barkeep"
+    name = "Milla"
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)

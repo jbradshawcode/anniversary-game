@@ -2,10 +2,12 @@
 import pygame
 import sys
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
-                    GYM_MUSIC, CHARACTER_MUSIC, CHAPTER_END_MUSIC, PHONE_THREAD)
+                    GYM_MUSIC, CHARACTER_MUSIC, CHAPTER_END_MUSIC,
+                    PHONE_THREAD_W1, PHONE_THREAD_W2, PHONE_THREAD_W3)
 from entities import Player
 from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
-                    Courtyard, Passage, Courts, WilliamMorris, VolleyCourt)
+                    Courtyard, Passage, Courts, WilliamMorris, VolleyCourt,
+                    DiveGame)
 from systems.scene_manager import SceneManager
 from systems.input_handler import event_to_action
 from systems.audio import MusicPlayer, SoundBank
@@ -16,14 +18,14 @@ from systems.party import Party
 from systems.cutscene import Cutscene
 from systems.lighting import Lighting
 from systems.modes import (TitleMode, PlayMode, GameOverMode, ResultsMode,
-                           PhoneMode)
+                           PhoneMode, InterludeMode)
 from systems.menu_flow import MenuFlow
 
 
 _SCENE_NAMES = {1: "Gym", 2: "King Street", 3: "The Salutation", 4: "Beer Garden",
                 5: "Corridor", 6: "Reception", 7: "Courtyard",
                 8: "Passage", 9: "Netball Courts", 10: "Wetherspoons",
-                11: "Volleyball"}
+                11: "Volleyball", 12: "Diving"}
 
 
 class Game:
@@ -51,6 +53,7 @@ class Game:
         courts = Courts()
         wetherspoons = WilliamMorris()
         self.court = VolleyCourt()
+        self.dive = DiveGame()
 
         self._start_col = (gym.walkable_cols[0] + gym.walkable_cols[1]) // 2
         self._start_row = (gym.walkable_rows[0] + gym.walkable_rows[1]) // 2
@@ -68,6 +71,7 @@ class Game:
         self.scene_manager.register(9, courts)
         self.scene_manager.register(10, wetherspoons)
         self.scene_manager.register(11, self.court)
+        self.scene_manager.register(12, self.dive)
         self.scene_manager.start(1, self.player)
 
         self.party = Party()
@@ -79,7 +83,9 @@ class Game:
                            self.party, self.story)
         self.cutscene.on_game_over = self._game_over
         self.story.on_launch_vb = self._launch_match
+        self.story.on_launch_dive = self._launch_dive
         self.story.on_week_end = self._week_end
+        self.story.on_phone = self.enter_interlude
         self.scene_manager.story = self.story
         self._vb_retry = False
 
@@ -205,15 +211,14 @@ class Game:
 
     # ---- volleyball orchestration ------------------------------------------
     def _launch_match(self):
-        """Story hook: drop into the 3v3 (Leonard's lot) at the difficulty Dan
-        picked in the vb_setup beat, running the controls warm-up first if asked."""
-        level = ('easy' if self.story.has('w1_diff_easy')
-                 else 'medium' if self.story.has('w1_diff_medium')
-                 else 'hard')
-        if self.story.has('w1_want_tut') and not self.story.has('w1_tut_done'):
+        """Story hook: drop into the 3v3. Difficulty + roster are set per chapter
+        (Ch1 easy, Ch2 medium); Ch1 can run the controls warm-up first if asked."""
+        week = self.story.beat.get('week', 1)
+        level = {1: 'easy', 2: 'medium'}.get(week, 'hard')
+        if week == 1 and self.story.has('w1_want_tut') and not self.story.has('w1_tut_done'):
             self._launch_tutorial(level)
             return
-        self.court.configure('match', level)
+        self.court.configure('match', level, week)
         self.court.on_finish = self._end_volleyball
         self.music.play(VB_MUSIC)
         self.scene_manager.jump_to(11, self.player)
@@ -222,7 +227,7 @@ class Game:
         """The warm-up: the 5-step controls tutorial, then straight into the match.
         No vball theme here — that's reserved for the real match; the gym theme
         carries over from the overworld."""
-        self.court.configure('tutorial', level)
+        self.court.configure('tutorial', level, 1)
         self.court.on_finish = self._end_tutorial
         self.scene_manager.jump_to(11, self.player)
 
@@ -237,10 +242,22 @@ class Game:
             self.scene_manager.jump_to(1, self.player)
             self.play.mark_scene_synced()
             self.update_scene_music(1)              # back in the gym -> gym theme
-            self.story.set_flag('w1_won_vb')        # -> Dan asks about the pub
+            self.story.set_flag(self.story.beat.get('advance_when'))   # this chapter's win flag
         else:
             self.music.stop()
             self._vb_retry = True                   # relaunch -> _launch_match plays VB theme
+
+    # ---- diving minigame ---------------------------------------------------
+    def _launch_dive(self):
+        """Story hook: drop into the Ch3 diving drill (gym theme carries over)."""
+        self.dive.on_finish = self._end_dive
+        self.scene_manager.jump_to(12, self.player)
+
+    def _end_dive(self):
+        self.scene_manager.jump_to(1, self.player)        # back to the gym
+        self.play.mark_scene_synced()
+        self.update_scene_music(1)
+        self.story.set_flag(self.story.beat.get('advance_when'))
 
     # ---- story interludes --------------------------------------------------
     def _game_over(self, lines):
@@ -250,18 +267,46 @@ class Game:
         self.resume()
         self.story.replay_beat()
 
+    def debug_next_chapter(self):
+        """Dev only: bail out of whatever's on screen and jump to the next chapter."""
+        self.cutscene.active = False
+        self.dialogue.active = False
+        self.resume()                            # back to PlayMode before the jump
+        self.story.debug_next_chapter()
+
     def _week_end(self):
+        title = "{0} Complete".format(self.story.week_title or "Week")
         self.active = ResultsMode(self, screens.Results(
-            self.story.stars(), max(1, self.story.vb_attempts)))
+            self.story.stars(), max(1, self.story.vb_attempts), title))
         self.music.play(CHAPTER_END_MUSIC)         # end-of-chapter screen theme
 
     def enter_phone(self):
-        self.active = PhoneMode(self, screens.Phone(PHONE_THREAD))
+        threads = {1: PHONE_THREAD_W1, 2: PHONE_THREAD_W2, 3: PHONE_THREAD_W3}
+        thread = threads.get(self.story.beat.get('week'), PHONE_THREAD_W1)
+        self.active = PhoneMode(self, screens.Phone(thread))
 
     def finish_week(self):
         self.resume()
-        self.story.set_flag('w1_left')
+        self.story.vb_attempts = 0                  # star cards are per-chapter; reset for the next
+        self.story.set_flag(self.story.beat.get('advance_when'))   # this chapter's "left" flag
         self.update_scene_music(self.scene_manager.current_id)   # end chapter-end theme
+
+    def enter_interlude(self, thread, other, flag, title='Interlude', date=''):
+        """A between-chapters texts-only beat (e.g. the Scrims interlude): a title
+        card announces it, then the text thread plays."""
+        kicker, _, name = title.partition('—')
+        kicker, name = kicker.strip() or 'Interlude', name.strip()
+
+        def start_phone():
+            phone = screens.Phone(thread, other=other)
+            self.active = PhoneMode(self, phone,
+                                    on_done=lambda: self._finish_interlude(flag))
+        self.active = InterludeMode(self, kicker, name or kicker, date, start_phone)
+
+    def _finish_interlude(self, flag):
+        self.resume()
+        self.story.set_flag(flag)
+        self.update_scene_music(self.scene_manager.current_id)
 
     def run(self):
         while self.running:

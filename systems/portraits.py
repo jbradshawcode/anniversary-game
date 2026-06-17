@@ -13,9 +13,12 @@ _cache: dict = {}
 def _registry() -> dict:
     global _REG
     if _REG is None:
-        from entities import James, Dan, Matt, Nat, Leonard, Player
+        from entities import (James, Dan, Matt, Nat, Leonard, Player,
+                              Milla, Bailey, Mayu, Wallace, Matus)
         _REG = {'james': James, 'dan': Dan, 'matt': Matt, 'nat': Nat,
-                'leonard': Leonard, 'sarah': Player, 'you': Player, 'player': Player}
+                'leonard': Leonard, 'sarah': Player, 'you': Player, 'player': Player,
+                'milla': Milla, 'bailey': Bailey, 'mayu': Mayu, 'wallace': Wallace,
+                'matúš': Matus, 'matus': Matus}
     return _REG
 
 

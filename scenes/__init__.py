@@ -10,7 +10,8 @@ from .passage import Passage
 from .courts import Courts
 from .wetherspoons import WilliamMorris
 from .court import VolleyCourt
+from .dive import DiveGame
 
 __all__ = ['Scene', 'Gym', 'KingSt', 'Salutation', 'Garden',
            'Corridor', 'Reception', 'Courtyard', 'Passage', 'Courts',
-           'WilliamMorris', 'VolleyCourt']
+           'WilliamMorris', 'VolleyCourt', 'DiveGame']

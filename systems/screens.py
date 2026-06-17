@@ -23,6 +23,22 @@ def draw_game_over(screen: pygame.Surface, lines: List[str]) -> None:
               menu.font(UI_FONT_NAME, 15), menu.MUTED)
 
 
+def draw_interlude_card(screen: pygame.Surface, kicker: str, name: str,
+                        date: str = "") -> None:
+    """A between-chapters title card, distinct from the chapter results screen."""
+    menu.title_backdrop(screen)
+    cx = SCREEN_WIDTH // 2
+    menu.text(screen, kicker.upper(), cx, 150,
+              menu.font(UI_FONT_NAME, 20), (150, 154, 162))
+    menu.text(screen, name, cx, 184,
+              menu.font(UI_TITLE_FONT_NAME, 46, bold=True), menu.INK, shadow=True)
+    pygame.draw.rect(screen, (150, 154, 162), (cx - 40, 250, 80, 2))
+    if date:
+        menu.text(screen, date, cx, 268, menu.font(UI_FONT_NAME, 16), (150, 154, 162))
+    menu.text(screen, "Z to read", cx, SCREEN_HEIGHT - 56,
+              menu.font(UI_FONT_NAME, 15), menu.MUTED)
+
+
 def _draw_star(screen, cx, cy, r, filled) -> None:
     import math
     pts = []
@@ -38,14 +54,15 @@ def _draw_star(screen, cx, cy, r, filled) -> None:
 class Results:
     """The end-of-week star card; stars earned (1-5) from volleyball attempts."""
 
-    def __init__(self, stars: int, attempts: int) -> None:
+    def __init__(self, stars: int, attempts: int, title: str = "Week Complete") -> None:
         self.stars = max(1, min(5, stars))
         self.attempts = attempts
+        self.title = title
 
     def draw(self, screen: pygame.Surface) -> None:
         menu.title_backdrop(screen)
         cx = SCREEN_WIDTH // 2
-        menu.text(screen, "Week 1 Complete", cx, 70,
+        menu.text(screen, self.title, cx, 70,
                   menu.font(UI_TITLE_FONT_NAME, 40, bold=True), menu.INK, shadow=True)
         gap, r = 78, 30
         x0 = cx - 2 * gap
@@ -155,11 +172,164 @@ def _e_no(s, S):
     pygame.draw.line(s, red, (cx - a, cy - a), (cx + a, cy + a), max(2, S // 7))
 
 
+def _e_heart(s, S):
+    red, dk = (228, 52, 64), (180, 32, 44)
+    r = S // 4
+    pygame.draw.circle(s, red, (S // 2 - r + 1, S // 2 - r + 2), r)
+    pygame.draw.circle(s, red, (S // 2 + r - 1, S // 2 - r + 2), r)
+    pygame.draw.polygon(s, red, [(S // 2 - 2 * r + 1, S // 2 - r + 2),
+                                 (S // 2 + 2 * r - 1, S // 2 - r + 2),
+                                 (S // 2, S - S // 8)])
+    pygame.draw.circle(s, dk, (S // 2 - r + 1, S // 2 - r + 2), r, 1)
+
+
+def _e_cry(s, S):                                          # loud crying (two streams)
+    r = S // 2 - 1
+    cx = cy = S // 2
+    pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
+    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 18))
+    dk = (70, 50, 25)
+    for ex in (cx - S // 5, cx + S // 5):                  # scrunched eyes (^)
+        pygame.draw.lines(s, dk, False,
+                          [(ex - S // 9, cy - S // 14), (ex, cy - S // 7),
+                           (ex + S // 9, cy - S // 14)], max(2, S // 16))
+    pygame.draw.ellipse(s, (110, 45, 35),
+                        pygame.Rect(cx - S // 6, cy + S // 8, S // 3, S // 5))
+    for ex in (cx - S // 4, cx + S // 4):                  # tear streams
+        pygame.draw.rect(s, (120, 200, 240),
+                         pygame.Rect(ex - S // 16, cy - S // 16, S // 8, S // 2),
+                         border_radius=S // 12)
+
+
+def _e_tear(s, S):                                         # single sad tear
+    r = S // 2 - 1
+    cx = cy = S // 2
+    pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
+    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 18))
+    dk = (70, 50, 25)
+    for ex in (cx - S // 5, cx + S // 5):
+        pygame.draw.circle(s, dk, (ex, cy - S // 10), max(1, S // 16))
+    pygame.draw.arc(s, dk, pygame.Rect(cx - S // 5, cy + S // 8, 2 * (S // 5), S // 3),
+                    3.4, 6.0, max(2, S // 18))             # downturned mouth
+    pygame.draw.ellipse(s, (120, 200, 240),
+                        pygame.Rect(cx + S // 5 - S // 14, cy - S // 16, S // 8, S // 3))
+
+
+def _e_pray(s, S):                                         # folded hands (peak shape)
+    tan, dk = (244, 198, 150), (200, 155, 110)
+    pygame.draw.polygon(s, tan, [(S // 2, S // 6), (S // 2 - S // 4, S * 5 // 6),
+                                 (S // 2, S * 3 // 4)])
+    pygame.draw.polygon(s, tan, [(S // 2, S // 6), (S // 2 + S // 4, S * 5 // 6),
+                                 (S // 2, S * 3 // 4)])
+    pygame.draw.line(s, dk, (S // 2, S // 6), (S // 2, S * 3 // 4), max(1, S // 20))
+
+
+def _e_wave(s, S):                                          # waving hand
+    tan, dk = (244, 198, 150), (200, 155, 110)
+    palm = pygame.Rect(S // 4, S // 3, S // 2, S // 2)
+    pygame.draw.rect(s, tan, palm, border_radius=max(2, S // 8))
+    pygame.draw.rect(s, dk, palm, 1, border_radius=max(2, S // 8))
+    for i in range(4):                                      # four fingers
+        fx = S // 4 + 2 + i * (S // 8)
+        pygame.draw.rect(s, tan, (fx, S // 5, max(2, S // 12), S // 4), border_radius=2)
+    pygame.draw.rect(s, tan, (S // 6, S * 2 // 5, S // 6, S // 4), border_radius=2)  # thumb
+
+
+def _e_eyes(s, S):                                          # looking eyes
+    for ex in (S // 2 - S // 5, S // 2 + S // 5):
+        pygame.draw.ellipse(s, (250, 250, 252), (ex - S // 6, S // 3, S // 3, S // 3))
+        pygame.draw.circle(s, (40, 42, 50), (ex, S // 2), max(2, S // 9))
+
+
+def _e_clock(s, S):                                         # clock face
+    cx = cy = S // 2
+    r = S // 2 - 1
+    pygame.draw.circle(s, (236, 238, 242), (cx, cy), r)
+    pygame.draw.circle(s, (120, 124, 132), (cx, cy), r, max(1, S // 14))
+    pygame.draw.line(s, (40, 42, 50), (cx, cy), (cx, cy - r + S // 5), max(2, S // 14))
+    pygame.draw.line(s, (40, 42, 50), (cx, cy), (cx + r - S // 4, cy), max(2, S // 16))
+
+
+def _e_party(s, S):                                         # party popper
+    pygame.draw.polygon(s, (240, 180, 60),
+                        [(S // 5, S * 4 // 5), (S * 2 // 5, S * 2 // 5), (S * 4 // 5, S * 4 // 5)])
+    for cxp, cyp, col in [(S * 3 // 5, S // 4, (228, 52, 64)), (S * 4 // 5, S * 2 // 5, (58, 160, 220)),
+                          (S // 2, S // 6, (90, 200, 120)), (S * 7 // 10, S // 2, (245, 196, 70))]:
+        pygame.draw.circle(s, col, (cxp, cyp), max(1, S // 12))
+
+
+def _e_pin(s, S):                                           # round pushpin
+    cx = S // 2
+    r = S // 4
+    pygame.draw.polygon(s, (228, 52, 52),
+                        [(cx - r // 2, S // 3 + r // 2), (cx + r // 2, S // 3 + r // 2), (cx, S * 5 // 6)])
+    pygame.draw.circle(s, (228, 52, 52), (cx, S // 3), r)
+    pygame.draw.circle(s, (255, 150, 150), (cx - r // 3, S // 3 - r // 3), max(1, r // 3))
+
+
+def _e_money(s, S):                                         # money with wings
+    note = pygame.Rect(S // 4, S // 3, S // 2, S // 3)
+    pygame.draw.polygon(s, (236, 238, 242), [(S // 4, S * 2 // 5), (S // 12, S // 4), (S // 4, S // 2)])  # wing
+    pygame.draw.rect(s, (90, 180, 110), note, border_radius=2)
+    pygame.draw.rect(s, (40, 120, 70), note, 1, border_radius=2)
+    pygame.draw.circle(s, (40, 120, 70), (S // 2, S // 2), max(2, S // 10), 1)
+
+
+def _e_zip(s, S):                                           # zipper-mouth face
+    cx = cy = S // 2
+    r = S // 2 - 1
+    pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
+    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 18))
+    dk = (70, 50, 25)
+    for ex in (cx - S // 5, cx + S // 5):
+        pygame.draw.circle(s, dk, (ex, cy - S // 9), max(1, S // 14))
+    y = cy + S // 6
+    pygame.draw.line(s, (120, 120, 130), (cx - S // 4, y), (cx + S // 4, y), max(2, S // 14))
+    for i in range(-2, 3):                                  # zip teeth
+        pygame.draw.line(s, (160, 160, 170), (cx + i * S // 12, y - S // 16),
+                         (cx + i * S // 12, y + S // 16), 1)
+
+
+def _e_salute(s, S):                                        # saluting face
+    cx = cy = S // 2
+    r = S // 2 - 1
+    pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
+    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 18))
+    dk = (70, 50, 25)
+    for ex in (cx - S // 5, cx + S // 5):
+        pygame.draw.circle(s, dk, (ex, cy - S // 12), max(1, S // 14))
+    pygame.draw.arc(s, dk, pygame.Rect(cx - S // 5, cy, 2 * (S // 5), S // 4), 3.6, 5.8, max(2, S // 18))
+    pygame.draw.line(s, (244, 198, 150), (cx - r, cy - r // 2), (cx + r // 4, cy - r), max(2, S // 9))
+
+
+def _e_raise(s, S):                                         # raising hands
+    tan = (244, 198, 150)
+    for hx in (S // 4, S * 3 // 4):
+        palm = pygame.Rect(hx - S // 10, S * 2 // 5, S // 5, S // 3)
+        pygame.draw.rect(s, tan, palm, border_radius=2)
+        for i in range(3):
+            pygame.draw.rect(s, tan, (hx - S // 10 + i * (S // 14), S // 5, max(1, S // 16), S // 4),
+                             border_radius=1)
+
+
 _EMOJI_DRAW = {
     '\U0001F602': _e_joy,    # face with tears of joy
     '\U0001F44D': _e_thumb,  # thumbs up
     '\U0001F94A': _e_glove,  # boxing glove
     '\U0001F6AB': _e_no,     # prohibited / no entry
+    '❤': _e_heart,      # red heart
+    '\U0001F62D': _e_cry,    # loudly crying face
+    '\U0001F622': _e_tear,   # crying face
+    '\U0001F64F': _e_pray,   # folded hands
+    '\U0001F44B': _e_wave,   # waving hand
+    '\U0001F440': _e_eyes,   # eyes
+    '\U0001F550': _e_clock,  # clock
+    '\U0001F389': _e_party,  # party popper
+    '\U0001F4CD': _e_pin,    # round pushpin
+    '\U0001F4B8': _e_money,  # money with wings
+    '\U0001F910': _e_zip,    # zipper-mouth face
+    '\U0001FAE1': _e_salute, # saluting face
+    '\U0001F64C': _e_raise,  # raising hands
 }
 
 
@@ -212,9 +382,11 @@ def _rich_blit(screen, fnt, text: str, x: int, y: int, color, epx: int) -> int:
 class Phone:
     """A scrolling iMessage-style thread, revealed one bubble per confirm."""
 
-    def __init__(self, thread: List[dict], me: str = 'James') -> None:
+    def __init__(self, thread: List[dict], me: str = 'James',
+                 other: str = None) -> None:
         self._thread = thread
         self._me = me
+        self._other = other or ('Dan' if me == 'James' else 'James')
         self.shown = 1
         self._fnt = None
         self._small = None
@@ -264,8 +436,7 @@ class Phone:
         pygame.draw.rect(screen, (60, 64, 78), shell, 2, border_radius=26)
         header = pygame.Rect(px, py, pw, 46)
         pygame.draw.rect(screen, (30, 32, 42), header, border_radius=26)
-        other = 'Dan' if self._me == 'James' else 'James'
-        ts = title.render(other, True, _BUB_TEXT)
+        ts = title.render(self._other, True, _BUB_TEXT)
         screen.blit(ts, (px + pw // 2 - ts.get_width() // 2, py + 14))
 
         inner_w = pw - 28
@@ -287,6 +458,8 @@ class Phone:
 
     # Each _measure returns (render_fn(screen, x, y, w), height).
     def _measure(self, m: dict, fnt, small, w):
+        if 'sep' in m:                       # a centered date pill
+            return self._measure_sep(m, small, w)
         mine = m['who'] == self._me
         if 'shot' in m:
             return self._measure_shot(m, fnt, small, w, mine)
@@ -294,9 +467,22 @@ class Phone:
             return self._measure_notif(m, small, w, mine)
         return self._measure_text(m, fnt, small, w, mine)
 
+    def _measure_sep(self, m, small, w):
+        label = m['sep']
+        ts = small.render(label, True, (150, 154, 162))
+        bw = ts.get_width() + 18
+
+        def render(screen, x, y, ww):
+            bx = x + (ww - bw) // 2
+            pygame.draw.rect(screen, (40, 42, 52), (bx, y, bw, 20), border_radius=10)
+            screen.blit(ts, (bx + 9, y + 4))
+        return render, 20
+
     def _measure_text(self, m, fnt, small, w, mine):
         epx = _epx(fnt)
-        lines = self._wrap(fnt, m['text'], int(w * 0.66))
+        lines = []                               # honour explicit \n (paragraph breaks)
+        for seg in m['text'].split('\n'):
+            lines.extend(self._wrap(fnt, seg, int(w * 0.66)) if seg else [''])
         bw = max(_rich_w(fnt, ln, epx) for ln in lines) + 22
         bh = len(lines) * 20 + 14
         react = m.get('react')

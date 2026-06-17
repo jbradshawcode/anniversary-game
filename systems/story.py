@@ -35,8 +35,8 @@ _BEATS = _flatten(STORY_WEEKS)
 
 # Pub seats in WEEK1_CREW order — must match the final tiles the 'pub_queue'
 # cutscene walks them to (config.STORY_WEEKS).
-# James, Dan, Matt, Nat, Leonard, Bailey, Mayu, Wallace
-PUB_SEATS = [(13, 8), (11, 8), (9, 8), (7, 11), (7, 8),
+# James, Dan, Matt, Nat, Bailey, Mayu, Wallace
+PUB_SEATS = [(13, 8), (11, 8), (9, 8), (7, 11),
              (11, 11), (13, 11), (10, 10)]
 _SEATED_BEATS = {'pub_queue', 'gifts', 'where_from', 'wind_down'}
 
@@ -53,7 +53,9 @@ class StoryManager:
         self._party: Optional['Party'] = None
         self._cutscene: Optional['Cutscene'] = None
         self.on_launch_vb: Optional[Callable[[], None]] = None
+        self.on_launch_dive: Optional[Callable[[], None]] = None
         self.on_week_end: Optional[Callable[[], None]] = None
+        self.on_phone: Optional[Callable] = None
 
     def bind(self, dialogue: 'DialogueBox', scene_manager: 'SceneManager',
              player: 'Player', party: 'Party',
@@ -116,9 +118,27 @@ class StoryManager:
 
     def _enter_beat(self) -> None:
         beat = self.beat
+        goto = beat.get('goto')                       # relocate the player (e.g. a chapter jump)
+        if goto and self._scenes is not None and self._player is not None:
+            self._scenes.jump_to(goto['scene'], self._player)
+            if 'tile' in goto:
+                self._player.teleport(*goto['tile'])
         self._apply_party(beat.get('party'))
+        if beat.get('settle_party') and self._party is not None:
+            self._party.stop_following()             # crew stays put (e.g. you head home alone)
         if beat.get('launch_volleyball') and self.on_launch_vb is not None:
             self.on_launch_vb()
+            return
+        if beat.get('launch_dive') and self.on_launch_dive is not None:
+            self.on_launch_dive()
+            return
+        if beat.get('end_chapter') and self.on_week_end is not None:
+            self.on_week_end()                       # straight to results + texts
+            return
+        if beat.get('phone') and self.on_phone is not None:
+            self.on_phone(beat['phone'], beat.get('phone_with', 'Sarah'),
+                          beat.get('advance_when'),    # a texts-only interlude
+                          beat.get('week_title', 'Interlude'), beat.get('card_date', ''))
             return
         cutscene = beat.get('cutscene')
         if cutscene and self._cutscene is not None:
@@ -178,6 +198,11 @@ class StoryManager:
         checklist = self.beat.get('checklist')
         if checklist is not None:
             return self._interact_checklist(obj, checklist)
+        ask = self.beat.get('interact_ask')          # talk to a named NPC to fire a choice cutscene
+        if (ask is not None and self._cutscene is not None
+                and (getattr(obj, 'name', None) or '').lower() == ask['who'].lower()):
+            self._cutscene.start(ask['steps'])
+            return True
         lines = self.beat.get('dialogue', {}).get((obj.tile_x, obj.tile_y))
         if not lines or self._dialogue is None:
             return False
@@ -193,18 +218,20 @@ class StoryManager:
             return False
         beat = self.beat
         flag = item['flag']
-        if flag in self.flags:                       # already ticked off
-            self._dialogue.start(beat.get('checked_again', item['lines']))
+        spk = item.get('speaker')                     # per-item speaker (e.g. who you greeted)
+        if flag in self.flags:                        # already ticked off
+            self._dialogue.start(beat.get('checked_again', item['lines']), speaker=spk)
             return True
         last = all(it['flag'] in self.flags for t, it in checklist.items() if it is not item)
-        lines = list(item['lines']) + (beat['check_done'] if last else beat['check_more'])
+        suffix = beat.get('check_done', []) if last else beat.get('check_more', [])
+        lines = list(item['lines']) + list(suffix)    # suffix optional (greets need none)
         advance = beat.get('advance_when')
 
         def _after() -> None:
             self.flags.add(flag)
             if all(it['flag'] in self.flags for it in checklist.values()):
                 self.set_flag(advance)
-        self._dialogue.start(lines, on_done=_after)
+        self._dialogue.start(lines, speaker=spk, on_done=_after)
         return True
 
     def talk(self, name: Optional[str]) -> bool:
@@ -232,6 +259,21 @@ class StoryManager:
     def debug_advance(self) -> None:
         """Skip the current beat: satisfy its gate, applying the next beat's setup."""
         self.set_flag(self.beat.get('advance_when'))
+
+    def debug_next_chapter(self) -> None:
+        """Dev only: jump to the first beat of the next chapter (fresh flags, no
+        leftover party). No-op once we're in the last chapter."""
+        here = self.beat.get('week_title')
+        for i in range(self._beat + 1, len(_BEATS)):
+            if _BEATS[i].get('week_title') != here:
+                self._beat = i
+                self.flags = set()
+                self._fired = set()
+                self.vb_attempts = 0
+                if self._party is not None:
+                    self._party.clear()
+                self._enter_beat()
+                return
 
     def snapshot(self) -> dict:
         return {'beat': self._beat, 'flags': sorted(self.flags),

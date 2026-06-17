@@ -88,6 +88,9 @@ class PlayMode(Mode):
     def handle_action(self, action) -> None:
         g = self._game
         scene = g.scene_manager.current
+        if action == Action.DEBUG_CHAPTER:       # dev only: skip to the next chapter
+            g.debug_next_chapter()
+            return
         if action == Action.QUIT and not g.cutscene.active:
             g.open_pause()
             return
@@ -138,8 +141,11 @@ class PlayMode(Mode):
         ty = g.player.tile_y + dy
         for obj in g.scene_manager.current.objects:
             if obj.occupies(tx, ty):
-                if not g.story.interact(obj) and obj.interaction_text:
-                    g.dialogue.start(obj.interaction_text, speaker=obj.name)
+                if not g.story.interact(obj):
+                    if hasattr(obj, 'on_interact'):
+                        obj.on_interact(g)           # e.g. the ref blows his whistle
+                    if obj.interaction_text:
+                        g.dialogue.start(obj.interaction_text, speaker=obj.name)
                 return
         for f in g.party.followers:
             if f.tile_x == tx and f.tile_y == ty:
@@ -193,11 +199,13 @@ class PlayMode(Mode):
     def draw(self, screen) -> None:
         g = self._game
         scene = g.scene_manager.current
+        hide_player = g.story.beat.get('hide_player')   # POV scenes where Sarah's left
         if scene.scrolling:
             world = scene.get_world_surface()
             scene.draw(world)
             g.party.draw(world)
-            g.player.draw(world)
+            if not hide_player:
+                g.player.draw(world)
             scene.draw_overlay(world)
             cam_x = scene.get_camera_x(g.player.x)
             screen.blit(world, (0, 0), (cam_x, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -205,7 +213,8 @@ class PlayMode(Mode):
             scene.draw(screen)
             if not getattr(scene, 'wants_raw_input', False):
                 g.party.draw(screen)
-                g.player.draw(screen)
+                if not hide_player:
+                    g.player.draw(screen)
             scene.draw_overlay(screen)
 
         if not getattr(scene, 'wants_raw_input', False):
@@ -300,22 +309,47 @@ class ResultsMode(Mode):
         self._results = results
 
     def handle_action(self, action) -> None:
-        if action == Action.CONFIRM:
+        if action == Action.DEBUG_CHAPTER:
+            self._game.debug_next_chapter()
+        elif action == Action.CONFIRM:
             self._game.enter_phone()
 
     def draw(self, screen) -> None:
         self._results.draw(screen)
 
 
-class PhoneMode(Mode):
-    """The post-results text thread; CONFIRM advances, last bubble ends the week."""
-    def __init__(self, game, phone) -> None:
+class InterludeMode(Mode):
+    """A between-chapters title card; CONFIRM rolls on to the interlude's texts."""
+    def __init__(self, game, kicker, name, date, on_done) -> None:
         self._game = game
-        self._phone = phone
+        self._kicker = kicker
+        self._name = name
+        self._date = date
+        self._on_done = on_done
 
     def handle_action(self, action) -> None:
-        if action == Action.CONFIRM and not self._phone.advance():
-            self._game.finish_week()
+        if action == Action.DEBUG_CHAPTER:
+            self._game.debug_next_chapter()
+        elif action == Action.CONFIRM:
+            self._on_done()
+
+    def draw(self, screen) -> None:
+        screens.draw_interlude_card(screen, self._kicker, self._name, self._date)
+
+
+class PhoneMode(Mode):
+    """A text thread; CONFIRM advances, and the last bubble runs on_done (which
+    defaults to ending the week, but an interlude supplies its own continuation)."""
+    def __init__(self, game, phone, on_done=None) -> None:
+        self._game = game
+        self._phone = phone
+        self._on_done = on_done or game.finish_week
+
+    def handle_action(self, action) -> None:
+        if action == Action.DEBUG_CHAPTER:
+            self._game.debug_next_chapter()
+        elif action == Action.CONFIRM and not self._phone.advance():
+            self._on_done()
 
     def draw(self, screen) -> None:
         self._phone.draw(screen)

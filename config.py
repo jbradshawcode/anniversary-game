@@ -31,6 +31,8 @@ ASSET_DIR     = os.path.join(os.path.dirname(__file__), 'assets')
 MUSIC_VOLUME  = 0.5     # 0..1 background-music level
 MUSIC_FADE_MS = 600     # fade applied on play-in / stop, in ms
 SFX_VOLUME    = 0.55    # 0..1 sound-effects level
+WHISTLE_VOLUME = 1.0    # Matúš's whistle in the overworld — loud and annoying (cranked)
+WHISTLE_GAME_VOLUME = 0.4  # eased right off while he lazily blows it during a match
 VB_MUSIC      = os.path.join(ASSET_DIR, 'vball_theme.ogg')  # volleyball match theme (not the tutorial)
 KING_ST_MUSIC = os.path.join(ASSET_DIR, 'king_st.ogg')     # plays while on King Street (scene 2)
 GYM_MUSIC     = os.path.join(ASSET_DIR, 'gym_theme.ogg')   # plays while in the gym overworld (scene 1)
@@ -106,6 +108,7 @@ VB_DIFFICULTY = {
 # Defence — who takes the first ball (agency: you take balls near you).
 VB_PLAYER_TAKE_RADIUS = 120  # you (non-setter) take any ball landing within this of you
 VB_SETTER_TAKE_RADIUS = 70   # the setter just plays balls this close (no annoying dodge)
+VB_SETTER_PLAYER_BIAS = 0.6  # chance your team's AI setter sets to YOU (so you get swings)
 
 # Player movement — momentum (accelerate to held vector, decel to a snappy stop).
 VB_TOP_SPEED       = 224     # px/s top free-running speed
@@ -193,10 +196,10 @@ SCENE_CONFIGS = {
             'james': [(5, 7)], 'dan': [(14, 7)],
             'matt': [(3, 4)],
             'nat': [(16, 4)],
-            'leonard': [(3, 10)],
             'bailey': [(6, 4)],
             'mayu': [(15, 10)],
             'wallace': [(8, 10)],
+            'matus': [(10, 2)],          # the ref, watching from a central bench
             'benches': [(1, 2, 5), (1, 8, 5), (18, 2, 5), (18, 8, 5)],
         },
     },
@@ -237,7 +240,7 @@ SCENE_CONFIGS = {
             'up': {'scene': 4, 'cols': (14, 16)},
         },
         'entry_points': {'up': (9, 11)},
-        'objects': {'barkeep': [(3, 8)]},
+        'objects': {'milla': [(3, 8)]},
     },
     'garden': {
         'id': 4,
@@ -353,7 +356,23 @@ SCENE_CONFIGS = {
         'entry_points': {},
         'objects': {},
     },
+    # Diving minigame (Ch3) — another self-contained real-time scene.
+    'dive': {
+        'id': 12,
+        'walkable_cols': (1, 18),
+        'walkable_rows': (1, 13),
+        'exits': {},
+        'entry_points': {},
+        'objects': {},
+    },
 }
+
+# Diving minigame (Ch3) — a silly reaction drill. Deliberately forgiving.
+DIVE_ROUNDS = 6
+DIVE_BALL_TIME = 1.25        # seconds for a toss to drop to the floor
+DIVE_SAVE_FROM = 0.0        # any correct-direction dive saves (wrong side / no dive misses)
+DIVE_RESULT_TIME = 0.9      # how long each toss's verdict lingers
+DIVE_LUNGE = 64             # px James flops sideways on a dive
 
 
 # End-of-week star rating, earned from how many volleyball attempts a win took.
@@ -388,6 +407,88 @@ def stars_for_attempts(attempts: int) -> int:
 #   end_week         'down'|...  leaving the scene this way ends the week (results screen)
 #   advance_when     flag name that completes the beat (None = final beat)
 #   locked_msg       [lines]  shown when a sealed exit is bumped
+#   goto             {'scene': id, 'tile': (col,row)}  relocate the player on beat-enter
+#   interact_ask     {'who': name, 'steps': [cutscene]}  talk to that NPC to run a choice cutscene
+#   checklist item   may carry 'speaker'; 'check_more'/'check_done' suffixes are optional
+
+# Week 2's "ready to start?" prompt — fired both automatically (after greeting) and on
+# talking to James again, so declining lets you wander back to him.
+_W2_READY_ASK = [
+    ('ask', "Sweet — are we ready to start?", {
+        'Yes': ('flag', 'w2_ready_done'),
+        'No': [('say', ["Oh ok — come back when you're ready."], "James")],
+    }, "James"),
+]
+
+# Interlude (9th June, between Ch2 and Ch3) — James invites Sarah to scrims.
+# POV: James's phone, so James is the "me" (right) side, Sarah on the left.
+# (Defined here, above STORY_WEEKS, because a beat references it directly.)
+INTERLUDE_SCRIMS = [
+    {'sep': '7 Jun 2024'},
+    # James's opening pitch — one message with line breaks, as it was sent.
+    {'who': 'James', 'text': "Hiii Sarah \U0001F44B\n\n"
+                            "I play w a social team most Saturdays, and when we "
+                            "don't have a league game we organise scrims to get "
+                            "some reps in.\n\n"
+                            "We're short one outside for tmz if you want to come? "
+                            "\U0001F440"},
+    # The forwarded session details — also one message.
+    {'who': 'James', 'text': "Next session 8 June (Saturday)\n\n"
+                            "\U0001F550 Time: 12:00 - 3:00pm (3 hours)\n\n"
+                            "\U0001F389 Signup: 1drv.ms/x/c/8eb19810...JjpLA\n\n"
+                            "\U0001F4CD Location: Wembley, Preston Manor High "
+                            "School - maps.app.goo.gl/qTzHvhym\n\n"
+                            "\U0001F4B8 Price for 3 hrs: £11.57"},
+    {'who': 'James', 'text': "This is all the details", 'react': "❤"},
+    {'who': 'Sarah', 'text': "yea alr i had no plans"},
+    {'who': 'Sarah', 'text': "do u want me to put my name down on this sheet or "
+                             "how do i do this"},
+    {'who': 'James', 'text': "Yes pls"},
+    {'who': 'Sarah', 'text': "... in number 8 i assume"},
+    {'who': 'James', 'text': "Yea yea"},
+    {'who': 'James', 'text': "Sry its a very confusing document lol"},
+    {'who': 'Sarah', 'text': "omg no worried i just didnt wanna fuck up yalls system"},
+    {'who': 'James', 'text': "If the template broke I would probably cry"},
+    {'who': 'James', 'text': "But we have a million copies so it's ok"},
+    {'who': 'Sarah', 'text': "see thats what we dont want"},
+    {'who': 'Sarah', 'text': "\U0001F64F"},
+    {'who': 'Sarah', 'text': "no tears today"},
+    {'who': 'Sarah', 'text': "also who do i pay or do i pay there"},
+    {'who': 'James', 'text': "Friday cryday"},
+    {'who': 'James', 'text': "\U0001FAE1"},
+    {'who': 'James', 'text': "After the sesh I'll send a msg np"},
+    {'who': 'Sarah', 'text': "\U0001FAE1"},
+    {'who': 'Sarah', 'text': "yes captain"},
+    {'who': 'James', 'text': "See u tmrr", 'react': "❤"},
+    {'who': 'Sarah', 'text': "HEY so this is just a warning, i hope ill feel "
+                             "better tomorrow but i ate some bad chicken and have "
+                             "been quite sick today, i thought it would pass but it "
+                             "hasnt yet so just a warning for tomorrow, im so sorry "
+                             "in advance if im too sick to make it (im praying that "
+                             "wont be the case)"},
+    {'who': 'Sarah', 'text': "\U0001F622"},
+    {'who': 'James', 'text': "Hey hey Sarahh"},
+    {'who': 'James', 'text': "Okay"},
+    {'who': 'James', 'text': "Rest up sleep good"},
+    {'who': 'James', 'text': "And come tmz if you can \U0001F64F"},
+    {'sep': '8 Jun 2024'},
+    {'who': 'James', 'text': "Hey how are you feeling?"},
+    {'who': 'Sarah', 'text': "Much better!"},
+    {'who': 'Sarah', 'text': "I didnt mean to worry u lol it was just a failsafe "
+                             "text so if i had to miss out i wouldnt come off as "
+                             "much as a dick lol"},
+    {'who': 'Sarah', 'text': "thanks for inviting me btw i had sm fun! Also how "
+                             "to do pay?"},
+    {'who': 'James', 'text': "Hey hey I'm glad, this session was rly good"},
+    {'who': 'James', 'text': "There's a group that we organise in, I can add you?",
+                     'react': "❤"},
+    {'who': 'James', 'text': "Since I'll send payment details there anyway"},
+    {'who': 'Sarah', 'text': "sounds good!"},
+    {'who': 'James', 'text': "You are added \U0001FAE1", 'react': "\U0001F44D"},
+    {'who': 'Sarah', 'text': "Appreciated my friend"},
+    {'who': 'Sarah', 'text': "\U0001F64C"},
+]
+
 STORY_WEEKS = [
     {
         'week': 1,
@@ -443,12 +544,8 @@ STORY_WEEKS = [
                 'locked_exits': {1: 'all'},
                 'cutscene': [
                     ('say', ["Six of us — so it's three on three.",
-                             "You and me and Matt against Leonard's lot."], "Dan"),
-                    ('ask', "How are we playing it?", {
-                        'Easy': ('flag', 'w1_diff_easy'),
-                        'Medium': ('flag', 'w1_diff_medium'),
-                        'Hard': ('flag', 'w1_diff_hard'),
-                    }, "Dan"),
+                             "You and me and Matt against Leonard's lot.",
+                             "We'll keep it gentle this first time."], "Dan"),
                     ('ask', "Want a quick warm-up to learn the controls first?", {
                         'Yes please': [('flag', 'w1_want_tut'), ('flag', 'w1_vb_set')],
                         "I'm good": ('flag', 'w1_vb_set'),
@@ -468,6 +565,9 @@ STORY_WEEKS = [
                 'objective': None,
                 'locked_exits': {1: 'all'},
                 'cutscene': [
+                    ('say', ["GG, everyone! I must away — auf Wiedersehen!"], "Leonard"),
+                    ('say', ["Leonard strides off into the evening.",
+                             "(He is never seen again.)"]),
                     ('move', {'dan': (10, 2), 'james': (11, 3)}),
                     ('face', 'sarah', 'down'),
                     ('say', ["Good game!"], "Dan"),
@@ -498,11 +598,9 @@ STORY_WEEKS = [
                 'cutscene': [
                     ('say', ["The whole gang piles into The Salutation."]),
                     ('move', {'james': (5, 9), 'dan': (6, 9),
-                              'matt': (5, 10), 'leonard': (6, 10), 'nat': (6, 11),
+                              'matt': (5, 10), 'nat': (6, 11),
                               'bailey': (4, 9), 'mayu': (4, 10), 'wallace': (4, 11)}),
                     ('say', ["Pints all round — and whatever they're having!"], "Dan"),
-                    ('walk', 'leonard', (4, 8)),
-                    ('walk', 'leonard', (7, 8)),
                     ('walk', 'matt', (4, 8)),
                     ('walk', 'matt', (9, 8)),
                     ('say', ["Cheers!"], "Matt"),
@@ -618,19 +716,382 @@ STORY_WEEKS = [
         'title': 'Week 2',
         'beats': [
             {
-                'name': 'week2_start',
+                'name': 'w2_arrive',
                 'objective': None,
-                'on_enter_scene': {3: ["Week 2 — coming soon."]},
-                'advance_when': None,
+                'goto': {'scene': 1, 'tile': (9, 12)},
+                'locked_exits': {1: 'all'},
+                'cutscene': [
+                    ('fade_in', 1.2),
+                    ('say', ["Week 2. Another evening at the sports hall."]),
+                    ('say', ["Sarah and Nat head in for more volleyball."]),
+                    ('say', ["I'm gonna go get ready."], "Nat"),
+                    ('say', ["(I should go say hi to everyone.)"], "Sarah"),
+                    ('flag', 'w2_arrived'),
+                ],
+                'advance_when': 'w2_arrived',
+            },
+            {
+                'name': 'w2_greet',
+                'objective': 'Greet everyone',
+                'locked_exits': {1: 'all'},
+                'checklist': {
+                    (14, 7): {'flag': 'w2_g_dan', 'speaker': 'Dan',
+                              'lines': ["Wagwan g."]},
+                    (5, 7):  {'flag': 'w2_g_james', 'speaker': 'James',
+                              'lines': ["Oh hey, what's up.",
+                                        "When am I playing? Um... that's a funny story."]},
+                    (16, 4): {'flag': 'w2_g_nat', 'speaker': 'Nat',
+                              'lines': ["Huh, where did Leonard get to today?",
+                                        "(...he was never seen again.)", "(...)",
+                                        "(...not in a creepy way tho.)"]},
+                    (3, 4):  {'flag': 'w2_g_matt', 'speaker': 'Matt',
+                              'lines': ["Good evening, m'lady!", "(Tips fedora.)"]},
+                    (15, 10): {'flag': 'w2_g_mayu', 'speaker': 'Mayu',
+                               'lines': ["Heyy! Good to see you again.",
+                                         "Let's get a win tonight."]},
+                    (8, 10): {'flag': 'w2_g_wallace', 'speaker': 'Wallace',
+                              'lines': ["Oh — hey.", "Ready when you are."]},
+                },
+                'checked_again': ["..."],
+                'advance_when': 'w2_greeted',
+            },
+            {
+                'name': 'w2_ready',
+                'objective': "Talk to James when you're ready",
+                'locked_exits': {1: 'all'},
+                'cutscene': [
+                    ('say', ["Quick heads up — they've stepped it up since last week.",
+                             "Proper game tonight. Let's bring it!"], "James"),
+                ] + _W2_READY_ASK,
+                'interact_ask': {'who': 'James', 'steps': _W2_READY_ASK},
+                'advance_when': 'w2_ready_done',
+            },
+            {
+                'name': 'w2_match',
+                'objective': 'Win the 3v3 (Medium)',
+                'launch_volleyball': True,
+                'locked_exits': {1: 'all'},
+                'advance_when': 'w2_won_vb',
+            },
+            {
+                # Beer garden: the group settles round the communal table, James
+                # and Sarah on the near pair of chairs.
+                'name': 'w2_garden',
+                'objective': None,
+                'goto': {'scene': 4, 'tile': (2, 7)},
+                'party': 'form',
+                'locked_exits': {4: 'all'},
+                'cutscene': [
+                    ('fade_in', 1.0),
+                    ('settle',),
+                    ('say', ["The group heads round to the Salutation's beer "
+                             "garden and piles in around the big table."]),
+                    # James & Sarah on the near bench; everyone else round the table,
+                    # Mayu & Wallace off at a loose table in their own little chat.
+                    ('move', {'james': (9, 9), 'sarah': (10, 9), 'dan': (7, 6),
+                              'nat': (12, 6), 'matt': (7, 8), 'bailey': (12, 8),
+                              'mayu': (3, 7), 'wallace': (3, 11)}),
+                    ('face', 'james', 'up'),
+                    ('face', 'sarah', 'up'),
+                    ('face', 'dan', 'down'),
+                    ('face', 'nat', 'down'),
+                    ('face', 'matt', 'down'),
+                    ('face', 'bailey', 'down'),
+                    ('ask', "So... what do you do right now? Like — in general?", {
+                        'I study at Imperial': [
+                            ('say', ["Oh, awesome — what are you studying?"], "James"),
+                            ('ask', "...", {
+                                'Drugs': [('say', ["Huh? ...Oh, right.",
+                                                   "Damn, you're super smart."], "James")],
+                            }, "Sarah"),
+                        ],
+                        'Drugs': [('say', ["Huh? ...Oh, right.",
+                                           "Damn, you're super smart."], "James")],
+                    }, "James"),
+                    ('say', ["...hold on. I've heard of Western Blotting.",
+                             "...do I want you to explain it in excruciating detail?",
+                             "(She is really pretty, after all.)",
+                             "...sure. Let's do science!"], "James"),
+                    ('fade_out', 1.0),
+                    ('wait', 0.9),
+                    ('say', ["(Half an hour passes. They discussed Western Blotting.)"]),
+                    ('fade_in', 1.0),
+                    ('say', ["Okay, okay! So — you take some goo, run it through a "
+                             "wiggly machine, and a sticker tells you if the thing's "
+                             "in there!"], "James"),
+                    ('ask', "Did he get it?", {
+                        'Not really': [], 'Not really...': [],
+                    }, "Sarah"),
+                    ('say', ["Welp. I tried.",
+                             "I worked at a Biotech for a while. Didn't work out."], "James"),
+                    ('ask', "...", {
+                        'Because of the science?': [
+                            ('say', ["Uh... you could say that."], "James")],
+                        'How come?': [
+                            ('say', ["Because of the science, lol."], "James")],
+                    }, "Sarah"),
+                    ('say', ["I'm late-stage with an Insurtech, so fingers crossed I "
+                             "get that!", "...", "I work at a pub right now tho."], "James"),
+                    ('say', ["Hey guys — time to come inside!"], "Milla"),
+                    ('say', ["Rip. Ok."], "Dan"),
+                    ('flag', 'w2_garden_done'),
+                ],
+                'advance_when': 'w2_garden_done',
+            },
+            {
+                # Inside the Salutation: the chatter resumes, James digs his own
+                # grave in French, and Nat happens to be from Martinique.
+                'name': 'w2_inside',
+                'objective': None,
+                'goto': {'scene': 3, 'tile': (9, 11)},
+                'locked_exits': {3: 'all'},
+                'cutscene': [
+                    ('settle',),
+                    # Everyone crammed into the big east-wall booth (banquette col 16,
+                    # west chairs col 14); Nat's off at a centre table until she clocks it.
+                    ('move', {'james': (16, 10), 'sarah': (14, 10), 'dan': (16, 9),
+                              'matt': (14, 8), 'bailey': (16, 8), 'mayu': (16, 12),
+                              'wallace': (14, 12), 'nat': (9, 9)}),
+                    ('face', 'james', 'left'),
+                    ('face', 'sarah', 'right'),
+                    ('face', 'dan', 'left'),
+                    ('say', ["Inside, everyone squeezes into the big booth over "
+                             "fresh drinks."]),
+                    ('say', ["Yeah, I actually speak pretty good French.",
+                             "I'm doing a course on Mondays to keep it up."], "James"),
+                    ('say', ["( ! )  Nat's head snaps round."]),
+                    ('move', {'nat': (14, 9)}),         # she comes over to the booth
+                    ('face', 'nat', 'right'),
+                    ('face', 'dan', 'left'),
+                    ('face', 'james', 'up'),
+                    ('say', ["Oh really? I'm from Martinique!"], "Nat"),
+                    ('say', ["..."], "James"),
+                    ('say', ["So... you speak fluent French."], "James"),
+                    ('say', ["Native."], "Nat"),
+                    ('say', ["(Oh fuck.) ...lol."], "James"),
+                    ('say', ["James slowly backs away..."]),
+                    ('walk', 'james', (13, 11)),
+                    ('walk', 'james', (9, 11)),
+                    ('walk', 'james', (9, 12)),
+                    ('say', ["...and bolts out the door."]),
+                    ('face', 'sarah', 'down'),
+                    ('say', ["(Ugh, I don't feel great.)",
+                             "(...damn, that chicken sucked.)",
+                             "(I think I'll head home.)"], "Sarah"),
+                    ('flag', 'w2_inside_done'),
+                ],
+                'advance_when': 'w2_inside_done',
+            },
+            {
+                # Walk out the front door to call it a night -> results + texts.
+                'name': 'w2_homeward',
+                'objective': 'Head home',
+                'end_week': 'down',
+                'locked_exits': {3: ['up']},
+                'settle_party': True,                  # the crew stays at the pub as you leave
+                'advance_when': 'w2_left',
+            },
+        ],
+    },
+    {
+        'week': 2, 'title': 'Interlude — First Contact',
+        'beats': [
+            {
+                # Texts-only interlude (9th June): James invites Sarah to scrims.
+                'name': 'scrims_texts',
+                'objective': None,
+                'phone': INTERLUDE_SCRIMS,
+                'phone_with': 'Sarah',
+                'card_date': '9 June 2024',
+                'advance_when': 'scrims_done',
+            },
+        ],
+    },
+    {
+        'week': 3,
+        'title': 'Week 3',
+        'beats': [
+            {
+                # Sarah arrives to find James flat on the floor; agree to teach him.
+                'name': 'w3_arrive',
+                'objective': None,
+                'goto': {'scene': 1, 'tile': (9, 12)},
+                'locked_exits': {1: 'all'},
+                'cutscene': [
+                    ('fade_in', 1.0),
+                    ('pose', 'james', 'right'),       # sprawled flat on the floor
+                    ('say', ["Week 3. Sarah heads into the sports hall..."]),
+                    ('say', ["...and finds James flat on the floor."]),
+                    ('walk', 'sarah', (5, 9)),
+                    ('face', 'sarah', 'up'),
+                    ('say', ["Huh? Am I okay?", "Do I look like okay?!",
+                             "...yea, of course I am."], "James"),
+                    ('say', ["I kinda realised, watching you at scrims, that I "
+                             "suck at diving."], "James"),
+                    ('ask', "...", {
+                        'I can teach you': [],
+                        'Sucks to be you': [
+                            ('say', ["Dude, what the hell.",
+                                     "Can you help me out pls?"], "James"),
+                            ('ask', "...", {'Yes': [], 'Fine, ok': []}, "Sarah"),
+                        ],
+                    }, "Sarah"),
+                    ('say', ["Awesome!", "Let's give it a go..."], "James"),
+                    ('flag', 'w3_arrived'),
+                ],
+                'advance_when': 'w3_arrived',
+            },
+            {
+                'name': 'w3_dive',
+                'objective': 'Teach James to dive',
+                'launch_dive': True,
+                'locked_exits': {1: 'all'},
+                'advance_when': 'w3_dove',
+            },
+            {
+                'name': 'w3_postdive',
+                'objective': None,
+                'locked_exits': {1: 'all'},
+                'cutscene': [
+                    ('pose', 'james', None),          # back on his feet after the drill
+                    ('say', ["Thanks! I feel less scared to dive now.",
+                             "Not sure I actually got any better.",
+                             "But that's a problem for another day."], "James"),
+                    ('say', ["Are you guys gonna come play?!"], "Matt"),
+                    ('say', ["(Oh yeah.)"], "James"),
+                    ('say', ["Oh yeah, the difficulty went up again lol.",
+                             "So good luck with that."], "James"),
+                    ('flag', 'w3_ready'),
+                ],
+                'advance_when': 'w3_ready',
+            },
+            {
+                'name': 'w3_match',
+                'objective': 'Win the 3v3 (Hard)',
+                'launch_volleyball': True,
+                'locked_exits': {1: 'all'},
+                'advance_when': 'w3_won_vb',
+            },
+            {
+                # Beer garden, back-left table. Family-visit chat; Sarah feels rough
+                # and heads home early.
+                'name': 'w3_garden',
+                'objective': None,
+                'goto': {'scene': 4, 'tile': (2, 7)},
+                'party': 'form',
+                'locked_exits': {4: 'all'},
+                'cutscene': [
+                    ('fade_in', 1.0),
+                    ('settle',),
+                    ('say', ["Afterwards the group pile into the garden — the "
+                             "back-left table this time."]),
+                    ('move', {'sarah': (3, 4), 'james': (4, 4), 'matt': (2, 3),
+                              'dan': (5, 3), 'nat': (3, 2), 'bailey': (6, 4),
+                              'mayu': (7, 3), 'wallace': (5, 5)}),
+                    ('face', 'sarah', 'up'),
+                    ('face', 'james', 'up'),
+                    ('say', ["Hm? Your family's visiting in two weeks?"], "Matt"),
+                    ('ask', "...", {
+                        "Yeah, they're coming to watch you guys play": [],
+                        "Yeah, to watch you lot suck at volleyball": [
+                            ('say', ["(Ouch.)"], "James")],
+                    }, "Sarah"),
+                    ('say', ["I'm sure they're going to be...",
+                             "...very entertained by what they see."], "Dan"),
+                    ('say', ["Too right."], "James"),
+                    ('say', ["(Sarah's stomach turns. Oh no. Not again.)"]),
+                    ('say', ["Are you feeling ok?"], "Matt"),
+                    ('say', ["(Blasted chicken.)"]),
+                    ('say', ["Damn, no worries.",
+                             "Have a good night — see ya next week!"], "James"),
+                    ('say', ["Sarah slips out and heads home."]),
+                    ('flag', 'w3_garden_done'),
+                ],
+                'advance_when': 'w3_garden_done',
+            },
+            {
+                # James's POV: the lads carry on to Wetherspoons. Sarah's gone, so
+                # her sprite is hidden for this scene.
+                'name': 'w3_spoons',
+                'objective': None,
+                'goto': {'scene': 10, 'tile': (2, 13)},
+                'hide_player': True,
+                'locked_exits': {10: 'all'},
+                'cutscene': [
+                    ('fade_out', 0.8),
+                    ('wait', 0.6),
+                    ('say', ["(Meanwhile — James, Dan, Nat and Matt carry on to "
+                             "Wetherspoons.)"]),
+                    ('fade_in', 1.0),
+                    ('settle',),
+                    ('move', {'james': (8, 8), 'dan': (10, 8), 'nat': (8, 9),
+                              'matt': (10, 9), 'bailey': (16, 12), 'mayu': (17, 12),
+                              'wallace': (16, 11)}),
+                    ('face', 'james', 'right'),
+                    ('face', 'dan', 'left'),
+                    ('say', ["So... who's Sarah interested in?"], "Dan"),
+                    ('say', ["You can't tell anyone."], "Nat"),
+                    ('say', ["Of course, of course."], "Dan"),
+                    ('say', ["..."], "James"),
+                    ('say', ["Do you know Leonard?"], "Nat"),
+                    ('say', ["...", "Who the hell is Leonard?"], "James"),
+                    ('say', ["He's tall and also German."], "Nat"),
+                    ('say', ["I have literally never met this guy before."], "James"),
+                    ('say', ["The guy that made us run round in circles the "
+                             "first week?"], "Dan"),
+                    ('say', ["Oh, nvm, I do know that guy.", "...",
+                             "I'm gonna grab another drink."], "James"),
+                    ('walk', 'james', (8, 6)),
+                    ('walk', 'james', (6, 4)),
+                    ('face', 'james', 'up'),
+                    ('say', ["Me too."], "Matt"),
+                    ('walk', 'matt', (10, 6)),
+                    ('walk', 'matt', (7, 4)),
+                    ('face', 'matt', 'up'),
+                    ('face', 'james', 'right'),
+                    ('face', 'matt', 'left'),
+                    ('say', ["Hey man."], "Matt"),
+                    ('say', ["Yo."], "James"),
+                    ('say', ["What do you think about that whole Leonard thing?"], "Matt"),
+                    ('say', ["Idk dude. Good for her?"], "James"),
+                    ('say', ["Were you interested in her as well?"], "Matt"),
+                    ('say', ["No, no — not really."], "James"),
+                    ('say', ["Well, between you and me, I think this might be for "
+                             "the best.",
+                             "We don't want something silly like this coming "
+                             "between two bros, y'know."], "Matt"),
+                    ('say', ["Lol, for sure man."], "James"),
+                    ('say', ["Let's make a pact.",
+                             "Neither of us asks Sarah on a date, and we both just "
+                             "keep on going with everything."], "Matt"),
+                    ('say', ["A pact?", "...", "...sure?"], "James"),
+                    ('say', ["Sweet — this is a good thing, trust me."], "Matt"),
+                    ('walk', 'matt', (10, 6)),
+                    ('walk', 'matt', (10, 9)),
+                    ('say', ["(...okay.)"], "James"),
+                    ('walk', 'james', (8, 6)),
+                    ('walk', 'james', (8, 8)),
+                    ('fade_out', 1.0),
+                    ('wait', 0.5),
+                    ('flag', 'w3_spoons_done'),
+                ],
+                'advance_when': 'w3_spoons_done',
+            },
+            {
+                # End of chapter -> results card + the Week 3 texts.
+                'name': 'w3_end',
+                'objective': None,
+                'end_chapter': True,
+                'advance_when': 'w3_left',
             },
         ],
     },
 ]
 
 
-# Post-night phone thread shown after the Week 1 results card (James <-> Dan).
+# Post-night phone threads shown after each week's results card (James <-> Dan).
 # See systems/screens.py Phone for the entry schema.
-PHONE_THREAD = [
+PHONE_THREAD_W1 = [
     {'who': 'Dan', 'shot_me': 'Dan', 'caption': 'Dan sent a screenshot', 'shot': [
         ('Matt', "Yesterday I overheard you telling a guy to turn the oven "
                  "on and leave a rug in the room?? what was that about"),
@@ -647,4 +1108,42 @@ PHONE_THREAD = [
     {'who': 'Dan', 'text': "That should be illegal"},
     {'who': 'James', 'text': "Santander want the smoke", 'react': "\U0001F602"},
     {'who': 'James', 'text': "I'm here \U0001F94A\U0001F6AB"},
+]
+
+# Week 2: Dan can't keep a secret.
+PHONE_THREAD_W2 = [
+    {'who': 'Dan', 'text': "Me n Mayu just got off for like an hour"},
+    {'who': 'James', 'text': "Lmao on fucking way"},
+    {'who': 'Dan', 'text': "Don't tell anyone cus we promised not to tell anyone"},
+    {'who': 'Dan', 'text': "And she specifically said James"},
+    {'who': 'James', 'text': "Won't"},
+    {'who': 'Dan', 'text': "But I can't not tell h"},
+    {'who': 'Dan', 'text': "U"},
+    {'who': 'James', 'text': "Real"},
+    {'who': 'Dan', 'text': "For real you can't tell anyone"},
+    {'who': 'James', 'text': "\U0001F910"},
+    {'who': 'Dan', 'text': "Told u I got it", 'react': "\U0001F44D"},
+]
+
+# Week 3: Dan's night out, then Matt does a full 180 on the pact.
+PHONE_THREAD_W3 = [
+    {'who': 'Dan', 'text': "Back at Natalia's place rn"},
+    {'who': 'James', 'text': "Huh"},
+    {'who': 'James', 'text': "All good?"},
+    {'who': 'Dan', 'text': "Ye"},
+    {'who': 'Dan', 'text': "Slept with her"},
+    {'who': 'James', 'text': "Say ong"},
+    {'who': 'Dan', 'text': "Ong"},
+    # ...scroll past some texts...
+    {'who': 'James', 'notif': {
+        'app': 'Messages · 18m ago',
+        'title': 'Matthew Endicott',
+        'body': "I asked out Sarah. She said no. I apologise for going back on what "
+                "I said last night, I apologise for that. Just to be clear I am not "
+                "apologising for asking her out, I am apologising for going back on "
+                "my word yesterday when I said I wouldn't. At the end of"}},
+    {'who': 'James', 'text': "Can't have a normal night out \U0001F62D\U0001F62D"},
+    {'who': 'Dan', 'text': "Fucking hell man \U0001F602\U0001F602\U0001F602\U0001F602"},
+    {'who': 'Dan', 'text': "Fuck spoons"},
+    {'who': 'Dan', 'text': "Nah how can someone do a full 180 like that \U0001F62D"},
 ]
