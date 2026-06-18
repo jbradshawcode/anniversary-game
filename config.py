@@ -510,7 +510,7 @@ STORY_WEEKS = [
                 'locked_exits': {1: 'all'},
                 'cutscene': [
                     ('fade_in', 1.2),
-                    ('say', ["Saturday morning. The sports hall hums with the",
+                    ('say', ["Thursday evening. The sports hall hums with the",
                              "squeak of fresh trainers on the floor."]),
                     ('say', ["Sarah and Nat walk in through the doors."]),
                     ('say', ["So... what's the plan?"], "Nat"),
@@ -910,7 +910,7 @@ STORY_WEEKS = [
                 'objective': None,
                 'phone': INTERLUDE_SCRIMS,
                 'phone_with': 'Sarah',
-                'card_date': '9 June 2024',
+                'card_date': '7 June 2024',
                 'advance_when': 'scrims_done',
             },
         ],
