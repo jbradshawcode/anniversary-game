@@ -203,17 +203,20 @@ def _e_cry(s, S):                                          # loud crying (two st
 
 
 def _e_tear(s, S):                                         # single sad tear
-    r = S // 2 - 1
     cx = cy = S // 2
+    r = S // 2 - 1
     pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
-    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 18))
+    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 20))
     dk = (70, 50, 25)
-    for ex in (cx - S // 5, cx + S // 5):
-        pygame.draw.circle(s, dk, (ex, cy - S // 10), max(1, S // 16))
-    pygame.draw.arc(s, dk, pygame.Rect(cx - S // 5, cy + S // 8, 2 * (S // 5), S // 3),
-                    3.4, 6.0, max(2, S // 18))             # downturned mouth
-    pygame.draw.ellipse(s, (120, 200, 240),
-                        pygame.Rect(cx + S // 5 - S // 14, cy - S // 16, S // 8, S // 3))
+    for ex in (cx - S // 5, cx + S // 5):                  # eyes
+        pygame.draw.circle(s, dk, (ex, cy - S // 12), max(2, S // 12))
+    pygame.draw.arc(s, dk, pygame.Rect(cx - S // 5, cy + S // 8, 2 * (S // 5), S // 4),
+                    0.4, 2.74, max(2, S // 14))            # frown (top arc)
+    blue, bd = (120, 200, 240), (70, 150, 210)            # big teardrop on the cheek
+    tx, ty = cx - S // 4, cy + S // 10
+    pygame.draw.polygon(s, blue, [(tx, cy - S // 8), (tx - S // 9, ty), (tx + S // 9, ty)])
+    pygame.draw.circle(s, blue, (tx, ty), max(2, S // 9))
+    pygame.draw.circle(s, bd, (tx, ty), max(2, S // 9), 1)
 
 
 def _e_pray(s, S):                                         # folded hands (peak shape)
@@ -295,12 +298,17 @@ def _e_salute(s, S):                                        # saluting face
     cx = cy = S // 2
     r = S // 2 - 1
     pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
-    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 18))
+    pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 20))
     dk = (70, 50, 25)
-    for ex in (cx - S // 5, cx + S // 5):
-        pygame.draw.circle(s, dk, (ex, cy - S // 12), max(1, S // 14))
-    pygame.draw.arc(s, dk, pygame.Rect(cx - S // 5, cy, 2 * (S // 5), S // 4), 3.6, 5.8, max(2, S // 18))
-    pygame.draw.line(s, (244, 198, 150), (cx - r, cy - r // 2), (cx + r // 4, cy - r), max(2, S // 9))
+    for ex in (cx - S // 6, cx + S // 6):                  # eyes
+        pygame.draw.circle(s, dk, (ex, cy + S // 12), max(2, S // 12))
+    pygame.draw.arc(s, dk, pygame.Rect(cx - S // 6, cy + S // 5, 2 * (S // 6), S // 6),
+                    3.6, 5.8, max(2, S // 18))             # slight smile
+    tan, td = (244, 198, 150), (200, 155, 110)            # raised arm to the brow = salute
+    pygame.draw.line(s, td, (cx - S // 8, cy - S // 8), (S - 2, 1), max(5, S // 5))   # forearm, off-face
+    pygame.draw.line(s, tan, (cx - S // 8, cy - S // 8), (S - 3, 2), max(3, S // 8))
+    pygame.draw.line(s, tan, (cx - S // 4, cy - S // 5), (cx + S // 8, cy - S // 4),
+                     max(4, S // 6))                       # flat hand across the brow
 
 
 def _e_raise(s, S):                                         # raising hands
