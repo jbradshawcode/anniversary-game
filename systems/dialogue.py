@@ -11,6 +11,11 @@ _TEXT   = (255, 255, 255)
 _SEL    = (255,  50,  50)
 _NAME   = (255, 210,  80)
 
+# A page ending in one of these is an intentional beat-break; anything else (a
+# mid-sentence wrap) has "no reason to break", so it merges with the next page.
+_SENTENCE_END = '.!?…"\')]”’'
+_MAX_LINES = 2          # a single dialogue page never shows more than this many lines
+
 _BORDER_W = 3
 _PAD_X    = 24
 _PAD_Y    = 18
@@ -60,7 +65,8 @@ class DialogueBox:
               speaker: Optional[str] = None,
               on_choice: Optional[Callable[[str], None]] = None):
         self.active = True
-        self._pages = list(pages)
+        self._speaker = speaker
+        self._pages = self._paginate(list(pages))
         self._index = 0
         self._on_done = on_done
         self._on_choice = on_choice
@@ -137,6 +143,48 @@ class DialogueBox:
             return
         self._choice_index = (self._choice_index + delta) % len(self._choice_keys)
 
+    def _max_text_w(self) -> int:
+        """Available text width — narrower when the speaker has a portrait bust."""
+        portrait = portraits.bust(self._speaker) if self._speaker else None
+        if portrait is not None:
+            text_x = _BOX.x + 12 + _PB + 16
+        else:
+            text_x = _BOX.x + _PAD_X
+        return max(60, _BOX.right - 14 - text_x)
+
+    def _paginate(self, pages: list) -> list:
+        """Merge consecutive text pages that were only split mid-sentence (a wrap with
+        no reason to break) into one page, capped at 2 lines; then split any page that
+        still exceeds 2 lines so nothing overflows the box. Choice pages pass through."""
+        font = _get_font()
+        max_w = self._max_text_w()
+
+        def lines_of(t):
+            return self._wrap_text(font, t, max_w)
+
+        merged: list = []
+        for p in pages:
+            prev = merged[-1] if merged else None
+            if (isinstance(p, str) and isinstance(prev, str)
+                    and prev.rstrip()[-1:] not in _SENTENCE_END
+                    and len(lines_of(prev + ' ' + p)) <= _MAX_LINES):
+                merged[-1] = prev + ' ' + p
+            else:
+                merged.append(p)
+
+        out: list = []
+        for p in merged:
+            if not isinstance(p, str):
+                out.append(p)
+                continue
+            wl = lines_of(p)
+            if len(wl) <= _MAX_LINES:
+                out.append(p)
+            else:                                  # too long -> chunk into 2-line pages
+                for i in range(0, len(wl), _MAX_LINES):
+                    out.append(' '.join(wl[i:i + _MAX_LINES]))
+        return out
+
     @staticmethod
     def _wrap_text(font, text: str, max_w: int) -> List[str]:
         lines, cur = [], ""
@@ -180,7 +228,7 @@ class DialogueBox:
             screen.blit(ns, (tag.x + 12, tag.y + 2))
         # wrap to the available width (narrower when a portrait is shown), then run
         # the typewriter over the wrapped lines so long lines can't overflow the box
-        max_w = max(60, _BOX.right - 14 - text_x)
+        max_w = self._max_text_w()
         display = []                       # (is_paragraph_start, text)
         for para in self._full.split('\n'):
             wl = self._wrap_text(font, para, max_w) or ['']
