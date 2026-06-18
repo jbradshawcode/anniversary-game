@@ -35,6 +35,12 @@ WHISTLE_VOLUME = 1.0    # the loud recorded whistle (whistle_loud) — overworld
 VB_MUSIC      = os.path.join(ASSET_DIR, 'vball_theme.ogg')  # volleyball match theme (not the tutorial)
 KING_ST_MUSIC = os.path.join(ASSET_DIR, 'king_st.ogg')     # plays while on King Street (scene 2)
 GYM_MUSIC     = os.path.join(ASSET_DIR, 'gym_theme.ogg')   # plays while in the gym overworld (scene 1)
+SALUTATION_MUSIC = os.path.join(ASSET_DIR, 'salutation.ogg')  # the Salutation pub interior (scene 3)
+GARDEN_MUSIC  = os.path.join(ASSET_DIR, 'garden.ogg')      # the Salutation beer garden (scene 4)
+LATIMER_MUSIC = os.path.join(ASSET_DIR, 'latimer_upper_school.ogg')  # school grounds, not the gym (5-9)
+WETHERSPOONS_MUSIC = os.path.join(ASSET_DIR, 'wetherspoons.ogg')  # the Wetherspoons (scene 10)
+DIVE_MUSIC    = os.path.join(ASSET_DIR, 'diving.ogg')      # the diving minigame (scene 12)
+GAME_OVER_MUSIC = os.path.join(ASSET_DIR, 'game_over.ogg') # the Game Over screen (played once)
 MATT_MUSIC    = os.path.join(ASSET_DIR, 'matt_theme.ogg')  # Matt's theme, while he's speaking
 CHAPTER_END_MUSIC = os.path.join(ASSET_DIR, 'chapter_end.ogg')  # the end-of-chapter results screen
 

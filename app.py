@@ -2,7 +2,9 @@
 import pygame
 import sys
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
-                    GYM_MUSIC, CHARACTER_MUSIC, CHAPTER_END_MUSIC,
+                    GYM_MUSIC, SALUTATION_MUSIC, GARDEN_MUSIC, LATIMER_MUSIC,
+                    WETHERSPOONS_MUSIC, DIVE_MUSIC, GAME_OVER_MUSIC,
+                    CHARACTER_MUSIC, CHAPTER_END_MUSIC,
                     PHONE_THREAD_W1, PHONE_THREAD_W2, PHONE_THREAD_W3)
 from entities import Player
 from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
@@ -37,7 +39,13 @@ class Game:
         self.running = True
         self.music = MusicPlayer()
         self.sfx = SoundBank()                   # shared UI/overworld SFX (dialogue blip, etc.)
-        self._scene_music = {1: GYM_MUSIC, 2: KING_ST_MUSIC}   # scene_id -> loop (else silence)
+        self._scene_music = {                      # scene_id -> looping track (else silence)
+            1: GYM_MUSIC, 2: KING_ST_MUSIC,
+            3: SALUTATION_MUSIC, 4: GARDEN_MUSIC,
+            5: LATIMER_MUSIC, 6: LATIMER_MUSIC, 7: LATIMER_MUSIC,   # school grounds, not the gym
+            8: LATIMER_MUSIC, 9: LATIMER_MUSIC,
+            10: WETHERSPOONS_MUSIC,
+        }
         self._speaker_music = None                # character theme overriding scene music
         self.dialogue = DialogueBox(self.sfx)
         self.lighting = Lighting()
@@ -249,8 +257,9 @@ class Game:
 
     # ---- diving minigame ---------------------------------------------------
     def _launch_dive(self):
-        """Story hook: drop into the Ch3 diving drill (gym theme carries over)."""
+        """Story hook: drop into the Ch3 diving drill."""
         self.dive.on_finish = self._end_dive
+        self.music.play(DIVE_MUSIC)
         self.scene_manager.jump_to(12, self.player)
 
     def _end_dive(self):
@@ -261,10 +270,12 @@ class Game:
 
     # ---- story interludes --------------------------------------------------
     def _game_over(self, lines):
+        self.music.play(GAME_OVER_MUSIC, loop=False)    # plays once, then silence
         self.active = GameOverMode(self, lines)
 
     def retry_beat(self):
         self.resume()
+        self.update_scene_music(self.scene_manager.current_id)   # back to the scene's track
         self.story.replay_beat()
 
     def debug_next_chapter(self):
