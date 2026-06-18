@@ -102,7 +102,8 @@ _EMOJI_SKIP = frozenset([0x200D, 0xFE0F]) | frozenset(range(0x1F3FB, 0x1F400))
 def _is_emoji(ch: str) -> bool:
     o = ord(ch)
     return (o >= 0x1F000 or 0x2600 <= o <= 0x27BF or 0x2B00 <= o <= 0x2BFF
-            or o in (0x200D, 0xFE0F) or 0x1F3FB <= o <= 0x1F3FF)
+            or 0x2300 <= o <= 0x23FF or o in (0x200D, 0xFE0F, 0x203C, 0x2049)
+            or 0x1F3FB <= o <= 0x1F3FF)
 
 
 def _runs(text: str):
@@ -312,6 +313,118 @@ def _e_raise(s, S):                                         # raising hands
                              border_radius=1)
 
 
+def _e_alarm(s, S):                                         # alarm clock
+    cx = cy = S // 2
+    r = S // 2 - 4
+    dk = (70, 72, 80)
+    pygame.draw.circle(s, dk, (cx - r, cy - r + 2), max(2, S // 8))   # bells
+    pygame.draw.circle(s, dk, (cx + r, cy - r + 2), max(2, S // 8))
+    pygame.draw.line(s, dk, (cx - r // 2, cy + r - 2), (cx - r, cy + r + S // 8), 2)  # legs
+    pygame.draw.line(s, dk, (cx + r // 2, cy + r - 2), (cx + r, cy + r + S // 8), 2)
+    pygame.draw.circle(s, (228, 70, 60), (cx, cy), r)
+    pygame.draw.circle(s, (245, 245, 245), (cx, cy), r - 3)
+    pygame.draw.line(s, (40, 42, 50), (cx, cy), (cx, cy - r + S // 5), max(2, S // 16))
+    pygame.draw.line(s, (40, 42, 50), (cx, cy), (cx + r - S // 5, cy), max(1, S // 20))
+
+
+def _e_bangbang(s, S):                                      # double exclamation
+    red = (228, 52, 52)
+    for ex in (S // 2 - S // 6, S // 2 + S // 6):
+        pygame.draw.rect(s, red, (ex - max(1, S // 22), S // 5, max(2, S // 11), S * 2 // 5))
+        pygame.draw.circle(s, red, (ex, S * 7 // 10), max(2, S // 12))
+
+
+def _e_siren(s, S):                                         # rotating red light
+    pygame.draw.line(s, (255, 220, 130), (S // 2 - S // 4, S // 5), (S // 2 - S // 3, S // 8), 2)
+    pygame.draw.line(s, (255, 220, 130), (S // 2 + S // 4, S // 5), (S // 2 + S // 3, S // 8), 2)
+    pygame.draw.rect(s, (80, 82, 90), (S // 4, S * 3 // 5, S // 2, S // 5), border_radius=2)
+    pygame.draw.ellipse(s, (228, 52, 52), (S // 3, S // 4, S // 3, S * 2 // 5))
+    pygame.draw.ellipse(s, (255, 170, 170), (S // 3 + 2, S // 4 + 2, S // 6, S // 6))
+
+
+def _e_microbe(s, S):                                       # microbe
+    g, gd = (120, 200, 90), (80, 150, 60)
+    pygame.draw.circle(s, g, (S // 2, S // 2), S // 2 - 4)
+    pygame.draw.circle(s, gd, (S // 2, S // 2), S // 2 - 4, 2)
+    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1), (0, 0)]:
+        pygame.draw.circle(s, gd, (S // 2 + dx * S // 6, S // 2 + dy * S // 6), max(1, S // 11))
+
+
+def _e_sponge(s, S):                                        # sponge
+    r = pygame.Rect(S // 5, S // 4, S * 3 // 5, S // 2)
+    pygame.draw.rect(s, (240, 210, 90), r, border_radius=2)
+    pygame.draw.rect(s, (200, 170, 60), r, 1, border_radius=2)
+    for dx, dy in [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1)]:
+        pygame.draw.circle(s, (200, 170, 60),
+                           (S // 5 + S // 8 + dx * S // 7, S // 4 + S // 6 + dy * S // 6), max(1, S // 16))
+
+
+def _e_melt(s, S):                                          # melting face
+    y, dk = (255, 206, 64), (70, 50, 25)
+    pygame.draw.circle(s, y, (S // 2, S // 2 - S // 12), S // 2 - 4)
+    pygame.draw.ellipse(s, y, (S // 6, S // 2, S * 2 // 3, S // 3))    # drip downward
+    pygame.draw.ellipse(s, y, (S // 3, S * 5 // 8, S // 4, S // 4))
+    for ex in (S // 2 - S // 5, S // 2 + S // 5):
+        pygame.draw.circle(s, dk, (ex, S // 2 - S // 10), max(1, S // 14))
+    pygame.draw.arc(s, dk, pygame.Rect(S // 2 - S // 5, S // 2 - S // 12, 2 * (S // 5), S // 4),
+                    3.6, 5.8, max(1, S // 18))
+
+
+def _e_skull(s, S):                                         # skull
+    w, dk = (238, 238, 235), (40, 42, 48)
+    pygame.draw.circle(s, w, (S // 2, S // 2 - S // 12), S // 2 - 4)
+    pygame.draw.rect(s, w, (S // 2 - S // 5, S // 2, 2 * (S // 5), S // 4), border_radius=2)
+    for ex in (S // 2 - S // 5, S // 2 + S // 5):
+        pygame.draw.circle(s, dk, (ex, S // 2 - S // 10), max(2, S // 9))
+    pygame.draw.circle(s, dk, (S // 2, S // 2), max(1, S // 16))
+    for i in range(-2, 3):
+        pygame.draw.line(s, dk, (S // 2 + i * S // 12, S // 2 + S // 8),
+                         (S // 2 + i * S // 12, S // 2 + S // 4), 1)
+
+
+def _e_boom(s, S):                                          # collision / boom
+    cx = cy = S // 2
+    spikes = [(0, -1, 1.0), (0.35, -0.35, 0.45), (1, 0, 1.0), (0.35, 0.35, 0.45),
+              (0, 1, 1.0), (-0.35, 0.35, 0.45), (-1, 0, 1.0), (-0.35, -0.35, 0.45)]
+    out = [(cx + int(dx * (S // 2 - 1) * m), cy + int(dy * (S // 2 - 1) * m)) for dx, dy, m in spikes]
+    pygame.draw.polygon(s, (245, 150, 40), out)
+    inn = [(cx + int(dx * (S // 4) * m), cy + int(dy * (S // 4) * m)) for dx, dy, m in spikes]
+    pygame.draw.polygon(s, (250, 220, 90), inn)
+
+
+def _e_speaker(s, S):                                       # speaker / loud
+    dk = (60, 62, 70)
+    pygame.draw.rect(s, dk, (S // 5, S * 2 // 5, S // 6, S // 5))
+    pygame.draw.polygon(s, dk, [(S // 5 + S // 6, S * 2 // 5), (S * 2 // 5, S // 4),
+                                (S * 2 // 5, S * 3 // 4), (S // 5 + S // 6, S * 3 // 5)])
+    for r in (S // 6, S // 4):
+        pygame.draw.arc(s, (80, 160, 230), pygame.Rect(S // 2 - r // 2, S // 2 - r, r, 2 * r),
+                        -1.0, 1.0, 2)
+
+
+def _e_seenoevil(s, S):                                     # see-no-evil monkey
+    br, tan = (150, 100, 60), (212, 172, 124)
+    for ex in (S // 4, S * 3 // 4):
+        pygame.draw.circle(s, br, (ex, S // 2 - S // 8), max(2, S // 6))   # ears
+    pygame.draw.circle(s, br, (S // 2, S // 2), S // 2 - 4)                 # face
+    pygame.draw.ellipse(s, tan, (S // 3, S // 2, S // 3, S // 3))          # muzzle
+    pygame.draw.rect(s, tan, (S // 5, S // 3, S * 3 // 5, S // 5), border_radius=3)  # hands over eyes
+
+
+def _e_flag_lb(s, S):                                       # Lebanese flag
+    fr = pygame.Rect(S // 6, S // 4, S * 2 // 3, S // 2)
+    band = fr.h // 3
+    pygame.draw.rect(s, (220, 60, 60), (fr.x, fr.y, fr.w, band))
+    pygame.draw.rect(s, (245, 245, 245), (fr.x, fr.y + band, fr.w, band))
+    pygame.draw.rect(s, (220, 60, 60), (fr.x, fr.y + 2 * band, fr.w, fr.h - 2 * band))
+    cxp, cym = fr.centerx, fr.centery
+    pygame.draw.polygon(s, (40, 130, 60), [(cxp, cym - band // 2),
+                                           (cxp - fr.w // 8, cym + band // 2),
+                                           (cxp + fr.w // 8, cym + band // 2)])
+    pygame.draw.rect(s, (40, 130, 60), (cxp - 1, cym + band // 2 - 1, 2, 3))
+    pygame.draw.rect(s, (170, 170, 170), fr, 1)
+
+
 _EMOJI_DRAW = {
     '\U0001F602': _e_joy,    # face with tears of joy
     '\U0001F44D': _e_thumb,  # thumbs up
@@ -330,6 +443,17 @@ _EMOJI_DRAW = {
     '\U0001F910': _e_zip,    # zipper-mouth face
     '\U0001FAE1': _e_salute, # saluting face
     '\U0001F64C': _e_raise,  # raising hands
+    '⏰': _e_alarm,      # alarm clock
+    '‼': _e_bangbang,   # double exclamation
+    '\U0001F6A8': _e_siren,  # police-car light / siren
+    '\U0001F9A0': _e_microbe,# microbe
+    '\U0001F9FD': _e_sponge, # sponge
+    '\U0001FAE0': _e_melt,   # melting face
+    '\U0001F480': _e_skull,  # skull
+    '\U0001F4A5': _e_boom,   # collision / boom
+    '\U0001F50A': _e_speaker,# speaker high volume
+    '\U0001F648': _e_seenoevil,  # see-no-evil monkey
+    '\U0001F1F1\U0001F1E7': _e_flag_lb,  # Lebanese flag (regional indicators L + B)
 }
 
 
@@ -346,7 +470,17 @@ def _emoji_glyph(ch: str, px: int):
 
 
 def _emoji_bases(seg: str):
-    return [ch for ch in seg if ord(ch) not in _EMOJI_SKIP]
+    chars = [ch for ch in seg if ord(ch) not in _EMOJI_SKIP]
+    out, i = [], 0
+    while i < len(chars):                         # pair regional indicators into a flag glyph
+        if (0x1F1E6 <= ord(chars[i]) <= 0x1F1FF and i + 1 < len(chars)
+                and 0x1F1E6 <= ord(chars[i + 1]) <= 0x1F1FF):
+            out.append(chars[i] + chars[i + 1])
+            i += 2
+        else:
+            out.append(chars[i])
+            i += 1
+    return out
 
 
 def _rich_w(fnt, text: str, epx: int) -> int:

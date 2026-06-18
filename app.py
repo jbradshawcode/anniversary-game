@@ -5,7 +5,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
                     GYM_MUSIC, SALUTATION_MUSIC, GARDEN_MUSIC, LATIMER_MUSIC,
                     WETHERSPOONS_MUSIC, DIVE_MUSIC, GAME_OVER_MUSIC,
                     CHARACTER_MUSIC, CHAPTER_END_MUSIC,
-                    PHONE_THREAD_W1, PHONE_THREAD_W2, PHONE_THREAD_W3)
+                    PHONE_THREAD_W1, PHONE_THREAD_W2, PHONE_THREAD_W3, PHONE_THREAD_W4)
 from entities import Player
 from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
                     Courtyard, Passage, Courts, WilliamMorris, VolleyCourt,
@@ -222,7 +222,7 @@ class Game:
         """Story hook: drop into the 3v3. Difficulty + roster are set per chapter
         (Ch1 easy, Ch2 medium); Ch1 can run the controls warm-up first if asked."""
         week = self.story.beat.get('week', 1)
-        level = {1: 'easy', 2: 'medium'}.get(week, 'hard')
+        level = {1: 'easy', 2: 'medium', 3: 'hard', 4: 'insane'}.get(week, 'hard')
         if week == 1 and self.story.has('w1_want_tut') and not self.story.has('w1_tut_done'):
             self._launch_tutorial(level)
             return
@@ -292,7 +292,8 @@ class Game:
         self.music.play(CHAPTER_END_MUSIC)         # end-of-chapter screen theme
 
     def enter_phone(self):
-        threads = {1: PHONE_THREAD_W1, 2: PHONE_THREAD_W2, 3: PHONE_THREAD_W3}
+        threads = {1: PHONE_THREAD_W1, 2: PHONE_THREAD_W2, 3: PHONE_THREAD_W3,
+                   4: PHONE_THREAD_W4}
         thread = threads.get(self.story.beat.get('week'), PHONE_THREAD_W1)
         self.active = PhoneMode(self, screens.Phone(thread))
 

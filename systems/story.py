@@ -214,23 +214,32 @@ class StoryManager:
         """A 'check N things in any order' beat: each item sets its own flag; the
         beat advances once all are checked. Lines are order-aware (more left vs done)."""
         item = checklist.get((obj.tile_x, obj.tile_y))
-        if item is None or self._dialogue is None:
+        if item is None:
             return False
         beat = self.beat
         flag = item['flag']
         spk = item.get('speaker')                     # per-item speaker (e.g. who you greeted)
-        if flag in self.flags:                        # already ticked off
-            self._dialogue.start(beat.get('checked_again', item['lines']), speaker=spk)
-            return True
-        last = all(it['flag'] in self.flags for t, it in checklist.items() if it is not item)
-        suffix = beat.get('check_done', []) if last else beat.get('check_more', [])
-        lines = list(item['lines']) + list(suffix)    # suffix optional (greets need none)
         advance = beat.get('advance_when')
 
         def _after() -> None:
             self.flags.add(flag)
             if all(it['flag'] in self.flags for it in checklist.values()):
                 self.set_flag(advance)
+
+        if flag in self.flags:                        # already ticked off
+            again = beat.get('checked_again', item.get('lines', ['...']))
+            if self._dialogue is not None:
+                self._dialogue.start(again, speaker=spk)
+            return True
+        steps = item.get('steps')                     # a cutscene greet — can hold a choice
+        if steps is not None and self._cutscene is not None:
+            self._cutscene.start(list(steps) + [('call', _after)])
+            return True
+        if self._dialogue is None:
+            return False
+        last = all(it['flag'] in self.flags for t, it in checklist.items() if it is not item)
+        suffix = beat.get('check_done', []) if last else beat.get('check_more', [])
+        lines = list(item['lines']) + list(suffix)    # suffix optional (greets need none)
         self._dialogue.start(lines, speaker=spk, on_done=_after)
         return True
 

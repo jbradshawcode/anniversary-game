@@ -53,6 +53,8 @@ _ROSTERS = {
         {Role.SETTER: Dan, Role.HITTER_L: Matt, Role.HITTER_R: Bailey}),
     3: ({Role.HITTER_R: Player, Role.SETTER: James, Role.HITTER_L: Nat},
         {Role.SETTER: Dan, Role.HITTER_L: Matt, Role.HITTER_R: Bailey}),
+    4: ({Role.HITTER_R: Player, Role.SETTER: James, Role.HITTER_L: Nat},
+        {Role.SETTER: Dan, Role.HITTER_L: Matt, Role.HITTER_R: Bailey}),
 }
 
 # ── Palette ──────────────────────────────────────────────────────────────────
