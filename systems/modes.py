@@ -54,7 +54,7 @@ class TitleMode(Mode):
         menu.title_backdrop(screen)
         current = self._flow.current_menu
         if self._flow.at_root:
-            menu.hero(screen, "PYGAME ADVENTURE")
+            menu.hero(screen, "The Story of Us")
             menu.options(screen, current.options, current.index, 248)
             menu.text(screen, current.hint, SCREEN_WIDTH // 2, SCREEN_HEIGHT - 34,
                       menu.font(UI_FONT_NAME, 14), menu.MUTED)

@@ -110,7 +110,7 @@ class MenuFlow:
     def _open_root(self) -> None:
         self._state = 'root'
         if self._root == 'title':
-            self.menu = menu.Menu("PYGAME ADVENTURE",
+            self.menu = menu.Menu("The Story of Us",
                                   ["New Game", "Load Game", "Quit"], hint=_TITLE_HINT)
         else:
             self.menu = menu.Menu("Paused",
