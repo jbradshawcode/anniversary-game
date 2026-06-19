@@ -11,6 +11,7 @@ from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
                     Courtyard, Passage, Courts, WilliamMorris, VolleyCourt,
                     DiveGame)
 from systems.scene_manager import SceneManager
+from systems import input_handler
 from systems.input_handler import event_to_action
 from systems.audio import MusicPlayer, SoundBank
 from systems.dialogue import DialogueBox
@@ -33,6 +34,7 @@ _SCENE_NAMES = {1: "Gym", 2: "King Street", 3: "The Salutation", 4: "Beer Garden
 class Game:
     def __init__(self):
         pygame.init()
+        input_handler.init_joysticks()           # open any controller already plugged in
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
         pygame.display.set_caption("The Story of Us")
         self.clock = pygame.time.Clock()
@@ -109,6 +111,12 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+                continue
+            if event.type == pygame.JOYDEVICEADDED:        # controller plugged in mid-game
+                input_handler.add_joystick(event.device_index)
+                continue
+            if event.type == pygame.JOYDEVICEREMOVED:
+                input_handler.remove_joystick(event.instance_id)
                 continue
             action = event_to_action(event)
             if self.pause is not None:

@@ -380,12 +380,22 @@ SCENE_CONFIGS = {
     },
 }
 
-# Diving minigame (Ch3) — a silly reaction drill. Deliberately forgiving.
-DIVE_ROUNDS = 6
-DIVE_BALL_TIME = 1.25        # seconds for a toss to drop to the floor
-DIVE_SAVE_FROM = 0.0        # any correct-direction dive saves (wrong side / no dive misses)
-DIVE_RESULT_TIME = 0.9      # how long each toss's verdict lingers
-DIVE_LUNGE = 64             # px James flops sideways on a dive
+# Diving minigame (Ch3) — a "keep it up" digging rally: short balls are fed to your
+# side, run under each and dig (or dive for the wide ones). It ramps as the rally
+# grows; a dropped ball ends it. Skill = positioning + committing to dives.
+DIVE_PLAYER_SPEED = 305      # px/s run speed
+DIVE_PLAYER_ACCEL = 2900     # px/s^2 momentum ramp (snappy starts/stops)
+DIVE_DIG_REACH    = 46       # px you can dig from a standing position
+DIVE_LUNGE_REACH  = 132      # px you can reach with a committed dive
+DIVE_FALL_TIME    = 1.30     # base seconds for a fed ball to arc down
+DIVE_FALL_MIN     = 0.60     # fastest the feed ramps to
+DIVE_DIG_WINDOW   = 0.52     # ball must be this low (s before it lands) to be diggable
+DIVE_FEED_GAP     = 0.40     # pause after a dig before the next feed
+DIVE_LUNGE_TIME   = 0.52     # how long a dive animation takes
+DIVE_LUNGE_HOP    = 18       # px the body lifts at the apex of a dive
+DIVE_RESULT_TIME  = 0.9      # verdict pause before the result card
+DIVE_TARGET       = 30       # digs that complete the drill (a drop just resets the streak)
+DIVE_MAX_FEEDS    = 70       # safety net: the drill always ends after this many fed balls
 
 
 # End-of-week star rating, earned from how many volleyball attempts a win took.
