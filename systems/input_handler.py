@@ -47,6 +47,14 @@ _DIRECTION_KEYS = [
 ]
 
 # ── gamepad ───────────────────────────────────────────────────────────────--
+# D-pad as buttons (SDL controller layout) -> screen-space deltas. Many pads,
+# DualSense included, report the D-pad this way rather than as a hat.
+_DPAD_BUTTONS = {
+    11: ( 0, -1),   # up
+    12: ( 0,  1),   # down
+    13: (-1,  0),   # left
+    14: ( 1,  0),   # right
+}
 # DualSense face buttons under SDL's game-controller mapping.
 _BUTTON_MAP = {
     0: Action.CONFIRM,   # Cross  (✕)
@@ -54,6 +62,10 @@ _BUTTON_MAP = {
     2: Action.MENU,      # Square (□)
     3: Action.MENU,      # Triangle (△) — handy second menu button
     6: Action.QUIT,      # Options — opens the pause menu
+    11: Action.MOVE_UP,
+    12: Action.MOVE_DOWN,
+    13: Action.MOVE_LEFT,
+    14: Action.MOVE_RIGHT,
 }
 # D-pad hat -> discrete move (SDL hat y is +1 up, so screen y is negated below).
 _HAT_MAP = {
@@ -67,6 +79,12 @@ _ANALOG_DEADZONE = 0.25      # below this the analog vector reads as centred
 
 _joysticks: Dict[int, "pygame.joystick.Joystick"] = {}
 _axis_state: Dict[Tuple[int, int], int] = {}   # (instance_id, axis) -> -1/0/1, for edge detection
+_last_device = 'keyboard'                       # 'keyboard' or 'gamepad' — drives on-screen prompts
+
+
+def last_input_device() -> str:
+    """Which input method was used most recently (so the UI can label controls)."""
+    return _last_device
 
 
 def init_joysticks() -> None:
@@ -110,6 +128,14 @@ def _pad_vector() -> Tuple[float, float]:
         hx, hy = js.get_hat(0) if js.get_numhats() > 0 else (0, 0)
         if hx or hy:
             return (float(hx), float(-hy))
+        nb = js.get_numbuttons()
+        bx = by = 0
+        for btn, (dx, dy) in _DPAD_BUTTONS.items():
+            if btn < nb and js.get_button(btn):
+                bx += dx
+                by += dy
+        if bx or by:
+            return (float(bx), float(by))
         ax = js.get_axis(0) if js.get_numaxes() > 0 else 0.0
         ay = js.get_axis(1) if js.get_numaxes() > 1 else 0.0
         if abs(ax) > _ANALOG_DEADZONE or abs(ay) > _ANALOG_DEADZONE:
@@ -148,13 +174,21 @@ def get_held_vector() -> Tuple[float, float]:
 
 
 def event_to_action(event: pygame.event.Event) -> Optional[Action]:
-    """Map a single input event to an action, or None if unmapped."""
+    """Map a single input event to an action, or None if unmapped. Also notes which
+    device was last used (ignoring sub-deadzone stick drift) for control prompts."""
+    global _last_device
     if event.type == pygame.KEYDOWN:
+        _last_device = 'keyboard'
         return _KEY_MAP.get(event.key)
     if event.type == pygame.JOYBUTTONDOWN:
+        _last_device = 'gamepad'
         return _BUTTON_MAP.get(event.button)
     if event.type == pygame.JOYHATMOTION:
+        if event.value != (0, 0):
+            _last_device = 'gamepad'
         return _HAT_MAP.get(event.value)
     if event.type == pygame.JOYAXISMOTION:
+        if abs(event.value) > _STICK_DEADZONE:
+            _last_device = 'gamepad'
         return _axis_to_action(event)
     return None

@@ -21,12 +21,39 @@ class MusicPlayer:
     def __init__(self, volume: float = MUSIC_VOLUME) -> None:
         self._volume = max(0.0, min(1.0, volume))
         self._current: Optional[str] = None
+        self._positions: dict = {}      # path -> seconds in; resume there instead of restarting
+        self._lengths: dict = {}        # path -> track length (cached, for looping modulo)
+        self._resume_base = 0.0         # start offset of the current play() call
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
             self._ok = True
         except pygame.error:
             self._ok = False
+
+    def _length(self, path: str) -> float:
+        if path not in self._lengths:
+            try:
+                self._lengths[path] = pygame.mixer.Sound(path).get_length()
+            except pygame.error:
+                self._lengths[path] = 0.0
+        return self._lengths[path]
+
+    def _bank_position(self) -> None:
+        """Remember where the current track is, so a later play() can resume it."""
+        if not self._ok or self._current is None:
+            return
+        try:
+            played = pygame.mixer.music.get_pos()    # ms since this play() call (-1 if stopped)
+        except pygame.error:
+            return
+        if played < 0:
+            return
+        pos = self._resume_base + played / 1000.0
+        length = self._length(self._current)
+        if length > 0:
+            pos = pos % length                       # looped tracks: wrap to within the file
+        self._positions[self._current] = pos
 
     def play(self, path: str, loop: bool = True, fade_ms: int = MUSIC_FADE_MS) -> None:
         # no-op if the same track is already playing, or the file isn't there yet
@@ -35,20 +62,27 @@ class MusicPlayer:
         if not os.path.isfile(path):
             self._current = None
             return
+        self._bank_position()           # remember the outgoing track's place before we swap
+        start = self._positions.get(path, 0.0)
         try:
             pygame.mixer.music.load(path)
             pygame.mixer.music.set_volume(self._volume)
-            pygame.mixer.music.play(-1 if loop else 0, fade_ms=fade_ms)
+            try:
+                pygame.mixer.music.play(-1 if loop else 0, start=start, fade_ms=fade_ms)
+            except (pygame.error, TypeError):        # some formats can't seek-on-start
+                pygame.mixer.music.play(-1 if loop else 0, fade_ms=fade_ms)
+                start = 0.0
+            self._resume_base = start
             self._current = path
         except pygame.error:
             self._current = None
 
-    def restart(self, path: str, loop: bool = True, fade_ms: int = MUSIC_FADE_MS) -> None:
-        """Play `path` from the beginning even if it's already the current track."""
-        self._current = None        # clear the same-track guard so play() restarts it
-        self.play(path, loop, fade_ms)
+    def reset(self) -> None:
+        """Forget all resume marks (call between chapters so tracks start fresh)."""
+        self._positions.clear()
 
     def stop(self, fade_ms: int = MUSIC_FADE_MS) -> None:
+        self._bank_position()           # so returning to this track resumes where it left off
         self._current = None
         if not self._ok:
             return

@@ -155,6 +155,7 @@ class Game:
     def start_new(self):
         self.cutscene.active = False
         self._vb_retry = False
+        self.music.reset()                 # fresh game -> no stale song resume marks
         self.story.restore(0, [], scene_id=None)
         self.scene_manager.jump_to(1, self.player)
         self.player.teleport(self._start_col, self._start_row)
@@ -205,14 +206,14 @@ class Game:
             self.music.stop()
 
     def update_speaker_music(self):
-        """While a character with a theme is talking, play it (from the start each
-        time they begin); restore the scene's track once they stop. Called each
-        play frame from PlayMode."""
+        """While a character with a theme is talking, play it (resuming where it
+        last left off — see MusicPlayer); restore the scene's track once they stop.
+        Called each play frame from PlayMode."""
         speaker = self.dialogue.speaker if self.dialogue.active else None
         theme = CHARACTER_MUSIC.get(speaker) if speaker else None
         if theme is not None:
             if speaker != self._speaker_music:
-                self.music.restart(theme)
+                self.music.play(theme)
                 self._speaker_music = speaker
         elif self._speaker_music is not None:
             self._speaker_music = None
@@ -307,6 +308,7 @@ class Game:
 
     def finish_week(self):
         self.resume()
+        self.music.reset()                          # new chapter -> songs start fresh, not resumed
         self.story.vb_attempts = 0                  # star cards are per-chapter; reset for the next
         self.story.set_flag(self.story.beat.get('advance_when'))   # this chapter's "left" flag
         self.update_scene_music(self.scene_manager.current_id)   # end chapter-end theme
@@ -325,6 +327,7 @@ class Game:
 
     def _finish_interlude(self, flag):
         self.resume()
+        self.music.reset()                          # interludes sit between chapters -> reset marks
         self.story.set_flag(flag)
         self.update_scene_music(self.scene_manager.current_id)
 

@@ -44,7 +44,7 @@ GAME_OVER_MUSIC = os.path.join(ASSET_DIR, 'game_over.ogg') # the Game Over scree
 MATT_MUSIC    = os.path.join(ASSET_DIR, 'matt_theme.ogg')  # Matt's theme, while he's speaking
 CHAPTER_END_MUSIC = os.path.join(ASSET_DIR, 'chapter_end.ogg')  # the end-of-chapter results screen
 
-# Speaker name -> theme that plays (restarted) while that character is talking.
+# Speaker name -> theme that plays (resuming where it left off) while they talk.
 CHARACTER_MUSIC = {'Matt': MATT_MUSIC}
 
 # ── Volleyball minigame (scene 11) ──────────────────────────────────────────
@@ -608,14 +608,16 @@ STORY_WEEKS = [
                              "before the others get here.",
                              "There should be one in the ball baskets."], "Sarah"),
                 ],
-                'checklist': {
-                    (2, 7):  {'flag': 'w1_basket_near',
-                              'lines': ["You dig through the near basket... nothing."]},
-                    (17, 7): {'flag': 'w1_basket_far',
-                              'lines': ["You check the far basket... nothing."]},
+                'checklist': {                              # text is order-based (see check_more/done)
+                    (2, 7):  {'flag': 'w1_basket_near', 'lines': []},
+                    (17, 7): {'flag': 'w1_basket_far', 'lines': []},
                 },
-                'check_more': ["\"Empty? Check the other basket.\""],
-                'check_done': ["\"Great. No balls anywhere. Brilliant start.\""],
+                'check_more': ["You check the basket.",
+                               "It is entirely empty.",
+                               "What did you expect to find in there?"],
+                'check_done': ["You check the basket.",
+                               "The void stares back at you.",
+                               "Is this your first day at GoMammoth?"],
                 'checked_again': ["You already checked this one — still empty."],
                 'advance_when': 'w1_baskets_done',
                 'locked_msg': ["Grab a ball first — check the baskets."],
@@ -645,8 +647,13 @@ STORY_WEEKS = [
                              "You and me and Matt against Leonard's lot.",
                              "We'll keep it gentle this first time."], "Dan"),
                     ('ask', "Want a quick warm-up to learn the controls first?", {
-                        'Yes please': [('flag', 'w1_want_tut'), ('flag', 'w1_vb_set')],
-                        "I'm good": ('flag', 'w1_vb_set'),
+                        'Yes please': [('flag', 'w1_want_tut'),
+                                       ('say', ["Sweet ok.",
+                                                "It's finally my time to shine."], "Dan"),
+                                       ('flag', 'w1_vb_set')],
+                        "I'm good": [('say', ["Sweet ok.",
+                                              "It's finally my time to shine."], "Dan"),
+                                     ('flag', 'w1_vb_set')],
                     }, "Dan"),
                 ],
                 'advance_when': 'w1_vb_set',

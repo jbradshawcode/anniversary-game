@@ -38,7 +38,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_AI_TIP_BIAS,
                     VB_OOS_ERROR_MULT, VB_RALLY_MAX,
                     VB_DIFFICULTY)
-from systems.input_handler import Action
+from systems.input_handler import Action, last_input_device
 from systems.fx import FX
 from systems.audio import SoundBank
 from entities.volleyball import VolleyBall, VBActor, Role, Pose
@@ -128,13 +128,14 @@ class Phase(Enum):
     OVER = 3
 
 
-# Tutorial: one mechanic at a time, gated on doing it once.
+# Tutorial: one mechanic at a time, gated on doing it once. Control names are
+# filled in per input device ({hit}/{set}/{move}) by _draw_tut.
 _TUT_STEPS = [
-    ('serve', "SERVE — tap Z for power, then Z again to aim. Land it in."),
-    ('dig',   "DIG — run under the ball with the arrows, then Z to bump it up."),
-    ('set',   "SET — the pass floats up to you at the net. X to set either way."),
-    ('spike', "SPIKE — run up from the back, Z to leap, aim, then Z to swing."),
-    ('block', "BLOCK — move to their hitter and TIME your jump. Z to stuff it."),
+    ('serve', "SERVE — tap {hit} for power, then {hit} again to aim. Land it in."),
+    ('dig',   "DIG — run under the ball with the {move}, then {hit} to bump it up."),
+    ('set',   "SET — the pass floats up to you at the net. {set} to set either way."),
+    ('spike', "SPIKE — run up from the back, {hit} to leap, aim, then {hit} to swing."),
+    ('block', "BLOCK — move to their hitter and TIME your jump. {hit} to stuff it."),
 ]
 
 
@@ -2044,8 +2045,11 @@ class VolleyCourt(Scene):
     def _draw_tut(self, screen: pygame.Surface) -> None:
         t = self._tut
         step, ph = t['step'], t['phase']
+        pad = last_input_device() == 'gamepad'
+        keys = {'hit': "Cross", 'set': "Circle", 'move': "stick"} if pad else \
+               {'hit': "Z", 'set': "X", 'move': "arrows"}
         head = "Tutorial  %d/%d" % (step + 1, len(_TUT_STEPS))
-        instr = _TUT_STEPS[step][1]
+        instr = _TUT_STEPS[step][1].format(**keys)
         if ph == 'success':
             status, col = "Nice!", (170, 255, 185)
         elif ph == 'fail':
@@ -2053,7 +2057,7 @@ class VolleyCourt(Scene):
                    if _TUT_STEPS[step][0] == 'spike' else "Just missed — going again...")
             status, col = msg, (255, 190, 170)
         elif ph == 'intro':
-            status, col = "Press Z to start", (255, 230, 140)
+            status, col = "Press {0} to start".format(keys['hit']), (255, 230, 140)
         else:
             status, col = "", (250, 245, 200)
         hs = self._small.render(head, True, (180, 200, 230))
@@ -2101,8 +2105,12 @@ class VolleyCourt(Scene):
                                            True, (220, 225, 235)), (504, 58))
 
     def _draw_legend(self, screen: pygame.Surface) -> None:
-        ctrls = (('Arrows', 'Move'), ('Z', 'Hit'), ('X', 'Set'),
-                 ('C', 'Tip / dump'), ('Esc', 'Pause'))
+        if last_input_device() == 'gamepad':
+            ctrls = (('Stick', 'Move'), ('Cross', 'Hit'), ('Circle', 'Set'),
+                     ('Square', 'Tip / dump'), ('Options', 'Pause'))
+        else:
+            ctrls = (('Arrows', 'Move'), ('Z', 'Hit'), ('X', 'Set'),
+                     ('C', 'Tip / dump'), ('Esc', 'Pause'))
         row = 18
         h = 24 + len(ctrls) * row
         y0 = SCREEN_HEIGHT - 8 - h
@@ -2124,22 +2132,25 @@ class VolleyCourt(Scene):
         pygame.draw.rect(screen, (90, 150, 220), (x, y, w, h), 2)
         title = self._big.render("HOW TO PLAY", True, (255, 255, 255))
         screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, y + 12))
+        pad = last_input_device() == 'gamepad'
+        mv = "Stick" if pad else "Arrows"
+        hit, st, tip = ("Cross", "Circle", "Square") if pad else ("Z", "X", "C")
         lines = [
             "You control the highlighted player",
             "(bright ring + marker). 3 vs 3.",
             "",
             "Rally:  serve  ->  dig  ->  set  ->  spike",
             "",
-            "Arrows : move (run under the ball)",
-            "Z      : dig / attack / serve / block",
-            "X      : set       C : tip / dump",
+            "{0} : move (run under the ball)".format(mv),
+            "{0} : dig / attack / serve / block".format(hit),
+            "{0} : set     {1} : tip / dump".format(st, tip),
             "",
-            "At the net: Z to leap into slow-mo, aim",
-            "with arrows, then Z spike or C tip.",
+            "At the net: {0} to leap into slow-mo, aim,".format(hit),
+            "then {0} to spike or {1} to tip.".format(hit, tip),
             "",
-            "At the net on ball 2: Z attack / X set",
-            "/ C dump.  On D: Z to block their hit.",
-            "Serve: Z power, then Z to aim L/R.",
+            "On ball 2 at the net: {0} attack /".format(hit),
+            "{0} set / {1} dump.  On D: {2} to block.".format(st, tip, hit),
+            "Serve: {0} for power, then {0} to aim L/R.".format(hit),
             "",
             "First to 7, win by 2.",
         ]
@@ -2147,7 +2158,7 @@ class VolleyCourt(Scene):
         for ln in lines:
             screen.blit(self._small.render(ln, True, (220, 224, 230)), (x + 20, ly))
             ly += 14
-        go = self._font.render("press Z to start", True, (250, 240, 160))
+        go = self._font.render("press {0} to start".format(hit), True, (250, 240, 160))
         screen.blit(go, (SCREEN_WIDTH // 2 - go.get_width() // 2, y + h - 24))
 
     def _draw_serve_meter(self, screen: pygame.Surface) -> None:
@@ -2196,27 +2207,29 @@ class VolleyCourt(Scene):
         screen.blit(txt, (SCREEN_WIDTH // 2 - txt.get_width() // 2, y))
 
     def _prompt(self) -> str:
+        hit, st, tip = (("Cross", "Circle", "Square")
+                        if last_input_device() == 'gamepad' else ("Z", "X", "C"))
         if self.phase == Phase.SERVE and self._server().is_player:
             if self._serve_stage == 'power':
-                return "Z: set power (green = fast)"
-            return "Z: aim left / right"
+                return "{0}: set power (green = fast)".format(hit)
+            return "{0}: aim left / right".format(hit)
         if self._aimstep is not None:
-            return "Aim · Z spike · C tip"
+            return "Aim · {0} spike · {1} tip".format(hit, tip)
         if self._setstep is not None:
-            return "Pick side · X set · C dump"
+            return "Pick side · {0} set · {1} dump".format(st, tip)
         if self._block_jump > 0:
             return "BLOCK!"
         if self._can_block():
-            return "At the net — Z to block"
+            return "At the net — {0} to block".format(hit)
         cc = self._current_contactor()
         if self.phase == Phase.RALLY and cc and cc.is_player:
             kind = self._await[0]
             if kind == 'receive':
-                return "Get under it — Z to dig"
+                return "Get under it — {0} to dig".format(hit)
             if kind == 'set':
                 if self._at_net(cc):
-                    return "Z hit · X set · C dump"
-                return "X to set · C dump"
+                    return "{0} hit · {1} set · {2} dump".format(hit, st, tip)
+                return "{0} to set · {1} dump".format(st, tip)
             if kind == 'spike':
-                return "Run in — Z to leap & aim"
+                return "Run in — {0} to leap & aim".format(hit)
         return ""
