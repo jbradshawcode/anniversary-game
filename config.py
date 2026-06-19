@@ -470,12 +470,10 @@ INTERLUDE_SCRIMS = [
     {'who': 'Sarah', 'text': "omg no worried i just didnt wanna fuck up yalls system"},
     {'who': 'James', 'text': "If the template broke I would probably cry"},
     {'who': 'James', 'text': "But we have a million copies so it's ok"},
-    {'who': 'Sarah', 'text': "see thats what we dont want"},
-    {'who': 'Sarah', 'text': "\U0001F64F"},
+    {'who': 'Sarah', 'text': "see thats what we dont want", 'react': "\U0001F64F"},
     {'who': 'Sarah', 'text': "no tears today"},
     {'who': 'Sarah', 'text': "also who do i pay or do i pay there"},
-    {'who': 'James', 'text': "Friday cryday"},
-    {'who': 'James', 'text': "\U0001FAE1"},
+    {'who': 'James', 'text': "Friday cryday", 'react': "\U0001FAE1"},
     {'who': 'James', 'text': "After the sesh I'll send a msg np"},
     {'who': 'Sarah', 'text': "\U0001FAE1"},
     {'who': 'Sarah', 'text': "yes captain"},
@@ -485,8 +483,7 @@ INTERLUDE_SCRIMS = [
                              "been quite sick today, i thought it would pass but it "
                              "hasnt yet so just a warning for tomorrow, im so sorry "
                              "in advance if im too sick to make it (im praying that "
-                             "wont be the case)"},
-    {'who': 'Sarah', 'text': "\U0001F622"},
+                             "wont be the case)", 'react': "\U0001F622"},
     {'who': 'James', 'text': "Hey hey Sarahh"},
     {'who': 'James', 'text': "Okay"},
     {'who': 'James', 'text': "Rest up sleep good"},
@@ -1083,8 +1080,8 @@ STORY_WEEKS = [
                     ('face', 'james', 'up'),
                     ('say', ["Hm? Your family's visiting in two weeks?"], "Matt"),
                     ('ask', "...", {
-                        "Yeah, they're coming to watch you guys play": [],
-                        "Yeah, to watch you lot suck at volleyball": [
+                        "Yeah, they'll watch you guys play": [],
+                        "Yeah, to watch you lot suck at it": [
                             ('say', ["(Ouch.)"], "James")],
                     }, "Sarah"),
                     ('say', ["I'm sure they're going to be...",

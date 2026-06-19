@@ -300,15 +300,23 @@ def _e_salute(s, S):                                        # saluting face
     pygame.draw.circle(s, (255, 206, 64), (cx, cy), r)
     pygame.draw.circle(s, (230, 170, 40), (cx, cy), r, max(1, S // 20))
     dk = (70, 50, 25)
-    for ex in (cx - S // 6, cx + S // 6):                  # eyes
-        pygame.draw.circle(s, dk, (ex, cy + S // 12), max(2, S // 12))
+    for ex in (cx - S // 6, cx + S // 7):                  # eyes
+        pygame.draw.circle(s, dk, (ex, cy + S // 12), max(2, S // 13))
     pygame.draw.arc(s, dk, pygame.Rect(cx - S // 6, cy + S // 5, 2 * (S // 6), S // 6),
-                    3.6, 5.8, max(2, S // 18))             # slight smile
-    tan, td = (244, 198, 150), (200, 155, 110)            # raised arm to the brow = salute
-    pygame.draw.line(s, td, (cx - S // 8, cy - S // 8), (S - 2, 1), max(5, S // 5))   # forearm, off-face
-    pygame.draw.line(s, tan, (cx - S // 8, cy - S // 8), (S - 3, 2), max(3, S // 8))
-    pygame.draw.line(s, tan, (cx - S // 4, cy - S // 5), (cx + S // 8, cy - S // 4),
-                     max(4, S // 6))                       # flat hand across the brow
+                    3.7, 5.7, max(2, S // 18))             # slight smile
+    # flat saluting hand: fingertips at the forehead, angled down to the wrist on the right
+    tan, td = (245, 206, 160), (200, 160, 115)
+    ft = (cx - S // 16, cy - S // 4)         # fingertips at the forehead
+    hl = (S - 1, cy + S // 5)                # wrist, lower-right off the face
+    dx, dy = hl[0] - ft[0], hl[1] - ft[1]
+    L = (dx * dx + dy * dy) ** 0.5 or 1.0
+    th = S // 5
+    nx, ny = -dy / L * th / 2.0, dx / L * th / 2.0
+    poly = [(int(ft[0] + nx), int(ft[1] + ny)), (int(hl[0] + nx), int(hl[1] + ny)),
+            (int(hl[0] - nx), int(hl[1] - ny)), (int(ft[0] - nx), int(ft[1] - ny))]
+    pygame.draw.polygon(s, tan, poly)
+    pygame.draw.circle(s, tan, (int(ft[0]), int(ft[1])), int(th / 2))   # rounded fingertips
+    pygame.draw.polygon(s, td, poly, 1)
 
 
 def _e_raise(s, S):                                         # raising hands
@@ -705,9 +713,11 @@ class Phone:
 
     @staticmethod
     def _reaction(screen, rect, react, mine, small):
+        # WhatsApp puts the reaction badge at the bubble's bottom-right corner — always,
+        # whoever sent the message (mine is kept for signature compatibility, unused).
         epx = _epx(small)
         pw2 = _rich_w(small, react, epx) + 12
-        bx = rect.left - pw2 + 6 if mine else rect.right - 6
-        pr = pygame.Rect(bx, rect.top - 8, pw2, 18)
+        bx = rect.right - pw2 + 8
+        pr = pygame.Rect(bx, rect.bottom - 9, pw2, 18)
         pygame.draw.rect(screen, (40, 42, 52), pr, border_radius=9)
-        _rich_blit(screen, small, react, bx + 6, rect.top - 6, (250, 250, 250), epx)
+        _rich_blit(screen, small, react, bx + 6, rect.bottom - 7, (250, 250, 250), epx)

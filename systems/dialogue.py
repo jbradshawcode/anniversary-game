@@ -144,13 +144,16 @@ class DialogueBox:
         self._choice_index = (self._choice_index + delta) % len(self._choice_keys)
 
     def _max_text_w(self) -> int:
-        """Available text width — narrower when the speaker has a portrait bust."""
+        """Width available for the wrapped text — narrower when the speaker has a
+        portrait bust, and minus the per-line "* "/indent prefix that draw() prepends
+        (so a wrapped line plus its prefix can never run off the box)."""
         portrait = portraits.bust(self._speaker) if self._speaker else None
         if portrait is not None:
             text_x = _BOX.x + 12 + _PB + 16
         else:
             text_x = _BOX.x + _PAD_X
-        return max(60, _BOX.right - 14 - text_x)
+        prefix_w = _get_font().size("* ")[0]
+        return max(60, _BOX.right - 14 - text_x - prefix_w)
 
     def _paginate(self, pages: list) -> list:
         """Merge consecutive text pages that were only split mid-sentence (a wrap with
@@ -245,12 +248,19 @@ class DialogueBox:
         if self._choosing and not self._typing:
             left = text_x + 16
             right = _BOX.right - 14
+            avail = max(40, right - left - 16)         # label width after the ">" gutter
             cx, cy = left, _BOX.y + _PAD_Y + len(display) * _LINE_H
             for i, key in enumerate(self._choice_keys):
-                surf = font.render(key, True, _TEXT)
-                if cx > left and cx + 16 + surf.get_width() > right:
-                    cx, cy = left, cy + _LINE_H    # wrap so long lists don't overflow
+                wl = self._wrap_text(font, key, avail) or [key]   # wrap over-long labels
+                w = max(font.size(ln)[0] for ln in wl)
+                multi = len(wl) > 1
+                if cx > left and (multi or cx + 16 + w > right):
+                    cx, cy = left, cy + _LINE_H        # this choice starts a fresh row
                 if i == self._choice_index:
                     screen.blit(font.render(">", True, _SEL), (cx, cy))
-                screen.blit(surf, (cx + 16, cy))
-                cx += 16 + surf.get_width() + 40   # advance past this label (no overlap)
+                for j, ln in enumerate(wl):
+                    screen.blit(font.render(ln, True, _TEXT), (cx + 16, cy + j * _LINE_H))
+                if multi:
+                    cx, cy = left, cy + _LINE_H * len(wl)   # next choice below the wrapped block
+                else:
+                    cx += 16 + w + 40
