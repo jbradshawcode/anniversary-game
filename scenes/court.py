@@ -1380,20 +1380,20 @@ class VolleyCourt(Scene):
             hl = self._role(0, Role.HITTER_L)
             hl.x, hl.y = float(_CX + 70), float(_COURT.bottom - 60)   # other hitter at base
             self.ball.hold_at(st.x, float(st.y - 6))
-        else:  # block — read the pass to the setter, then the set to the hitter
+        else:  # block — read the pass to the setter, then the set out to the wing hitter
             self.phase = Phase.RALLY
             p.x, p.y = float(_CX), float(VB_NET_Y + 22)
             nst = self._role(0, Role.SETTER)                   # your mates drop into back-row D
             nst.x, nst.y = float(_CX + 72), float(VB_NET_Y + 128)
             nhl = self._role(0, Role.HITTER_L)
             nhl.x, nhl.y = float(_CX - 72), float(VB_NET_Y + 128)
-            setter = self._role(1, Role.SETTER)
-            setter.x, setter.y = float(_CX - 60), float(VB_NET_Y - 48)   # clear of the hit lane
+            setter = self._role(1, Role.SETTER)                # their setter at centre net
+            setter.x, setter.y = float(_CX - 40), float(VB_NET_Y - 42)
             setter.set_pose(Pose.READY)
-            atk = self._role(1, Role.HITTER_L)
-            atk.x, atk.y = float(_CX), float(VB_NET_Y - 120)    # at their base; runs the approach
+            atk = self._role(1, Role.HITTER_R)                 # their right-side hitter, on the wing
+            atk.x, atk.y = float(_CX + 70), float(VB_NET_Y - 112)
             atk.set_pose(Pose.READY)
-            self.ball.hold_at(float(_CX + 50), float(VB_NET_Y - 150))
+            self.ball.hold_at(float(_CX - 96), float(VB_NET_Y - 150))   # incoming first ball -> the pass
         self._separate()        # guarantee no staged formation overlaps the player
 
     def _tut_begin(self) -> None:
@@ -1424,16 +1424,17 @@ class VolleyCourt(Scene):
         else:  # block — a pass floats to the setter; _tut_block_lead runs the chain
             t['bseq'] = 0
             setter = self._role(1, Role.SETTER)
-            self.ball.launch((float(_CX + 50), float(VB_NET_Y - 150)),
-                             (setter.x, setter.y - 6), 150, 1.35)
+            self.ball.launch((float(_CX - 96), float(VB_NET_Y - 150)),
+                             (setter.x, setter.y - 6), 150, 1.1)
             self.ball.team = 1
             self._crossing = False
 
     def _tut_block_lead(self, dt: float) -> None:
-        # scripted read for the block rep: pass -> set to the net -> hitter approaches,
-        # jumps and drives the ball down at you
+        # scripted, realistic read for the block rep: pass -> setter sets the right-side
+        # hitter out on the wing -> the hitter approaches and drives a normal-tempo spike
+        # across the net, so the block timing matches a real swing (not a floaty lob).
         t = self._tut
-        atk = self._role(1, Role.HITTER_L)
+        atk = self._role(1, Role.HITTER_R)
         self.ball.update(dt)
         if t['bseq'] == 1 and self.ball.in_flight:
             # close to the net while the set hangs, so the swing reads as an approach
@@ -1447,16 +1448,16 @@ class VolleyCourt(Scene):
         if t['bseq'] == 0:
             setter = self._role(1, Role.SETTER)
             setter.set_pose(Pose.DIG)
-            t['atk_to'] = (atk.x, float(VB_NET_Y - 40))             # approach point at the net
-            self.ball.launch((setter.x, setter.y), (atk.x, float(VB_NET_Y - 46)), 118, 1.0)
+            t['atk_to'] = (atk.x, float(VB_NET_Y - 44))             # approach point on the wing
+            self.ball.launch((setter.x, setter.y), (atk.x, float(VB_NET_Y - 48)), 130, 0.9)
             self.ball.team = 1
             t['bseq'] = 1
-        else:  # hitter is at the net -> jump and drive it down across the net at you
+        else:  # hitter is at the net -> jump and drive a normal spike across at you
             atk.x, atk.y = t['atk_to']
             atk.set_pose(Pose.JUMP)
             atk.z = 26.0
-            start = (atk.x, float(VB_NET_Y - 58))      # high contact -> the ball has to travel
-            self.ball.launch(start, (float(_CX), float(VB_NET_Y + 85)), 26, 1.2)
+            start = (atk.x, float(VB_NET_Y - 40))      # contact at the net
+            self.ball.launch(start, (atk.x - 12, float(VB_NET_Y + 95)), 54, 0.56)  # real spike tempo
             self.ball.team = 1
             self._crossing = True
             t['bseq'] = 2
