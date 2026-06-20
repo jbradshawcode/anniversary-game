@@ -30,7 +30,7 @@ class Nat(Humanoid):
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
-        self.interaction_text = ["Hey there! Nice day, isn't it?"]
+        self.interaction_text = ["Dawg I'm getting changed, can I have a minute?"]
 
     def _draw_head_down(self, screen, px, py):
         def r(x, y, w, h, c):

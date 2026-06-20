@@ -12,15 +12,16 @@ class Bench(GameObject):
     def __init__(self, tile_x: int, tile_y: int, height: int = 5):
         super().__init__(tile_x, tile_y)
         self._height = height
-        self.interaction_text = [
-            {
-                "text": "Sit on the bench?",
-                "choices": {
-                    "Yes": ["You sit for a moment."],
-                    "No": [],
-                },
-            }
-        ]
+        # interaction handled in on_interact so "Yes" actually seats the player
+
+    def on_interact(self, game) -> None:
+        def chose(label):
+            if label == "Yes":
+                game.player.sit(self)
+        game.dialogue.start(
+            [{"text": "Sit on the bench?",
+              "choices": {"Yes": ["You take a seat."], "No": []}}],
+            on_choice=chose)
 
     def blocked_tiles(self) -> list:
         return [(self.tile_x, self.tile_y + i) for i in range(self._height)]

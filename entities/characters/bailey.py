@@ -25,7 +25,7 @@ class Bailey(Humanoid):
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
-        self.interaction_text = ["Heyyy!"]
+        self.interaction_text = ["Um hello"]
 
     @staticmethod
     def _glasses_down(screen, px, py):

@@ -39,6 +39,19 @@ def draw_interlude_card(screen: pygame.Surface, kicker: str, name: str,
               menu.font(UI_FONT_NAME, 15), menu.MUTED)
 
 
+def draw_chapter_card(screen: pygame.Surface, completed: int, starting: int) -> None:
+    """Shown between chapters: marks the one just finished and the one ahead."""
+    menu.title_backdrop(screen)
+    cx = SCREEN_WIDTH // 2
+    menu.text(screen, "CHAPTER {0} COMPLETE".format(completed), cx, 150,
+              menu.font(UI_FONT_NAME, 20), (150, 154, 162))
+    menu.text(screen, "Chapter {0}".format(starting), cx, 188,
+              menu.font(UI_TITLE_FONT_NAME, 46, bold=True), menu.INK, shadow=True)
+    pygame.draw.rect(screen, (150, 154, 162), (cx - 40, 252, 80, 2))
+    menu.text(screen, "Z to continue", cx, SCREEN_HEIGHT - 56,
+              menu.font(UI_FONT_NAME, 15), menu.MUTED)
+
+
 def _draw_star(screen, cx, cy, r, filled) -> None:
     import math
     pts = []

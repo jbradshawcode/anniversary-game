@@ -155,6 +155,9 @@ class Cutscene:
             elif verb == 'settle':
                 if self._party is not None:
                     self._party.stop_following()
+                    if self._scenes is not None and self._scenes.current is not None:
+                        self._scenes.current.add_blockers(    # seated crew aren't walkable
+                            (f.tile_x, f.tile_y) for f in self._party.followers)
             elif verb == 'wait':
                 self._wait = float(step[1])
                 if self._wait > 0:

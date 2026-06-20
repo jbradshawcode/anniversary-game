@@ -71,11 +71,18 @@ class MenuFlow:
              self._ctx.open_title,
              self._ctx.quit_game)[i]()
 
+    def _slot_ids(self) -> List[int]:
+        """Slots offered this screen: the autosave shows in Load only (never Save)."""
+        if self._state == 'load' and save.has_save(save.AUTOSAVE):
+            return [save.AUTOSAVE] + list(save.SLOTS)
+        return list(save.SLOTS)
+
     def _select_slot(self, i: int) -> None:
-        if i >= len(save.SLOTS):             # the trailing "Back"
+        ids = self._slot_ids()
+        if i >= len(ids):                    # the trailing "Back"
             self._back()
             return
-        slot = save.SLOTS[i]
+        slot = ids[i]
         if save.has_save(slot):
             self._open_slot_action(slot, self._state)
         elif self._state == 'save':          # empty slot: save straight in
@@ -127,16 +134,17 @@ class MenuFlow:
         self._slot_source = source
         self._state = 'slot_action'
         verb = "Load" if source == 'load' else "Overwrite"
-        self.menu = menu.Menu("Slot {0}".format(slot), [verb, "Delete", "Back"])
+        name = "Autosave" if slot == save.AUTOSAVE else "Slot {0}".format(slot)
+        self.menu = menu.Menu(name, [verb, "Delete", "Back"])
 
-    @staticmethod
-    def _slot_labels() -> List[str]:
+    def _slot_labels(self) -> List[str]:
         labels = []
-        for slot in save.SLOTS:
+        for slot in self._slot_ids():
+            name = "Autosave" if slot == save.AUTOSAVE else "Slot {0}".format(slot)
             info = save.slot_info(slot)
             if info:
-                labels.append("Slot {0}: {1}  {2}".format(
-                    slot, info['scene_name'], info['saved_at']))
+                labels.append("{0}: {1}  {2}".format(
+                    name, info['scene_name'], info['saved_at']))
             else:
-                labels.append("Slot {0}: Empty".format(slot))
+                labels.append("{0}: Empty".format(name))
         return labels

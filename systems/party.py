@@ -7,7 +7,8 @@ the player. Presence is derived from the story beat, so nothing here is saved.
 """
 import pygame
 from typing import List, Optional, Tuple, TYPE_CHECKING
-from config import TILE_SIZE, TILE_MOVE_SPEED
+from config import (TILE_SIZE, TILE_MOVE_SPEED,
+                    PARTY_GROUP_SIZE, PARTY_RANK_GAP, PARTY_LATERAL)
 from entities import James, Dan, Matt, Nat, Bailey, Mayu, Wallace
 
 if TYPE_CHECKING:
@@ -87,14 +88,35 @@ class Party:
         if cur != self._last_tile:
             self._trail.append(_tile_center(cur[0], cur[1]))
             self._last_tile = cur
-            cap = len(self.followers) + 3
+            ranks = (len(self.followers) - 1) // PARTY_GROUP_SIZE + 1
+            cap = ranks * PARTY_RANK_GAP + 3
             if len(self._trail) > cap:
                 self._trail = self._trail[-cap:]
         for i, f in enumerate(self.followers):
-            idx = len(self._trail) - 2 - i
+            rank = i // PARTY_GROUP_SIZE                  # walk in staggered ranks of a pair
+            idx = len(self._trail) - 2 - rank * PARTY_RANK_GAP
             if idx < 0:
                 idx = 0
-            self._step(f, self._trail[idx], dt)
+            tx, ty = self._trail[idx]
+            # spread paired members symmetrically to either side of the trail
+            if PARTY_GROUP_SIZE > 1:
+                side = (i % PARTY_GROUP_SIZE) - (PARTY_GROUP_SIZE - 1) / 2.0
+                ox, oy = self._perp(idx)
+                tx += ox * side * PARTY_LATERAL
+                ty += oy * side * PARTY_LATERAL
+            self._step(f, (tx, ty), dt)
+
+    def _perp(self, idx: int) -> _Pt:
+        """Unit vector perpendicular to the trail's local direction at idx (for the
+        side-by-side offset); zero if the trail is too short to have a direction."""
+        a = self._trail[idx]
+        b = self._trail[idx - 1] if idx > 0 else (self._trail[idx + 1]
+                                                  if idx + 1 < len(self._trail) else a)
+        dx, dy = a[0] - b[0], a[1] - b[1]
+        d = (dx * dx + dy * dy) ** 0.5
+        if d < 1e-6:
+            return (0.0, 0.0)
+        return (-dy / d, dx / d)
 
     @staticmethod
     def _step(f, target: _Pt, dt: float) -> None:

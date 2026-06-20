@@ -12,6 +12,7 @@ from typing import Optional
 _SAVE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saves')
 
 SLOTS = (1, 2, 3)
+AUTOSAVE = 0           # written automatically at each chapter start; load-only in the menu
 
 
 def _slot_path(slot: int) -> str:

@@ -73,9 +73,6 @@ class PlayMode(Mode):
         self._scene_fade = 0.0           # quick fade-in on overworld scene change
         self._fade_black = None
         self._last_scene_id = game.scene_manager.current_id
-        self._title_surf = None
-        self._title_scene_id = None
-        self._font_large = pygame.font.SysFont(UI_FONT_NAME, 28)
         self._hint_surf = pygame.font.SysFont(UI_FONT_NAME, 14).render(
             "Arrows = move  |  Z = confirm  |  X = cancel  |  C = menu", True, WHITE)
 
@@ -139,14 +136,17 @@ class PlayMode(Mode):
         dx, dy = _FACING_DELTA[g.player.facing]
         tx = g.player.tile_x + dx
         ty = g.player.tile_y + dy
-        for obj in g.scene_manager.current.objects:
-            if obj.occupies(tx, ty):
-                if not g.story.interact(obj):
-                    if hasattr(obj, 'on_interact'):
-                        obj.on_interact(g)           # e.g. the ref blows his whistle
-                    if obj.interaction_text:
-                        g.dialogue.start(obj.interaction_text, speaker=obj.name)
-                return
+        here = [o for o in g.scene_manager.current.objects if o.occupies(tx, ty)]
+        here.sort(key=lambda o: o.name is None)      # talking to a character beats a bench
+        if here:
+            obj = here[0]
+            if not g.story.interact(obj):
+                if hasattr(obj, 'on_interact'):
+                    obj.on_interact(g)               # e.g. sitting on a bench
+                lines = obj.interaction_lines(g.story)
+                if lines:
+                    g.dialogue.start(lines, speaker=obj.name)
+            return
         for f in g.party.followers:
             if f.tile_x == tx and f.tile_y == ty:
                 g.story.talk(f.name)
@@ -175,6 +175,8 @@ class PlayMode(Mode):
             self._last_scene_id = g.scene_manager.current_id
             g.party.on_scene_change(g.player)
             g.update_scene_music(g.scene_manager.current_id)
+
+        scene.sync_blockers()                # NPCs block at their live tile, not their spawn
 
         if g.cutscene.active:
             g.cutscene.update(dt)
@@ -221,13 +223,6 @@ class PlayMode(Mode):
             g.lighting.draw(screen, g.scene_manager.current_id,
                             getattr(scene, 'lighting', None))
 
-        if self._title_scene_id != g.scene_manager.current_id:
-            self._title_scene_id = g.scene_manager.current_id
-            self._title_surf = self._font_large.render(
-                g.scene_title(self._title_scene_id), True, WHITE)
-
-        screen.blit(self._title_surf,
-                    (SCREEN_WIDTH // 2 - self._title_surf.get_width() // 2, 20))
         raw = getattr(scene, 'wants_raw_input', False)
         if not g.dialogue.active and not raw and not g.cutscene.active:
             self._draw_objective(screen)
@@ -335,6 +330,23 @@ class InterludeMode(Mode):
 
     def draw(self, screen) -> None:
         screens.draw_interlude_card(screen, self._kicker, self._name, self._date)
+
+
+class ChapterCardMode(Mode):
+    """Between-chapters card ('Chapter N Complete' / 'Chapter N+1'); CONFIRM rolls
+    on into the next chapter's opening (which is already queued behind it)."""
+    def __init__(self, game, completed, starting, on_done) -> None:
+        self._game = game
+        self._completed = completed
+        self._starting = starting
+        self._on_done = on_done
+
+    def handle_action(self, action) -> None:
+        if action == Action.CONFIRM:
+            self._on_done()
+
+    def draw(self, screen) -> None:
+        screens.draw_chapter_card(screen, self._completed, self._starting)
 
 
 class PhoneMode(Mode):

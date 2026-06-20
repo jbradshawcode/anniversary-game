@@ -31,6 +31,7 @@ class Scene:
         row0, row1 = self.walkable_rows
 
         self.objects = ObjectFactory.create_scene_objects(config_key)
+        self._extra_blocked = set()        # ad-hoc blockers (e.g. seated followers)
         self._tile_map = TileMap(
             self.walkable_cols, self.walkable_rows,
             self._map_cols, MAP_ROWS,
@@ -44,10 +45,26 @@ class Scene:
         """Re-derive the dynamic blocker layer from the current object list.
         Call after mutating self.objects (e.g. NPCs that joined the follower
         party) so vacated tiles become walkable again."""
-        blocked = []
+        blocked = list(self._extra_blocked)
         for obj in self.objects:
             blocked.extend(obj.blocked_tiles())
         self._tile_map.set_blockers(blocked)
+
+    def sync_blockers(self) -> None:
+        """Re-derive blockers from objects' live tiles (NPCs that moved in a
+        cutscene collide at their current position, not their spawn)."""
+        self._refresh_blockers()
+
+    def add_blockers(self, tiles) -> None:
+        """Block extra tiles (e.g. seated followers) so the player can't walk
+        through them. Cleared on scene entry so they don't leak across visits."""
+        self._extra_blocked.update((int(x), int(y)) for x, y in tiles)
+        self._refresh_blockers()
+
+    def clear_extra_blockers(self) -> None:
+        if self._extra_blocked:
+            self._extra_blocked.clear()
+            self._refresh_blockers()
 
     def despawn(self, types) -> None:
         """Remove objects of the given type(s) and rebuild walkability. Owns the

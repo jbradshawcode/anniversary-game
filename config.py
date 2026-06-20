@@ -21,6 +21,12 @@ UI_TITLE_FONT_NAME = 'Futura,Gill Sans,Avenir Next,Trebuchet MS,Arial'
 # Tile-based movement
 TILE_MOVE_SPEED = 280   # pixels per second during the smooth slide between tiles
 
+# Follower party formation — the crew trail the player in staggered pairs (more
+# natural than a single-file conga). See systems/party.py.
+PARTY_GROUP_SIZE = 2    # followers per rank (a pair)
+PARTY_RANK_GAP   = 2    # breadcrumb steps between successive ranks (the stagger)
+PARTY_LATERAL    = 30   # px between a pair (each steps half this to its side)
+
 # Dialogue typewriter (Undertale-style)
 DIALOGUE_CPS  = 45.0    # characters revealed per second
 DIALOGUE_FAST = 4.0     # multiplier while X (cancel) is held to speed up text
@@ -208,11 +214,11 @@ SCENE_CONFIGS = {
             'ball_baskets': [(2, 7), (17, 7)],
             'james': [(5, 7)], 'dan': [(14, 7)],
             'matt': [(3, 4)],
-            'nat': [(16, 4)],
+            'nat': [(8, 1)],             # starts beside Sarah, just inside the doors
             'bailey': [(6, 4)],
             'mayu': [(15, 10)],
             'wallace': [(8, 10)],
-            'matus': [(10, 2)],          # the ref, watching from a central bench
+            'matus': [(18, 3)],          # the ref, sitting on the right-hand bench
             'benches': [(1, 2, 5), (1, 8, 5), (18, 2, 5), (18, 8, 5)],
         },
     },
@@ -604,9 +610,9 @@ STORY_WEEKS = [
                              "squeak of fresh trainers on the floor."]),
                     ('say', ["Sarah and Nat walk in through the doors."]),
                     ('say', ["So... what's the plan?"], "Nat"),
-                    ('say', ["Let's grab a volleyball and warm up",
-                             "before the others get here.",
+                    ('say', ["Let's grab a volleyball and warm up.",
                              "There should be one in the ball baskets."], "Sarah"),
+                    ('say', ["I'm gonna go get changed."], "Nat"),
                 ],
                 'checklist': {                              # text is order-based (see check_more/done)
                     (2, 7):  {'flag': 'w1_basket_near', 'lines': []},
@@ -627,8 +633,8 @@ STORY_WEEKS = [
                 'objective': None,
                 'locked_exits': {1: 'all'},
                 'cutscene': [
-                    ('say', ["I HAVE A BALL! You can play with us!"], "Leonard"),
-                    ('say', ["Furthermore, I am tall AND German."], "Leonard"),
+                    ('say', ["Hey, ve haf a ball, you can come play mit us!"], "Leonard"),
+                    ('say', ["I am tall und I am also German"], "Leonard"),
                     ('say', ["..."], "James"),
                     ('flag', 'w1_leonard'),
                 ],
@@ -643,17 +649,15 @@ STORY_WEEKS = [
                 'objective': None,
                 'locked_exits': {1: 'all'},
                 'cutscene': [
-                    ('say', ["Six of us — so it's three on three.",
-                             "You and me and Matt against Leonard's lot.",
-                             "We'll keep it gentle this first time."], "Dan"),
-                    ('ask', "Want a quick warm-up to learn the controls first?", {
-                        'Yes please': [('flag', 'w1_want_tut'),
-                                       ('say', ["Sweet ok.",
-                                                "It's finally my time to shine."], "Dan"),
-                                       ('flag', 'w1_vb_set')],
-                        "I'm good": [('say', ["Sweet ok.",
-                                              "It's finally my time to shine."], "Dan"),
-                                     ('flag', 'w1_vb_set')],
+                    ('say', ["Alright, alright, let's get this party started!"], "Dan"),
+                    ('ask', "You ready?", {
+                        'Warm-up': [('flag', 'w1_want_tut'),
+                                    ('say', ["Sweet ok.",
+                                             "It's finally my time to shine."], "Dan"),
+                                    ('flag', 'w1_vb_set')],
+                        'Jump right in': [('say', ["Sweet ok.",
+                                                   "It's finally my time to shine."], "Dan"),
+                                          ('flag', 'w1_vb_set')],
                     }, "Dan"),
                 ],
                 'advance_when': 'w1_vb_set',
@@ -691,8 +695,7 @@ STORY_WEEKS = [
                 'objective': 'Head to The Salutation',
                 'party': 'form',
                 'advance_on_enter': 3,
-                'on_enter_scene': {10: ["This isn't The Salutation — wrong pub!",
-                                        "Head back out and find the right door."]},
+                'door_block': {10: ["This isn't The Salutation — wrong pub!"]},
                 'locked_exits': {},
                 'advance_when': 'w1_at_pub',
             },
@@ -701,23 +704,20 @@ STORY_WEEKS = [
                 'objective': 'Get a round in',
                 'locked_exits': {3: ['down', 'up']},
                 'cutscene': [
-                    ('say', ["The whole gang piles into The Salutation."]),
+                    ('say', ["The whole team piles into The Salutation."]),
                     ('move', {'james': (5, 9), 'dan': (6, 9),
                               'matt': (5, 10), 'nat': (6, 11),
                               'bailey': (4, 9), 'mayu': (4, 10), 'wallace': (4, 11)}),
-                    ('say', ["Pints all round — and whatever they're having!"], "Dan"),
-                    ('walk', 'matt', (4, 8)),
-                    ('walk', 'matt', (9, 8)),
-                    ('say', ["Cheers!"], "Matt"),
                     ('walk', 'dan', (4, 8)),
-                    ('walk', 'dan', (11, 8)),
+                    ('walk', 'dan', (11, 8)),                # Dan runs to the bar
+                    ('say', ["Could I have one million beers please.", "James?"], "Dan"),
+                    ('say', ["Um yeah sure, me too"], "James"),
+                    ('walk', 'matt', (4, 8)),               # the rest get their drinks (no dialogue)
+                    ('walk', 'matt', (9, 8)),
                     ('walk', 'james', (4, 8)),
                     ('walk', 'james', (13, 8)),
-                    ('say', ["...and squeeze in, you lot!"], "Dan"),
                     ('move', {'bailey': (11, 11), 'mayu': (13, 11), 'wallace': (10, 10)}),
-                    ('say', ["Just you two left."], "Dan"),
                     ('walk', 'sarah', (4, 8)),
-                    ('say', ["Two more over here, please."], "Sarah"),
                     ('walk', 'nat', (5, 9)),
                     ('walk', 'sarah', (9, 11)),
                     ('walk', 'nat', (7, 11)),
@@ -731,8 +731,8 @@ STORY_WEEKS = [
                 'objective': None,
                 'locked_exits': {3: ['down', 'up']},
                 'cutscene': [
-                    ('say', ["Hey guys.", "I got you guys stuff...",
-                             "From Comic Con!"], "Matt"),
+                    ('say', ["Hey guys.",
+                             "I got you guys stuff from Comic-Con!"], "Matt"),
                     ('say', ["(oh yeah)", "...", "(uh oh)",
                              "(...I forgot about this)"], "James"),
                     ('say', ["For you, James..."], "Matt"),
@@ -809,9 +809,14 @@ STORY_WEEKS = [
                     ('say', ["You're feeling pretty tired.",
                              "Might be time to head out."]),
                 ],
-                'talk_default': ["Cool — see ya later!"],
-                'talk': {'dan': ["Get home safe!"],
-                         'matt': ["Laters! Enjoy the figures haha"]},
+                'talk_default': ["Cool — see ya!"],
+                'talk': {'james': ["See you next week?"],
+                         'dan': ["Get home safe!"],
+                         'matt': ["Laters! Good to see you."],
+                         'nat': ["Byee! Text me when you're home."],
+                         'bailey': ["That was really fun. Bye!"],
+                         'mayu': ["See you around!"],
+                         'wallace': ["Take it easy, yeah?"]},
                 'advance_when': 'w1_left',
             },
         ],

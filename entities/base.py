@@ -23,6 +23,10 @@ class GameObject:
     def occupies(self, tx: int, ty: int) -> bool:
         return tx == self.tile_x and ty == self.tile_y
 
+    def interaction_lines(self, story) -> Optional[List[str]]:
+        """The lines to show when talked to; override to vary by story state."""
+        return self.interaction_text
+
     def update(self, dt: float):
         pass
 

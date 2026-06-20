@@ -33,6 +33,7 @@ class Player(Humanoid):
         self._target_y = self.y
         self.moving    = False
         self.facing    = 'down'
+        self._sit_x    = self.x        # draw-x while seated (set onto the bench by sit())
 
     def teleport(self, tile_x: int, tile_y: int):
         self.tile_x    = tile_x
@@ -43,8 +44,14 @@ class Player(Humanoid):
         self._target_y = self.y
         self.moving    = False
 
+    def sit(self, bench) -> None:
+        self.sitting = True
+        self.facing = 'left' if bench.tile_x > self.tile_x else 'right'   # face into the room
+        self._sit_x = bench.tile_x * TILE_SIZE + TILE_SIZE // 2           # seated ON the bench
+
     def try_move(self, dtx: int, dty: int, scene) -> bool:
         """Attempt to step one tile in (dtx, dty). Returns True if move started."""
+        self.sitting = False              # any move stands you up
         if self.moving:
             return False
         new_tx = self.tile_x + dtx
@@ -85,6 +92,10 @@ class Player(Humanoid):
 
     def draw(self, screen: pygame.Surface):
         px, py = int(self.x), int(self.y)
+        if self.sitting:
+            draw_shadow(screen, self._sit_x, self.y)
+            self._draw_sitting(screen, int(self._sit_x), py)
+            return
         draw_shadow(screen, self.x, self.y)        # grounded under the walk bob
         if self.moving:
             dx = self._target_x - self.x

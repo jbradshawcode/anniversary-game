@@ -30,7 +30,18 @@ class Matus(Humanoid):
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
-        self.interaction_text = ["FWEEEEEET!!", "...sorry. Force of habit."]
+        self.sitting = True               # the ref watches from the bench
+        self.facing = 'left'              # bench is on the right wall; he faces the court
+        self.interaction_text = ["FWEEEEEET!!",
+                                 "I listen to lonely people music.",
+                                 "Which means you all have to listen to lonely people music."]
+
+    def interaction_lines(self, story):
+        # once the Ch1 match is won, he's angling for the pub invite he won't get
+        if story is not None and 'w1_won_vb' in story.flags:
+            return ["(I'm pretty sure Matúš comes to the pub,",
+                    "but we don't really want him there...)"]
+        return self.interaction_text
 
     def on_interact(self, game) -> None:
         """Talking to the ref earns a deafening overworld whistle."""

@@ -28,7 +28,7 @@ class Dan(Humanoid):
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
-        self.interaction_text = ["Fancy a 3v3?"]
+        self.interaction_text = ["What's uuuup"]
 
     def _draw_head_down(self, screen, px, py):
         def r(x, y, w, h, c):

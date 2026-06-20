@@ -56,6 +56,8 @@ class StoryManager:
         self.on_launch_dive: Optional[Callable[[], None]] = None
         self.on_week_end: Optional[Callable[[], None]] = None
         self.on_phone: Optional[Callable] = None
+        self.on_chapter_start: Optional[Callable] = None   # (week, title, first)
+        self._cur_week = None              # last week we entered, to spot chapter changes
 
     def bind(self, dialogue: 'DialogueBox', scene_manager: 'SceneManager',
              player: 'Player', party: 'Party',
@@ -126,6 +128,12 @@ class StoryManager:
         self._apply_party(beat.get('party'))
         if beat.get('settle_party') and self._party is not None:
             self._party.stop_following()             # crew stays put (e.g. you head home alone)
+        week = beat.get('week')
+        if week is not None and week != self._cur_week:    # crossed into a new chapter
+            first = self._cur_week is None
+            self._cur_week = week
+            if self.on_chapter_start is not None:
+                self.on_chapter_start(week, beat.get('title', ''), first)
         if beat.get('launch_volleyball') and self.on_launch_vb is not None:
             self.on_launch_vb()
             return
@@ -167,6 +175,17 @@ class StoryManager:
         if locked is None:
             return False
         return locked == 'all' or direction in locked
+
+    def try_door_block(self, dest_scene_id: Optional[int]) -> bool:
+        """A specific door (by destination scene) is barred this beat: show its
+        message and refuse entry. Lets us block one of several same-edge doors
+        (e.g. the wrong pub) without locking the whole side."""
+        lines = self.beat.get('door_block', {}).get(dest_scene_id)
+        if not lines:
+            return False
+        if self._dialogue is not None and not self._dialogue.active:
+            self._dialogue.start(lines)
+        return True
 
     def confine(self, scene_id: Optional[int]) -> Optional[Region]:
         confine = self.beat.get('confine')
@@ -296,6 +315,7 @@ class StoryManager:
         self.flags = set(flags)
         self.vb_attempts = vb_attempts
         self._fired = {(beat, scene_id)} if scene_id is not None else set()
+        self._cur_week = _BEATS[beat].get('week')   # sync so a load won't fire a chapter card
 
     def sync_party(self, player: 'Player') -> None:
         """Rebuild the follower crew to match the current beat (new game / load)."""

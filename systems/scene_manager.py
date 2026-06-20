@@ -46,6 +46,8 @@ class SceneManager:
             scene_id, entry_pos = self._resolve_exit(
                 self.current.exits.get(exit_dir), player)
             if scene_id is not None:
+                if self.story and self.story.try_door_block(scene_id):
+                    return                        # this specific door is barred (e.g. wrong pub)
                 if self.story and self.story.exit_blocked(self._current_id, exit_dir):
                     self.story.show_locked(self._current_id)
                     return
@@ -96,6 +98,7 @@ class SceneManager:
         self.current.exit()
         self._current_id = new_id
         self.current     = self._scenes[new_id]
+        self.current.clear_extra_blockers()    # stale seated-follower blockers, etc.
 
         if entry_pos:
             player.teleport(entry_pos[0], entry_pos[1])
@@ -126,6 +129,7 @@ class SceneManager:
             self.current.exit()
         self._current_id = scene_id
         self.current = self._scenes[scene_id]
+        self.current.clear_extra_blockers()
         entry = self.current.entry_points
         pos = next(iter(entry.values())) if entry else None
         if pos:

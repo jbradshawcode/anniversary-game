@@ -21,7 +21,7 @@ from systems.party import Party
 from systems.cutscene import Cutscene
 from systems.lighting import Lighting
 from systems.modes import (TitleMode, PlayMode, GameOverMode, ResultsMode,
-                           PhoneMode, InterludeMode)
+                           PhoneMode, InterludeMode, ChapterCardMode)
 from systems.menu_flow import MenuFlow
 
 
@@ -65,8 +65,8 @@ class Game:
         self.court = VolleyCourt()
         self.dive = DiveGame()
 
-        self._start_col = (gym.walkable_cols[0] + gym.walkable_cols[1]) // 2
-        self._start_row = (gym.walkable_rows[0] + gym.walkable_rows[1]) // 2
+        self._start_col = 9            # top row, just inside the double doors (cols 8-11);
+        self._start_row = 1            # Nat spawns beside her at (8, 1)
         self.player = Player(self._start_col, self._start_row)
 
         self.scene_manager = SceneManager()
@@ -96,6 +96,7 @@ class Game:
         self.story.on_launch_dive = self._launch_dive
         self.story.on_week_end = self._week_end
         self.story.on_phone = self.enter_interlude
+        self.story.on_chapter_start = self._chapter_start
         self.scene_manager.story = self.story
         self._vb_retry = False
 
@@ -312,6 +313,14 @@ class Game:
         self.story.vb_attempts = 0                  # star cards are per-chapter; reset for the next
         self.story.set_flag(self.story.beat.get('advance_when'))   # this chapter's "left" flag
         self.update_scene_music(self.scene_manager.current_id)   # end chapter-end theme
+
+    def _chapter_start(self, week, title, first):
+        """A new chapter's first beat was entered (after its goto). Autosave the
+        fresh chapter; for Chapter 2+ show a transition card first — the chapter's
+        opening cutscene is already queued and plays once the card is dismissed."""
+        self.save_to_slot(save.AUTOSAVE)
+        if not first:
+            self.active = ChapterCardMode(self, week - 1, week, self.resume)
 
     def enter_interlude(self, thread, other, flag, title='Interlude', date=''):
         """A between-chapters texts-only beat (e.g. the Scrims interlude): a title

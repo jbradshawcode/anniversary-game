@@ -69,9 +69,37 @@ class Humanoid(GameObject):
     walk_phase = 0.0       # advanced by distance moved
     facing = 'down'        # movers (party/cutscene) set this; statics stay 'down'
     diving = None          # None | 'left' | 'right' — a sprawled, near-horizontal dive
+    sitting = False        # seated side-pose (on a bench)
 
     def __init__(self, tile_x: int, tile_y: int, blocking: bool = True):
         super().__init__(tile_x, tile_y, blocking=blocking)
+
+    def _draw_sitting(self, screen: pygame.Surface, px: int, py: int):
+        """A seated side-pose: the character's own side head over an upright torso
+        with the legs folded forward. Mirrored when facing left."""
+        p = self._palette
+        right = self.facing != 'left'
+        dy = 4                            # sitting sinks the body lower than standing
+
+        def r(x, y, w, h, c):
+            x0 = px + (x if right else -x - w)
+            pygame.draw.rect(screen, c, (x0, py + dy + y, w, h))
+
+        if right:
+            self._draw_head_right(screen, px, py + dy)
+        else:
+            self._draw_head_left(screen, px, py + dy)
+        r(-5, 1, 10, 5, p.tee)            # torso
+        r(-5, 1, 1, 5, p.tee_sh)
+        r(-2, 1, 4, 1, p.tee_sh)
+        r(-4, 6, 5, 3, p.short)           # hips / seat
+        r(-4, 6, 5, 1, p.short_sh)
+        r(0, 6, 7, 3, p.short)            # thigh, flat out front
+        r(0, 6, 7, 1, p.short_sh)
+        r(6, 9, 3, 3, p.skin)             # shin dropping to the floor
+        r(6, 9, 1, 3, p.skin_sh)
+        r(6, 12, 5, 2, p.shoe)            # foot
+        r(6, 13, 5, 1, p.sole)
 
     def _draw_diving(self, screen: pygame.Surface):
         """A dive/prone pose, reusing the upright art: render the body to a scratch
@@ -89,6 +117,10 @@ class Humanoid(GameObject):
     def draw(self, screen: pygame.Surface):
         if self.diving:
             self._draw_diving(screen)
+            return
+        if self.sitting:
+            draw_shadow(screen, self.x, self.y)
+            self._draw_sitting(screen, int(self.x), int(self.y))
             return
         py = self.y
         if self.walking:
