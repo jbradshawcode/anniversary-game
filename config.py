@@ -215,6 +215,7 @@ SCENE_CONFIGS = {
             'ball_baskets': [(2, 7), (17, 7)],
             'james': [(5, 7)], 'dan': [(14, 7)],
             'matt': [(3, 4)],
+            'leonard': [(16, 7)],        # Leonard's lot — only in Ch1 (absent weeks 2-4)
             'nat': [(8, 1)],             # starts beside Sarah, just inside the doors
             'bailey': [(6, 4)],
             'mayu': [(15, 10)],
@@ -233,7 +234,7 @@ SCENE_CONFIGS = {
             # two doors on the north side: the Salutation (col 97) and the
             # Wetherspoons / William Morris (the far east frontage, cols 176-177)
             'up': [
-                {'scene': 3, 'cols': (97, 97)},
+                {'scene': 3, 'target': (2, 9), 'cols': (97, 97)},   # -> Salutation (inside front door)
                 {'scene': 10, 'target': (9, 13), 'cols': (176, 177)},
             ],
         },
@@ -249,18 +250,19 @@ SCENE_CONFIGS = {
     },
     'salutation': {
         'id': 3,
-        # Wide main bar room (rows 6-12) opening into a NARROWER rear conservatory
-        # wing (cols 10-16, rows 1-5) on the right; the rear-left is outside.
-        'walkable_cols': (2, 16),
-        'walkable_rows': (1, 12),
+        # Wide, horizontally-scrolling pub (see scenes/salutation.py + specs): an
+        # L-peninsula bar across the top-centre, tartan banquettes along the bottom
+        # wall, a glazed conservatory lean-to on the right. Front door off-centre on
+        # the WEST edge (off King St); bi-fold garden doors on the EAST edge.
+        'map_cols': 34,
+        'walkable_cols': (1, 32),
+        'walkable_rows': (1, 11),
         'exits': {
-            # down: out the front door onto King St (door cols 8-11)
-            'down': {'scene': 2, 'target': (97, 4), 'cols': (8, 11)},
-            # up: through the bi-fold garden doors at the far-right of the wing
-            'up': {'scene': 4, 'cols': (14, 16)},
+            'left': {'scene': 2, 'target': (97, 6), 'rows': (8, 10)},   # front door -> King St
+            'right': {'scene': 4, 'target': (2, 7), 'rows': (3, 5)},    # garden doors -> garden
         },
-        'entry_points': {'up': (9, 11)},
-        'objects': {'milla': [(3, 8)]},
+        'entry_points': {'left': (2, 9), 'right': (32, 5)},
+        'objects': {'milla': [(15, 4)]},     # order spot: stand at (15,5), face up
     },
     'garden': {
         'id': 4,
@@ -270,7 +272,7 @@ SCENE_CONFIGS = {
         'walkable_cols': (1, 16),
         'walkable_rows': (1, 13),
         # left: back into the pub through the conservatory doors (rows 6-8)
-        'exits': {'left': {'scene': 3, 'target': (15, 1), 'rows': (6, 8)}},
+        'exits': {'left': {'scene': 3, 'target': (32, 5), 'rows': (6, 8)}},
         'entry_points': {'up': (2, 7)},
         'objects': {},
     },
@@ -707,27 +709,25 @@ STORY_WEEKS = [
             {
                 'name': 'pub_queue',
                 'objective': 'Get a round in',
-                'locked_exits': {3: ['down', 'up']},
+                'locked_exits': {3: ['left', 'right']},
                 'cutscene': [
                     ('say', ["The whole team piles into The Salutation."]),
-                    ('move', {'james': (5, 9), 'dan': (6, 9),
-                              'matt': (5, 10), 'nat': (6, 11),
-                              'bailey': (4, 9), 'mayu': (4, 10), 'wallace': (4, 11)}),
-                    ('walk', 'dan', (4, 8)),
-                    ('walk', 'dan', (11, 8)),                # Dan runs to the bar
+                    ('move', {'james': (3, 8), 'dan': (4, 8), 'matt': (3, 9),
+                              'nat': (4, 9), 'bailey': (2, 8), 'mayu': (3, 10),
+                              'wallace': (2, 10)}),
+                    ('walk', 'dan', (12, 5)),               # Dan heads to the bar
                     ('say', ["Could I have one million beers please.", "James?"], "Dan"),
                     ('say', ["Um yeah sure, me too"], "James"),
-                    ('walk', 'matt', (4, 8)),               # the rest get their drinks (no dialogue)
-                    ('walk', 'matt', (9, 8)),
-                    ('walk', 'james', (4, 8)),
-                    ('walk', 'james', (13, 8)),
-                    ('move', {'bailey': (11, 11), 'mayu': (13, 11), 'wallace': (10, 10)}),
-                    ('walk', 'sarah', (4, 8)),
-                    ('walk', 'nat', (5, 9)),
-                    ('walk', 'sarah', (9, 11)),
-                    ('walk', 'nat', (7, 11)),
+                    ('walk', 'james', (15, 5)),             # James gets the round in
+                    # two rows of four facing each other across the booth (must match PUB_SEATS):
+                    # chairs (row 9): Bailey, James, Sarah, Nat / banquette (row 11): Wallace, Mayu, Dan, Matt
+                    ('move', {'bailey': (10, 9), 'james': (11, 9), 'sarah': (12, 9), 'nat': (13, 9),
+                              'wallace': (10, 11), 'mayu': (11, 11), 'dan': (12, 11), 'matt': (13, 11)}),
                     ('settle',),
-                    ('sit_all',),                         # everyone's sat down at the table
+                    ('sit', 'bailey', 'down'), ('sit', 'james', 'down'),
+                    ('sit', 'sarah', 'down'), ('sit', 'nat', 'down'),
+                    ('sit', 'wallace', 'up'), ('sit', 'mayu', 'up'),
+                    ('sit', 'dan', 'up'), ('sit', 'matt', 'up'),
                     ('flag', 'w1_seated'),
                 ],
                 'advance_when': 'w1_seated',
@@ -735,7 +735,7 @@ STORY_WEEKS = [
             {
                 'name': 'gifts',
                 'objective': None,
-                'locked_exits': {3: ['down', 'up']},
+                'locked_exits': {3: ['left', 'right']},
                 'cutscene': [
                     ('say', ["Hey guys.",
                              "I got you guys stuff from Comic-Con!"], "Matt"),
@@ -764,7 +764,7 @@ STORY_WEEKS = [
             {
                 'name': 'where_from',
                 'objective': None,
-                'locked_exits': {3: ['down', 'up']},
+                'locked_exits': {3: ['left', 'right']},
                 'cutscene': [
                     ('say', ["There's a brief lull in conversation...",
                              "You feel a strong urge to fill it."]),
@@ -809,8 +809,8 @@ STORY_WEEKS = [
             {
                 'name': 'wind_down',
                 'objective': 'Say your goodbyes and head out',
-                'locked_exits': {3: ['up']},
-                'end_week': 'down',
+                'locked_exits': {3: ['right']},
+                'end_week': 'left',
                 'cutscene': [
                     ('say', ["You're feeling pretty tired.",
                              "Might be time to head out."]),
@@ -830,6 +830,7 @@ STORY_WEEKS = [
     {
         'week': 2,
         'title': 'Week 2',
+        'absent': ['Leonard'],             # Leonard left after Ch1 — never seen again
         'beats': [
             {
                 'name': 'w2_arrive',
@@ -960,38 +961,33 @@ STORY_WEEKS = [
                 # grave in French, and Nat happens to be from Martinique.
                 'name': 'w2_inside',
                 'objective': None,
-                'goto': {'scene': 3, 'tile': (9, 11)},
+                'goto': {'scene': 3, 'tile': (4, 9)},
                 'locked_exits': {3: 'all'},
                 'cutscene': [
                     ('settle',),
-                    # Everyone crammed into the big east-wall booth (banquette col 16,
-                    # west chairs col 14); Nat's off at a centre table until she clocks it.
-                    ('move', {'james': (16, 10), 'sarah': (14, 10), 'dan': (16, 9),
-                              'matt': (14, 8), 'bailey': (16, 8), 'mayu': (16, 12),
-                              'wallace': (14, 12), 'nat': (9, 9)}),
-                    ('face', 'james', 'left'),
-                    ('face', 'sarah', 'right'),
-                    ('face', 'dan', 'left'),
-                    ('say', ["Inside, everyone squeezes into the big booth over "
-                             "fresh drinks."]),
+                    # Everyone piles into the bottom-wall booth over fresh drinks;
+                    # Nat's off to the side until she clocks James's French.
+                    ('move', {'james': (10, 9), 'sarah': (10, 11), 'dan': (11, 9),
+                              'matt': (12, 9), 'bailey': (11, 11), 'mayu': (12, 11),
+                              'wallace': (13, 11), 'nat': (4, 9)}),
+                    ('sit', 'james', 'down'), ('sit', 'sarah', 'up'), ('sit', 'dan', 'down'),
+                    ('sit', 'matt', 'down'), ('sit', 'bailey', 'up'),
+                    ('sit', 'mayu', 'up'), ('sit', 'wallace', 'up'),
+                    ('say', ["Inside, everyone settles into the booth, two rows facing."]),
                     ('say', ["Yeah, I actually speak pretty good French.",
                              "I'm doing a course on Mondays to keep it up."], "James"),
                     ('say', ["( ! )  Nat's head snaps round."]),
-                    ('move', {'nat': (14, 9)}),         # she comes over to the booth
-                    ('face', 'nat', 'right'),
-                    ('face', 'dan', 'left'),
-                    ('face', 'james', 'up'),
+                    ('walk', 'nat', (13, 9)),           # she comes over to the table
+                    ('sit', 'nat', 'down'),
                     ('say', ["Oh really? I'm from Martinique!"], "Nat"),
                     ('say', ["..."], "James"),
                     ('say', ["So... you speak fluent French."], "James"),
                     ('say', ["Native."], "Nat"),
                     ('say', ["(Oh fuck.) ...lol."], "James"),
                     ('say', ["James slowly backs away..."]),
-                    ('walk', 'james', (13, 11)),
-                    ('walk', 'james', (9, 11)),
-                    ('walk', 'james', (9, 12)),
+                    ('walk', 'james', (6, 9)),
+                    ('walk', 'james', (1, 9)),          # bolts for the front door
                     ('say', ["...and bolts out the door."]),
-                    ('face', 'sarah', 'down'),
                     ('say', ["(Ugh, I don't feel great.)",
                              "(...damn, that chicken sucked.)",
                              "(I think I'll head home.)"], "Sarah"),
@@ -1003,8 +999,8 @@ STORY_WEEKS = [
                 # Walk out the front door to call it a night -> results + texts.
                 'name': 'w2_homeward',
                 'objective': 'Head home',
-                'end_week': 'down',
-                'locked_exits': {3: ['up']},
+                'end_week': 'left',
+                'locked_exits': {3: ['right']},
                 'settle_party': True,                  # the crew stays at the pub as you leave
                 'advance_when': 'w2_left',
             },
@@ -1027,6 +1023,7 @@ STORY_WEEKS = [
     {
         'week': 3,
         'title': 'Week 3',
+        'absent': ['Leonard'],
         'beats': [
             {
                 # Sarah arrives to find James flat on the floor; agree to teach him.
@@ -1207,7 +1204,7 @@ STORY_WEEKS = [
     {
         'week': 4,
         'title': 'Week 4',
-        'absent': ['Nat'],                 # Nat stays home this week — not in the gym at all
+        'absent': ['Nat', 'Leonard'],      # Nat stays home; Leonard long gone — not in the gym
         'beats': [
             {
                 'name': 'w4_arrive',
@@ -1342,12 +1339,14 @@ STORY_WEEKS = [
                 # do my dishes" — the spark neither of them quite reads yet.
                 'name': 'w4_inside',
                 'objective': None,
-                'goto': {'scene': 3, 'tile': (9, 11)},
+                'goto': {'scene': 3, 'tile': (4, 9)},
                 'locked_exits': {3: 'all'},
                 'cutscene': [
                     ('settle',),
-                    ('move', {'sarah': (9, 8), 'james': (12, 8), 'dan': (12, 10),
-                              'mayu': (5, 8), 'wallace': (5, 11)}),
+                    ('move', {'james': (10, 9), 'dan': (11, 9), 'sarah': (10, 11),
+                              'mayu': (11, 11), 'wallace': (12, 11)}),
+                    ('sit', 'james', 'down'), ('sit', 'dan', 'down'), ('sit', 'sarah', 'up'),
+                    ('sit', 'mayu', 'up'), ('sit', 'wallace', 'up'),
                     ('say', ["Inside, James and Dan look at each other."]),
                     ('say', ["Another drink?"], "Dan"),
                     ('say', ["Yeah.", "That would be real good."], "James"),
@@ -1355,8 +1354,8 @@ STORY_WEEKS = [
                     ('say', ["Don't worry bro. I got you."], "Dan"),
                     ('say', ["Wait.", "What — did I miss something?"], "James"),
                     ('say', ["I'll brb."], "Dan"),
-                    ('walk', 'dan', (9, 9)),
-                    ('face', 'dan', 'up'),
+                    ('walk', 'dan', (9, 11)),
+                    ('face', 'dan', 'right'),
                     ('say', ["Yo Sarah, can I pull you for a chat?"], "Dan"),
                     ('say', ["(OH BOY.)"], "James"),
                     ('say', ["Oh, sure."], "Sarah"),
@@ -1364,7 +1363,8 @@ STORY_WEEKS = [
                     ('wait', 0.7),
                     ('say', ["(Some time passes.)"]),
                     ('fade_in', 1.0),
-                    ('walk', 'dan', (12, 10)),
+                    ('walk', 'dan', (11, 9)),
+                    ('sit', 'dan', 'down'),
                     ('say', ["What happened man?????"], "James"),
                     ('say', ["Nothin' much, nothin' much.",
                              "Just went and laid it all out."], "Dan"),
@@ -1373,7 +1373,6 @@ STORY_WEEKS = [
                     ('say', ["Dude, no way.", "Is this High School Musical?"], "James"),
                     ('say', ["I guess so dude."], "Dan"),
                     ('say', ["Listen man, I don't think-"], "James"),
-                    ('walk', 'sarah', (10, 9)),
                     ('say', ["Hey, I'm heading out."], "Sarah"),
                     ('say', ["Oh, cool, okay."], "James"),
                     ('say', ["Dude, I have so many dishes at home right now."], "Sarah"),
@@ -1383,7 +1382,8 @@ STORY_WEEKS = [
                              "Since you're soooo on top of this, apparently."], "Sarah"),
                     ('say', ["Okay yeah??? Easy."], "James"),
                     ('say', ["Sweet.", "See you later!"], "Sarah"),
-                    ('walk', 'sarah', (9, 12)),
+                    ('walk', 'sarah', (8, 9)),
+                    ('walk', 'sarah', (1, 9)),
                     ('say', ["(Sarah leaves.)"]),
                     ('say', ["Huh.", "What was that about?",
                              "(She clearly said she wasn't interested... so...)"], "James"),

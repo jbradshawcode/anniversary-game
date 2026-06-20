@@ -34,11 +34,13 @@ def _flatten(weeks) -> List[dict]:
 
 _BEATS = _flatten(STORY_WEEKS)
 
-# Pub seats in WEEK1_CREW order — must match the final tiles the 'pub_queue'
-# cutscene walks them to (config.STORY_WEEKS).
-# James, Dan, Matt, Nat, Bailey, Mayu, Wallace
-PUB_SEATS = [(13, 8), (11, 8), (9, 8), (7, 11),
-             (11, 11), (13, 11), (10, 10)]
+# Pub seats: two rows of four facing each other across the left booth.
+#   chairs    (row 9):  Bailey, James, Sarah, Nat   (cols 10-13)
+#   banquette (row 11): Wallace, Mayu, Dan, Matt     (cols 10-13)
+# PUB_SEATS is in WEEK1_CREW order [James, Dan, Matt, Nat, Bailey, Mayu, Wallace].
+PUB_SEATS = [(11, 9), (12, 11), (13, 11), (13, 9),
+             (10, 9), (11, 11), (10, 11)]
+SARAH_PUB_SEAT = (12, 9)        # Sarah's chair (between James and Nat)
 _SEATED_BEATS = {'pub_queue', 'gifts', 'where_from', 'wind_down'}
 
 
@@ -359,7 +361,14 @@ class StoryManager:
             self._party.form(player, self._scenes)
             for sid, tiles in directive['settle'].items():
                 self._party.settle(sid, tiles)
-        # Loading into the pub once everyone's sat down: park them at the seats
-        # the queue cutscene leaves them in (in WEEK1_CREW order).
+        # Loading/jumping into the pub once everyone's sat down: park the crew at the
+        # seats the queue cutscene leaves them in (WEEK1_CREW order), and seat Sarah
+        # in her chair too (the 8th seat) so she isn't stranded at the door.
         if self._party.active and self.beat['name'] in _SEATED_BEATS:
             self._party.settle(3, PUB_SEATS)
+            if player is not None:
+                player.teleport(*SARAH_PUB_SEAT)
+                player.sitting = True
+                player.facing = 'up' if SARAH_PUB_SEAT[1] >= 10 else 'down'
+                if hasattr(player, '_sit_x'):
+                    player._sit_x = player.x

@@ -231,6 +231,7 @@ class PlayMode(Mode):
                 self._draw_affordance(screen, scene)
 
         g.cutscene.draw_fade(screen)
+        g.dialogue.set_anchor(g.player.tile_y)     # box flips to the top when the action is low
         g.dialogue.draw(screen)
         if self._scene_fade > 0:
             if self._fade_black is None:

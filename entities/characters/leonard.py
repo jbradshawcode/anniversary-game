@@ -30,7 +30,7 @@ class Leonard(Humanoid):
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
-        self.interaction_text = ["Hello!", "I am tall and also German"]
+        self.interaction_text = ["Alles klar, alles klar.", "Ordnung muss sein."]
 
     def _draw_head_down(self, screen, px, py):
         def r(x, y, w, h, c):

@@ -75,6 +75,7 @@ class Cutscene:
         self._hub_key = None               # identity of the active hub's topic dict
         self._hub_outcomes: dict = {}
         self._hub_choice = None
+        self._last_speaker: Optional[str] = None   # for turn-toward-each-other
 
     def bind(self, dialogue, scenes, player, party, story) -> None:
         self._dialogue = dialogue
@@ -94,6 +95,7 @@ class Cutscene:
         self._await_dialogue = False
         self._hub_explored = set()
         self._hub_key = None
+        self._last_speaker = None
         self._begin_step()
 
     def _finish(self) -> None:
@@ -116,6 +118,30 @@ class Cutscene:
                     return o
         return None
 
+    def _face_actor(self, a, b) -> None:
+        """Turn actor a to face actor b's tile (4-way)."""
+        if a is None or b is None or a is b or not hasattr(a, 'facing'):
+            return
+        dx, dy = b.tile_x - a.tile_x, b.tile_y - a.tile_y
+        if dx == 0 and dy == 0:
+            return
+        if abs(dx) >= abs(dy):
+            a.facing = 'right' if dx > 0 else 'left'
+        else:
+            a.facing = 'down' if dy > 0 else 'up'
+
+    def _converse(self, speaker: Optional[str]) -> None:
+        """Principle: people turn to face whoever they're talking to. On each spoken
+        line, turn the new speaker and the previous one to face each other (both must
+        be present actors). They keep their new facing — fine to leave them turned."""
+        if speaker is None:
+            return                              # narrator line: don't break the thread
+        a = self._resolve(speaker)
+        b = self._resolve(self._last_speaker) if self._last_speaker else None
+        self._face_actor(a, b)
+        self._face_actor(b, a)
+        self._last_speaker = speaker
+
     # ── step dispatch ──────────────────────────────────────────────────────--
     def _begin_step(self) -> None:
         gen = self._gen
@@ -128,6 +154,7 @@ class Cutscene:
             if verb == 'say':
                 lines = step[1]
                 speaker = step[2] if len(step) > 2 else None
+                self._converse(speaker)
                 self._i += 1
                 self._await_dialogue = True
                 if self._dialogue is not None:
@@ -196,6 +223,7 @@ class Cutscene:
     def _begin_ask(self, step) -> None:
         text, outcomes = step[1], step[2]
         speaker = step[3] if len(step) > 3 else None
+        self._converse(speaker)
         self._ask_outcomes = outcomes
         self._ask_choice = None
         self._i += 1
@@ -271,6 +299,7 @@ class Cutscene:
                 continue
             tx, ty = _tile_center(col, row)
             actor.tile_x, actor.tile_y = col, row
+            actor.sitting = False              # standing up to move/walk
             self._face_toward(actor, tx, ty)
             self._movers.append((actor, tx, ty))
         self._i += 1

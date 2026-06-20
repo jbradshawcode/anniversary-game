@@ -1,5 +1,6 @@
 """Milla — blonde woman behind the Salutation bar; her own sprite, wine top."""
 import pygame
+from config import TILE_SIZE
 from ..humanoid import Humanoid, Palette
 
 _SKIN     = (238, 205, 178)
@@ -25,6 +26,14 @@ class Milla(Humanoid):
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
         self.interaction_text = ["What'll it be?"]
+
+    def draw(self, screen):
+        # Her tile is the order spot in FRONT of the bar (so you can face her to
+        # order), but she's drawn ~2 tiles back, behind the counter.
+        oy = self.y
+        self.y = oy - 2 * TILE_SIZE
+        super().draw(screen)
+        self.y = oy
 
     def _draw_head_down(self, screen, px, py):
         def r(x, y, w, h, c):

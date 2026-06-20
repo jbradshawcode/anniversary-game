@@ -25,6 +25,8 @@ _PB       = 92          # portrait box size (when the speaker has a bust)
 _BOX_H    = 112
 _BOX      = pygame.Rect(_MARGIN, SCREEN_HEIGHT - _BOX_H - _MARGIN,
                          SCREEN_WIDTH - _MARGIN * 2, _BOX_H)
+_BOX_TOP  = pygame.Rect(_MARGIN, _MARGIN, SCREEN_WIDTH - _MARGIN * 2, _BOX_H)
+_LOW_ROW  = 8           # if the focus (player) is at this row or lower, the box flips up
 
 _font = None
 
@@ -39,6 +41,7 @@ def _get_font() -> pygame.font.Font:
 class DialogueBox:
     def __init__(self, sfx=None):
         self._sfx = sfx               # SoundBank for the typewriter blip (optional)
+        self._box = _BOX              # active panel rect — flips to the top when action is low
         self.active = False
         self._pages: list = []
         self._index = 0
@@ -52,6 +55,11 @@ class DialogueBox:
         self._full = ""              # current page text, fully
         self._shown = 0.0            # characters revealed so far (typewriter)
         self._typing = False
+
+    def set_anchor(self, focus_row: int) -> None:
+        """Place the box opposite the action: at the TOP when the focus (the player)
+        is in the lower part of the screen, otherwise along the bottom."""
+        self._box = _BOX_TOP if focus_row >= _LOW_ROW else _BOX
 
     @property
     def choosing(self) -> bool:
@@ -119,8 +127,7 @@ class DialogueBox:
             self._typing = False
 
     def advance(self):
-        if self._typing:                 # first press finishes the line, doesn't skip it
-            self.skip()
+        if self._typing:                 # confirm waits for the line; only cancel (X) rushes it
             return
         if self._choosing:
             selected = self._choice_keys[self._choice_index]
@@ -149,11 +156,11 @@ class DialogueBox:
         (so a wrapped line plus its prefix can never run off the box)."""
         portrait = portraits.bust(self._speaker) if self._speaker else None
         if portrait is not None:
-            text_x = _BOX.x + 12 + _PB + 16
+            text_x = self._box.x + 12 + _PB + 16
         else:
-            text_x = _BOX.x + _PAD_X
+            text_x = self._box.x + _PAD_X
         prefix_w = _get_font().size("* ")[0]
-        return max(60, _BOX.right - 14 - text_x - prefix_w)
+        return max(60, self._box.right - 14 - text_x - prefix_w)
 
     def _paginate(self, pages: list) -> list:
         """Merge consecutive text pages that were only split mid-sentence (a wrap with
@@ -206,16 +213,17 @@ class DialogueBox:
         if not self.active:
             return
 
-        pygame.draw.rect(screen, _BG, _BOX)
-        pygame.draw.rect(screen, _BORDER, _BOX, _BORDER_W)
+        box = self._box
+        pygame.draw.rect(screen, _BG, box)
+        pygame.draw.rect(screen, _BORDER, box, _BORDER_W)
 
         font = _get_font()
 
         # portrait bust on the left (when the speaker has one); text indents past it
         portrait = portraits.bust(self._speaker) if self._speaker else None
-        text_x = _BOX.x + _PAD_X
+        text_x = box.x + _PAD_X
         if portrait is not None:
-            pb = pygame.Rect(_BOX.x + 12, _BOX.y + 10, _PB, _PB)
+            pb = pygame.Rect(box.x + 12, box.y + 10, _PB, _PB)
             pygame.draw.rect(screen, (28, 30, 40), pb)
             screen.blit(portrait, (pb.centerx - portrait.get_width() // 2,
                                    pb.bottom - portrait.get_height()))
@@ -224,8 +232,9 @@ class DialogueBox:
 
         if self._speaker:
             ns = font.render(self._speaker, True, _NAME)
-            tag_x = _BOX.x + (12 if portrait is not None else 18)
-            tag = pygame.Rect(tag_x, _BOX.y - 24, ns.get_width() + 24, 26)
+            tag_x = box.x + (12 if portrait is not None else 18)
+            tag_y = box.bottom + 2 if box is _BOX_TOP else box.y - 24   # tag clears the screen edge
+            tag = pygame.Rect(tag_x, tag_y, ns.get_width() + 24, 26)
             pygame.draw.rect(screen, _BG, tag)
             pygame.draw.rect(screen, _BORDER, tag, _BORDER_W)
             screen.blit(ns, (tag.x + 12, tag.y + 2))
@@ -242,14 +251,14 @@ class DialogueBox:
                 break
             prefix = "* " if start else "   "
             screen.blit(font.render(prefix + sub[:revealed - count], True, _TEXT),
-                        (text_x, _BOX.y + _PAD_Y + i * _LINE_H))
+                        (text_x, box.y + _PAD_Y + i * _LINE_H))
             count += len(sub) + 1
 
         if self._choosing and not self._typing:
             left = text_x + 16
-            right = _BOX.right - 14
+            right = box.right - 14
             avail = max(40, right - left - 16)         # label width after the ">" gutter
-            cx, cy = left, _BOX.y + _PAD_Y + len(display) * _LINE_H
+            cx, cy = left, box.y + _PAD_Y + len(display) * _LINE_H
             for i, key in enumerate(self._choice_keys):
                 wl = self._wrap_text(font, key, avail) or [key]   # wrap over-long labels
                 w = max(font.size(ln)[0] for ln in wl)
