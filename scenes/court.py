@@ -536,10 +536,19 @@ class VolleyCourt(Scene):
         return True
 
     def _tool_out(self, attacker: int, start: Tuple[float, float], ry: float) -> None:
-        # the hitter tools the ball off the block and out of bounds -> attacker's point
-        side = float(_COURT.left - 36 if start[0] < _CX else _COURT.right + 36)
+        # the hitter tools the ball off the block and toward out of bounds. It's a LIVE
+        # ball: the blocking team (1 - attacker) can run it down before it lands — a block
+        # isn't a team touch, so they get a fresh rally if they save it. If nobody reaches
+        # it the floor resolves to the attacker's point (a receive miss is _point(1 - team)).
+        defteam = 1 - attacker
+        side = float(_COURT.left - VB_OUT_LAND if start[0] < _CX else _COURT.right + VB_OUT_LAND)
         self.fx.shake(4, 0.18)
-        self._block_send(attacker, start, (side, float(ry)), 80, 0.7, "Off the block!")
+        self.ball.launch(start, (side, float(ry)), 95, 0.8)
+        self.ball.team = defteam
+        self._crossing = False
+        self._serve_fault = False
+        self._touches = 0                      # block doesn't count -> blocker's team gets 3 fresh
+        self._await = ('receive', self._receiver(defteam))
 
     def _block_send(self, winner: int, start: Tuple[float, float], end: Tuple[float, float],
                     peak: float, dur: float, msg: str) -> None:
