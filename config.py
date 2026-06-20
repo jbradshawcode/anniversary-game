@@ -613,6 +613,10 @@ STORY_WEEKS = [
                     ('say', ["Let's grab a volleyball and warm up.",
                              "There should be one in the ball baskets."], "Sarah"),
                     ('say', ["I'm gonna go get changed."], "Nat"),
+                    ('walk', 'nat', (2, 1)),         # heads over to the left bench...
+                    ('walk', 'nat', (2, 3)),
+                    ('walk', 'nat', (1, 3)),         # ...and sits on it
+                    ('sit', 'nat', 'right'),
                 ],
                 'checklist': {                              # text is order-based (see check_more/done)
                     (2, 7):  {'flag': 'w1_basket_near', 'lines': []},

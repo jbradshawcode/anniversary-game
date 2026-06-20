@@ -152,6 +152,12 @@ class Cutscene:
                 actor = self._resolve(step[1])
                 if actor is not None:
                     actor.diving = step[2]
+            elif verb == 'sit':                   # ('sit', who, 'left'|'right') — seated on a bench
+                actor = self._resolve(step[1])
+                if actor is not None:
+                    actor.sitting = True
+                    if len(step) > 2 and hasattr(actor, 'facing'):
+                        actor.facing = step[2]
             elif verb == 'settle':
                 if self._party is not None:
                     self._party.stop_following()
