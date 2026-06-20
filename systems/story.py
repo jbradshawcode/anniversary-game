@@ -27,6 +27,7 @@ def _flatten(weeks) -> List[dict]:
             beat = dict(b)
             beat['week'] = w['week']
             beat['week_title'] = w['title']
+            beat['absent'] = w.get('absent', ())    # crew not present this chapter at all
             beats.append(beat)
     return beats
 
@@ -166,6 +167,8 @@ class StoryManager:
             return
         if directive == 'form':
             self._party.form(self._player, self._scenes)
+        elif isinstance(directive, dict) and 'form' in directive:
+            self._party.form(self._player, self._scenes, exclude=directive['form'])
         elif isinstance(directive, dict) and 'settle' in directive:
             for sid, tiles in directive['settle'].items():
                 self._party.settle(sid, tiles)
@@ -288,20 +291,41 @@ class StoryManager:
         """Skip the current beat: satisfy its gate, applying the next beat's setup."""
         self.set_flag(self.beat.get('advance_when'))
 
-    def debug_next_chapter(self) -> None:
-        """Dev only: jump to the first beat of the next chapter (fresh flags, no
-        leftover party). No-op once we're in the last chapter."""
-        here = self.beat.get('week_title')
-        for i in range(self._beat + 1, len(_BEATS)):
-            if _BEATS[i].get('week_title') != here:
-                self._beat = i
-                self.flags = set()
-                self._fired = set()
-                self.vb_attempts = 0
-                if self._party is not None:
-                    self._party.clear()
-                self._enter_beat()
-                return
+    def debug_cycle(self) -> None:
+        """Dev only: step to the next beat (sub-chapter), wrapping at the end, so you
+        can walk through every bit of every chapter with the N key."""
+        self.debug_jump_to((self._beat + 1) % len(_BEATS))
+
+    def debug_jump_to(self, i: int) -> None:
+        """Dev only: jump to beat index i in a playable state — fresh flags, gym
+        repopulated, crew rebuilt, and the player placed in that beat's scene (its
+        own goto, else the last goto / advance-on-enter scene up to here)."""
+        self._beat = i
+        beat = _BEATS[i]
+        self.flags = set()
+        self._fired = set()
+        self.vb_attempts = 0
+        self._cur_week = beat.get('week')          # no chapter card on a dev jump
+        # work out which scene this beat happens in (preceding gotos / scene-entries)
+        scene, tile = 1, None
+        for b in _BEATS[:i]:
+            if b.get('goto'):
+                scene, tile = b['goto']['scene'], b['goto'].get('tile')
+            elif b.get('advance_on_enter'):
+                scene, tile = b['advance_on_enter'], None
+        if beat.get('goto'):                        # the beat's own goto wins
+            scene, tile = beat['goto']['scene'], beat['goto'].get('tile')
+        if self._scenes is not None and self._scenes.scene(1) is not None:
+            self._scenes.scene(1).repopulate()
+            self._scenes.scene(1).remove_named(beat.get('absent', ()))
+        if self._scenes is not None and self._player is not None:
+            self._scenes.jump_to(scene, self._player)
+            if tile is not None:
+                self._player.teleport(*tile)
+            self.sync_party(self._player)
+        print("[dev] beat {0}/{1}: {2} ({3})".format(
+            i + 1, len(_BEATS), beat.get('name'), beat.get('week_title') or beat.get('week')))
+        self._enter_beat()
 
     def snapshot(self) -> dict:
         return {'beat': self._beat, 'flags': sorted(self.flags),
@@ -322,12 +346,15 @@ class StoryManager:
         if self._party is None:
             return
         self._party.clear()
+        cur_week = _BEATS[self._beat].get('week')   # crew reset each chapter: only this week counts
         directive = None
         for b in _BEATS[:self._beat + 1]:
-            if b.get('party'):
+            if b.get('week') == cur_week and b.get('party'):
                 directive = b.get('party')
         if directive == 'form':
             self._party.form(player, self._scenes)
+        elif isinstance(directive, dict) and 'form' in directive:
+            self._party.form(player, self._scenes, exclude=directive['form'])
         elif isinstance(directive, dict) and 'settle' in directive:
             self._party.form(player, self._scenes)
             for sid, tiles in directive['settle'].items():

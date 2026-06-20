@@ -22,6 +22,9 @@ class SceneManager:
     def register(self, scene_id: int, scene: 'Scene'):
         self._scenes[scene_id] = scene
 
+    def scene(self, scene_id: int) -> Optional['Scene']:
+        return self._scenes.get(scene_id)
+
     def start(self, scene_id: int, player: 'Player'):
         self._current_id = scene_id
         self.current = self._scenes[scene_id]

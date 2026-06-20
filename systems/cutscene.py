@@ -152,12 +152,15 @@ class Cutscene:
                 actor = self._resolve(step[1])
                 if actor is not None:
                     actor.diving = step[2]
-            elif verb == 'sit':                   # ('sit', who, 'left'|'right') — seated on a bench
+            elif verb == 'sit':                   # ('sit', who[, facing]) — seated in place
                 actor = self._resolve(step[1])
                 if actor is not None:
-                    actor.sitting = True
-                    if len(step) > 2 and hasattr(actor, 'facing'):
-                        actor.facing = step[2]
+                    self._seat(actor, step[2] if len(step) > 2 else None)
+            elif verb == 'sit_all':               # seat the whole crew + player where they stand
+                for f in (self._party.followers if self._party else []):
+                    self._seat(f, None)
+                if self._player is not None:
+                    self._seat(self._player, None)
             elif verb == 'settle':
                 if self._party is not None:
                     self._party.stop_following()
@@ -271,6 +274,14 @@ class Cutscene:
             self._face_toward(actor, tx, ty)
             self._movers.append((actor, tx, ty))
         self._i += 1
+
+    @staticmethod
+    def _seat(actor, facing) -> None:
+        actor.sitting = True
+        if facing is not None and hasattr(actor, 'facing'):
+            actor.facing = facing
+        if hasattr(actor, '_sit_x'):
+            actor._sit_x = actor.x        # the player sits in place, not bench-shifted
 
     @staticmethod
     def _face_toward(actor, tx, ty) -> None:

@@ -75,31 +75,49 @@ class Humanoid(GameObject):
         super().__init__(tile_x, tile_y, blocking=blocking)
 
     def _draw_sitting(self, screen: pygame.Surface, px: int, py: int):
-        """A seated side-pose: the character's own side head over an upright torso
-        with the legs folded forward. Mirrored when facing left."""
+        """Seated pose. Facing left/right gives a side pose with the legs folded
+        forward; facing up/down (e.g. round a table) a compact front/back pose with
+        the legs tucked under. Uses the character's own directional head art."""
         p = self._palette
-        right = self.facing != 'left'
         dy = 4                            # sitting sinks the body lower than standing
+        if self.facing in ('left', 'right'):
+            right = self.facing == 'right'
+
+            def r(x, y, w, h, c):
+                x0 = px + (x if right else -x - w)
+                pygame.draw.rect(screen, c, (x0, py + dy + y, w, h))
+
+            (self._draw_head_right if right else self._draw_head_left)(screen, px, py + dy)
+            r(-5, 1, 10, 5, p.tee)        # torso
+            r(-5, 1, 1, 5, p.tee_sh)
+            r(-2, 1, 4, 1, p.tee_sh)
+            r(-4, 6, 5, 3, p.short)       # hips / seat
+            r(-4, 6, 5, 1, p.short_sh)
+            r(0, 6, 7, 3, p.short)        # thigh, flat out front
+            r(0, 6, 7, 1, p.short_sh)
+            r(6, 9, 3, 3, p.skin)         # shin dropping to the floor
+            r(6, 9, 1, 3, p.skin_sh)
+            r(6, 12, 5, 2, p.shoe)        # foot
+            r(6, 13, 5, 1, p.sole)
+            return
 
         def r(x, y, w, h, c):
-            x0 = px + (x if right else -x - w)
-            pygame.draw.rect(screen, c, (x0, py + dy + y, w, h))
+            pygame.draw.rect(screen, c, (px + x, py + dy + y, w, h))
 
-        if right:
-            self._draw_head_right(screen, px, py + dy)
-        else:
-            self._draw_head_left(screen, px, py + dy)
+        (self._draw_head_up if self.facing == 'up' else self._draw_head_down)(screen, px, py + dy)
         r(-5, 1, 10, 5, p.tee)            # torso
         r(-5, 1, 1, 5, p.tee_sh)
         r(-2, 1, 4, 1, p.tee_sh)
-        r(-4, 6, 5, 3, p.short)           # hips / seat
-        r(-4, 6, 5, 1, p.short_sh)
-        r(0, 6, 7, 3, p.short)            # thigh, flat out front
-        r(0, 6, 7, 1, p.short_sh)
-        r(6, 9, 3, 3, p.skin)             # shin dropping to the floor
-        r(6, 9, 1, 3, p.skin_sh)
-        r(6, 12, 5, 2, p.shoe)            # foot
-        r(6, 13, 5, 1, p.sole)
+        r(-5, 6, 10, 3, p.short)          # lap (wide — knees out to the sides when sat)
+        r(-5, 6, 10, 1, p.short_sh)
+        r(-4, 9, 3, 2, p.skin)            # knees tucked
+        r(1, 9, 3, 2, p.skin)
+        r(-4, 11, 3, 2, p.shoe)           # feet
+        r(1, 11, 3, 2, p.shoe)
+        r(-4, 12, 3, 1, p.sole)
+        r(1, 12, 3, 1, p.sole)
+        if self.facing == 'up':
+            self._draw_back_hair(screen, px, py + dy)
 
     def _draw_diving(self, screen: pygame.Surface):
         """A dive/prone pose, reusing the upright art: render the body to a scratch

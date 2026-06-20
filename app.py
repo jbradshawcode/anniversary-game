@@ -4,7 +4,7 @@ import sys
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
                     GYM_MUSIC, SALUTATION_MUSIC, GARDEN_MUSIC, LATIMER_MUSIC,
                     WETHERSPOONS_MUSIC, DIVE_MUSIC, GAME_OVER_MUSIC,
-                    CHARACTER_MUSIC, CHAPTER_END_MUSIC,
+                    CHARACTER_MUSIC, CHAPTER_END_MUSIC, INTERLUDE_MUSIC,
                     PHONE_THREAD_W1, PHONE_THREAD_W2, PHONE_THREAD_W3, PHONE_THREAD_W4)
 from entities import Player
 from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
@@ -288,12 +288,12 @@ class Game:
         self.update_scene_music(self.scene_manager.current_id)   # back to the scene's track
         self.story.replay_beat()
 
-    def debug_next_chapter(self):
-        """Dev only: bail out of whatever's on screen and jump to the next chapter."""
+    def debug_cycle(self):
+        """Dev only: bail out of whatever's on screen and hop to the next activity."""
         self.cutscene.active = False
         self.dialogue.active = False
         self.resume()                            # back to PlayMode before the jump
-        self.story.debug_next_chapter()
+        self.story.debug_cycle()
 
     def _week_end(self):
         title = "{0} Complete".format(self.story.week_title or "Week")
@@ -315,9 +315,15 @@ class Game:
         self.update_scene_music(self.scene_manager.current_id)   # end chapter-end theme
 
     def _chapter_start(self, week, title, first):
-        """A new chapter's first beat was entered (after its goto). Autosave the
-        fresh chapter; for Chapter 2+ show a transition card first — the chapter's
-        opening cutscene is already queued and plays once the card is dismissed."""
+        """A new chapter's first beat was entered (after its goto). Reset the crew
+        (last chapter's followers don't carry over — they're back as gym NPCs),
+        autosave the fresh chapter, and for Chapter 2+ show a transition card first
+        — the chapter's opening cutscene is already queued and plays after it."""
+        self.party.clear()
+        gym = self.scene_manager.scene(1)
+        if gym is not None:
+            gym.repopulate()
+            gym.remove_named(self.story.beat.get('absent', ()))   # e.g. Nat stays home in Ch4
         self.save_to_slot(save.AUTOSAVE)
         if not first:
             self.active = ChapterCardMode(self, week - 1, week, self.resume)
@@ -327,6 +333,7 @@ class Game:
         card announces it, then the text thread plays."""
         kicker, _, name = title.partition('—')
         kicker, name = kicker.strip() or 'Interlude', name.strip()
+        self.music.play(CHAPTER_END_MUSIC if kicker == 'Finale' else INTERLUDE_MUSIC)
 
         def start_phone():
             phone = screens.Phone(thread, other=other)

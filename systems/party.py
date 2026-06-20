@@ -42,16 +42,18 @@ class Party:
         self._last_tile = None
         self._following = False
 
-    def form(self, player: 'Player', scene_manager) -> None:
-        """Spawn the crew stacked on the player and stop drawing them as scenery."""
-        self.followers = [cls(player.tile_x, player.tile_y) for cls in WEEK1_CREW]
+    def form(self, player: 'Player', scene_manager, exclude=()) -> None:
+        """Spawn the crew stacked on the player and stop drawing them as scenery.
+        `exclude` (names) stay behind as scenery and don't join the party."""
+        roster = [cls for cls in WEEK1_CREW if cls.name not in exclude]
+        self.followers = [cls(player.tile_x, player.tile_y) for cls in roster]
         for f in self.followers:
             f.blocking = False
             f.x, f.y = float(player.x), float(player.y)
         if scene_manager is not None and scene_manager.current is not None:
-            # Drop the crew from the scene (they become followers); despawn owns
-            # the tile-map rebuild so the space they vacated turns walkable.
-            scene_manager.current.despawn(tuple(WEEK1_CREW))
+            # Drop only the joining crew from the scene; despawn owns the tile-map
+            # rebuild so the space they vacated turns walkable. Excluded crew stay.
+            scene_manager.current.despawn(tuple(roster))
         self._seed(player)
         self._following = True
 
@@ -61,6 +63,7 @@ class Party:
             f.tile_x, f.tile_y = tile
             f.x, f.y = _tile_center(tile[0], tile[1])
             f.walking = False
+            f.sitting = True              # settled crew are sat down (at the pub table)
         self._following = False
 
     def stop_following(self) -> None:

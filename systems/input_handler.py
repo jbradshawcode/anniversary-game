@@ -21,7 +21,7 @@ class Action(Enum):
     MENU = auto()           # C / Square — open the menu                   (vb: tip / dump)
     QUIT = auto()
     DEBUG_GARDEN = auto()
-    DEBUG_CHAPTER = auto()   # N — dev only: jump to the next chapter's start
+    DEBUG_CYCLE = auto()     # N — dev only: cycle through the game's activities
 
 
 _KEY_MAP = {
@@ -35,7 +35,7 @@ _KEY_MAP = {
     pygame.K_c:      Action.MENU,
     pygame.K_ESCAPE: Action.QUIT,
     pygame.K_g:      Action.DEBUG_GARDEN,
-    pygame.K_n:      Action.DEBUG_CHAPTER,
+    pygame.K_n:      Action.DEBUG_CYCLE,
 }
 
 

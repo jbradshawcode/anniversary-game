@@ -643,9 +643,14 @@ class Phone:
 
     def _measure_text(self, m, fnt, small, w, mine):
         epx = _epx(fnt)
+        # pre-formatted messages (with their own line breaks, e.g. the emoji meme)
+        # get the full bubble width so each crafted line stays on one line, and are
+        # centred within the bubble (matching how they were composed)
+        preformatted = '\n' in m['text']
+        cap = w - 24 if preformatted else int(w * 0.66)
         lines = []                               # honour explicit \n (paragraph breaks)
         for seg in m['text'].split('\n'):
-            lines.extend(self._wrap(fnt, seg, int(w * 0.66)) if seg else [''])
+            lines.extend(self._wrap(fnt, seg, cap) if seg else [''])
         bw = max(_rich_w(fnt, ln, epx) for ln in lines) + 22
         bh = len(lines) * 20 + 14
         react = m.get('react')
@@ -656,7 +661,8 @@ class Phone:
             pygame.draw.rect(screen, _BUB_ME if mine else _BUB_THEM, rect,
                              border_radius=14)
             for i, ln in enumerate(lines):
-                _rich_blit(screen, fnt, ln, bx + 11, y + 7 + i * 20, _BUB_TEXT, epx)
+                lx = bx + (bw - _rich_w(fnt, ln, epx)) // 2 if preformatted else bx + 11
+                _rich_blit(screen, fnt, ln, lx, y + 7 + i * 20, _BUB_TEXT, epx)
             if react:
                 self._reaction(screen, rect, react, mine, small)
         return render, bh + (10 if react else 0)

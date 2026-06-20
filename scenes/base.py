@@ -17,6 +17,7 @@ class Scene:
     walls = frozenset()
 
     def __init__(self, config_key: str):
+        self._config_key = config_key
         config = SCENE_CONFIGS[config_key]
         self.scene_id  = config['id']
         self.exits         = config.get('exits', {})
@@ -65,6 +66,20 @@ class Scene:
         if self._extra_blocked:
             self._extra_blocked.clear()
             self._refresh_blockers()
+
+    def repopulate(self) -> None:
+        """Recreate this scene's objects from config — crew who left as followers in
+        a previous chapter come back as NPCs for a fresh one. Resets ad-hoc blockers."""
+        self.objects = ObjectFactory.create_scene_objects(self._config_key)
+        self._extra_blocked.clear()
+        self._refresh_blockers()
+
+    def remove_named(self, names) -> None:
+        """Drop objects whose display name is in `names` (e.g. crew absent a chapter)."""
+        if not names:
+            return
+        self.objects = [o for o in self.objects if o.name not in names]
+        self._refresh_blockers()
 
     def despawn(self, types) -> None:
         """Remove objects of the given type(s) and rebuild walkability. Owns the

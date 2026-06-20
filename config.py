@@ -48,7 +48,8 @@ WETHERSPOONS_MUSIC = os.path.join(ASSET_DIR, 'wetherspoons.ogg')  # the Wethersp
 DIVE_MUSIC    = os.path.join(ASSET_DIR, 'diving.ogg')      # the diving minigame (scene 12)
 GAME_OVER_MUSIC = os.path.join(ASSET_DIR, 'game_over.ogg') # the Game Over screen (played once)
 MATT_MUSIC    = os.path.join(ASSET_DIR, 'matt_theme.ogg')  # Matt's theme, while he's speaking
-CHAPTER_END_MUSIC = os.path.join(ASSET_DIR, 'chapter_end.ogg')  # the end-of-chapter results screen
+CHAPTER_END_MUSIC = os.path.join(ASSET_DIR, 'chapter_end.ogg')  # end-of-chapter results + the finale
+INTERLUDE_MUSIC = os.path.join(ASSET_DIR, 'interlude.ogg')   # between-chapter texts-only interludes
 
 # Speaker name -> theme that plays (resuming where it left off) while they talk.
 CHARACTER_MUSIC = {'Matt': MATT_MUSIC}
@@ -726,6 +727,7 @@ STORY_WEEKS = [
                     ('walk', 'sarah', (9, 11)),
                     ('walk', 'nat', (7, 11)),
                     ('settle',),
+                    ('sit_all',),                         # everyone's sat down at the table
                     ('flag', 'w1_seated'),
                 ],
                 'advance_when': 'w1_seated',
@@ -832,12 +834,12 @@ STORY_WEEKS = [
             {
                 'name': 'w2_arrive',
                 'objective': None,
-                'goto': {'scene': 1, 'tile': (9, 12)},
+                'goto': {'scene': 1, 'tile': (9, 1)},     # enter from the top, like Ch1
                 'locked_exits': {1: 'all'},
                 'cutscene': [
                     ('fade_in', 1.2),
-                    ('say', ["Week 2. Another evening at the sports hall."]),
-                    ('say', ["Sarah and Nat head in for more volleyball."]),
+                    ('face', 'sarah', 'down'),
+                    ('say', ['Week 2. Another wonderful evening of GoMammoth "volleyball"']),
                     ('say', ["I'm gonna go get ready."], "Nat"),
                     ('say', ["(I should go say hi to everyone.)"], "Sarah"),
                     ('flag', 'w2_arrived'),
@@ -854,7 +856,7 @@ STORY_WEEKS = [
                     (5, 7):  {'flag': 'w2_g_james', 'speaker': 'James',
                               'lines': ["Oh hey, what's up.",
                                         "When am I playing? Um... that's a funny story."]},
-                    (16, 4): {'flag': 'w2_g_nat', 'speaker': 'Nat',
+                    (8, 1):  {'flag': 'w2_g_nat', 'speaker': 'Nat',
                               'lines': ["Huh, where did Leonard get to today?",
                                         "(...he was never seen again.)", "(...)",
                                         "(...not in a creepy way tho.)"]},
@@ -911,6 +913,7 @@ STORY_WEEKS = [
                     ('face', 'nat', 'down'),
                     ('face', 'matt', 'down'),
                     ('face', 'bailey', 'down'),
+                    ('sit_all',),
                     ('ask', "So... what do you do right now? Like — in general?", {
                         'I study at Imperial': [
                             ('say', ["Oh, awesome — what are you studying?"], "James"),
@@ -1092,18 +1095,20 @@ STORY_WEEKS = [
                 'name': 'w3_garden',
                 'objective': None,
                 'goto': {'scene': 4, 'tile': (2, 7)},
-                'party': 'form',
+                'party': {'form': ['Bailey']},        # Bailey heads home after the match
                 'locked_exits': {4: 'all'},
                 'cutscene': [
                     ('fade_in', 1.0),
                     ('settle',),
-                    ('say', ["Afterwards the group pile into the garden — the "
-                             "back-left table this time."]),
-                    ('move', {'sarah': (3, 4), 'james': (4, 4), 'matt': (2, 3),
-                              'dan': (5, 3), 'nat': (3, 2), 'bailey': (6, 4),
-                              'mayu': (7, 3), 'wallace': (5, 5)}),
-                    ('face', 'sarah', 'up'),
-                    ('face', 'james', 'up'),
+                    ('say', ["Afterwards the group pack into the garden's "
+                             "top-right booth."]),
+                    ('move', {'sarah': (14, 5), 'james': (13, 3), 'nat': (13, 4),
+                              'dan': (13, 2), 'matt': (14, 2), 'mayu': (15, 2),
+                              'wallace': (15, 3)}),
+                    ('sit', 'sarah', 'up'),
+                    ('sit', 'james', 'right'), ('sit', 'nat', 'right'),
+                    ('sit', 'dan', 'down'), ('sit', 'matt', 'down'), ('sit', 'mayu', 'down'),
+                    ('sit', 'wallace', 'left'),
                     ('say', ["Hm? Your family's visiting in two weeks?"], "Matt"),
                     ('ask', "...", {
                         "Yeah, they'll watch you guys play": [],
@@ -1139,8 +1144,7 @@ STORY_WEEKS = [
                     ('fade_in', 1.0),
                     ('settle',),
                     ('move', {'james': (8, 8), 'dan': (10, 8), 'nat': (8, 9),
-                              'matt': (10, 9), 'bailey': (16, 12), 'mayu': (17, 12),
-                              'wallace': (16, 11)}),
+                              'matt': (10, 9), 'mayu': (17, 12), 'wallace': (16, 11)}),
                     ('face', 'james', 'right'),
                     ('face', 'dan', 'left'),
                     ('say', ["So... who's Sarah interested in?"], "Dan"),
@@ -1203,6 +1207,7 @@ STORY_WEEKS = [
     {
         'week': 4,
         'title': 'Week 4',
+        'absent': ['Nat'],                 # Nat stays home this week — not in the gym at all
         'beats': [
             {
                 'name': 'w4_arrive',
@@ -1241,21 +1246,6 @@ STORY_WEEKS = [
                     (8, 10): {'flag': 'w4_g_wallace', 'speaker': 'Wallace',
                               'lines': ["Hey hey hey.", "Good luck today!",
                                         "...that rhymed."]},
-                    (16, 4): {'flag': 'w4_g_nat', 'speaker': 'Nat', 'steps': [
-                        ('say', ["Soo, I may have done something a bit silly last week.",
-                                 "I told everyone that you like Leonard."], "Nat"),
-                        ('ask', "...", {
-                            'Why would you do that?': [
-                                ('say', ["I was trying to get them to leave you alone.",
-                                         "Sooo... you're welcome?"], "Nat")],
-                            'Who the hell is Leonard?': [
-                                ('say', ["He's tall. And also German.",
-                                         "Doesn't matter — I was trying to get them "
-                                         "to leave you alone.",
-                                         "Sooo... you're welcome?"], "Nat")],
-                        }, "Sarah"),
-                        ('say', ["(...ok.)"], "Sarah"),
-                    ]},
                 },
                 'checked_again': ["..."],
                 'advance_when': 'w4_greeted',
@@ -1296,21 +1286,21 @@ STORY_WEEKS = [
                 'name': 'w4_garden',
                 'objective': None,
                 'goto': {'scene': 4, 'tile': (2, 7)},
-                'party': 'form',
+                'party': {'form': ['Matt', 'Nat', 'Bailey']},  # Matt in the gym; Nat home; Bailey home
                 'locked_exits': {4: 'all'},
                 'cutscene': [
                     ('fade_in', 1.0),
                     ('settle',),
                     ('say', ["Is Matt not coming to the pub tonight?"], "Dan"),
                     ('say', ["I guess not.", "(...wonder why lol.)"], "James"),
-                    ('say', ["The group spills out to the garden's left-wall booth."]),
-                    ('move', {'sarah': (8, 8), 'dan': (12, 8), 'nat': (7, 6),
-                              'bailey': (12, 6), 'wallace': (9, 6), 'mayu': (11, 6),
-                              'matt': (1, 13)}),
-                    ('face', 'sarah', 'up'), ('face', 'dan', 'up'),
+                    ('say', ["The group pack into the garden's top-right booth."]),
+                    ('move', {'sarah': (14, 5), 'dan': (13, 4),
+                              'wallace': (14, 2), 'mayu': (15, 3)}),
+                    ('sit', 'sarah', 'up'), ('sit', 'dan', 'right'),
+                    ('sit', 'wallace', 'down'), ('sit', 'mayu', 'left'),
                     ('say', ["James is last out. He walks over, pauses..."]),
-                    ('walk', 'james', (11, 8)),       # sits by Dan, not the spot beside Sarah
-                    ('face', 'james', 'up'),
+                    ('walk', 'james', (13, 3)),       # sits by Dan, not the spot beside Sarah
+                    ('sit', 'james', 'right'),
                     ('say', ["...", "Hey, what's good dude.",
                              "I actually wanted to sit over there.",
                              "Let's swap places."], "Dan"),
@@ -1357,8 +1347,7 @@ STORY_WEEKS = [
                 'cutscene': [
                     ('settle',),
                     ('move', {'sarah': (9, 8), 'james': (12, 8), 'dan': (12, 10),
-                              'nat': (7, 11), 'bailey': (13, 11), 'mayu': (5, 8),
-                              'wallace': (5, 11), 'matt': (1, 1)}),
+                              'mayu': (5, 8), 'wallace': (5, 11)}),
                     ('say', ["Inside, James and Dan look at each other."]),
                     ('say', ["Another drink?"], "Dan"),
                     ('say', ["Yeah.", "That would be real good."], "James"),

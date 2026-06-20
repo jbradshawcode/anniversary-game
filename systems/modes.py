@@ -85,8 +85,8 @@ class PlayMode(Mode):
     def handle_action(self, action) -> None:
         g = self._game
         scene = g.scene_manager.current
-        if action == Action.DEBUG_CHAPTER:       # dev only: skip to the next chapter
-            g.debug_next_chapter()
+        if action == Action.DEBUG_CYCLE:         # dev only: cycle through activities
+            g.debug_cycle()
             return
         if action == Action.QUIT and not g.cutscene.active:
             g.open_pause()
@@ -304,8 +304,8 @@ class ResultsMode(Mode):
         self._results = results
 
     def handle_action(self, action) -> None:
-        if action == Action.DEBUG_CHAPTER:
-            self._game.debug_next_chapter()
+        if action == Action.DEBUG_CYCLE:
+            self._game.debug_cycle()
         elif action == Action.CONFIRM:
             self._game.enter_phone()
 
@@ -323,8 +323,8 @@ class InterludeMode(Mode):
         self._on_done = on_done
 
     def handle_action(self, action) -> None:
-        if action == Action.DEBUG_CHAPTER:
-            self._game.debug_next_chapter()
+        if action == Action.DEBUG_CYCLE:
+            self._game.debug_cycle()
         elif action == Action.CONFIRM:
             self._on_done()
 
@@ -358,8 +358,8 @@ class PhoneMode(Mode):
         self._on_done = on_done or game.finish_week
 
     def handle_action(self, action) -> None:
-        if action == Action.DEBUG_CHAPTER:
-            self._game.debug_next_chapter()
+        if action == Action.DEBUG_CYCLE:
+            self._game.debug_cycle()
         elif action == Action.CONFIRM and not self._phone.advance():
             self._on_done()
 
