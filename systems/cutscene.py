@@ -18,6 +18,8 @@ Steps:
   ('move', {who: (col, row), ...})  tween several actors in parallel; wait for all
   ('face', who, 'down'|'up'|...)    set facing (player only draws facing)
   ('pose', who, 'left'|'right'|None) sprawled dive/prone pose (None clears it)
+  ('vanish', who[, seconds])        fade the actor's sprite out, then remove it from
+                                    the scene (gone for good — no re-interaction)
   ('wait', seconds)                 hold
   ('fade_out', seconds)             fade screen to black
   ('fade_in', seconds)              fade screen up from black
@@ -76,6 +78,7 @@ class Cutscene:
         self._hub_outcomes: dict = {}
         self._hub_choice = None
         self._last_speaker: Optional[str] = None   # for turn-toward-each-other
+        self._fader: Optional[list] = None         # [actor, rate] for a blocking 'vanish'
 
     def bind(self, dialogue, scenes, player, party, story) -> None:
         self._dialogue = dialogue
@@ -96,6 +99,7 @@ class Cutscene:
         self._hub_explored = set()
         self._hub_key = None
         self._last_speaker = None
+        self._fader = None
         self._begin_step()
 
     def _finish(self) -> None:
@@ -179,6 +183,13 @@ class Cutscene:
                 actor = self._resolve(step[1])
                 if actor is not None:
                     actor.diving = step[2]
+            elif verb == 'vanish':                # ('vanish', who[, secs]) — fade out, then remove
+                actor = self._resolve(step[1])
+                if actor is not None and hasattr(actor, 'fade'):
+                    secs = float(step[2]) if len(step) > 2 else 0.8
+                    self._fader = [actor, 255.0 / secs if secs > 0 else 1e9]
+                    self._i += 1
+                    return                        # block until the fade completes
             elif verb == 'sit':                   # ('sit', who[, facing]) — seated in place
                 actor = self._resolve(step[1])
                 if actor is not None:
@@ -351,9 +362,23 @@ class Cutscene:
             if self._wait <= 0:
                 self._begin_step()
             return
+        if self._fader is not None:
+            self._advance_fader(dt)
+            return
         if self._movers:
             self._advance_movers(dt)
             return
+
+    def _advance_fader(self, dt: float) -> None:
+        actor, rate = self._fader
+        actor.fade = max(0.0, actor.fade - rate * dt)
+        if actor.fade <= 0:
+            actor.fade = 0.0
+            if (self._scenes is not None and self._scenes.current is not None
+                    and getattr(actor, 'name', None)):
+                self._scenes.current.remove_named([actor.name])   # gone for good
+            self._fader = None
+            self._begin_step()
 
     def _advance_movers(self, dt: float) -> None:
         step = TILE_MOVE_SPEED * dt

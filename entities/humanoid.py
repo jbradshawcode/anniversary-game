@@ -70,6 +70,7 @@ class Humanoid(GameObject):
     facing = 'down'        # movers (party/cutscene) set this; statics stay 'down'
     diving = None          # None | 'left' | 'right' — a sprawled, near-horizontal dive
     sitting = False        # seated side-pose (on a bench)
+    fade = 255             # 0..255 sprite opacity; a cutscene 'vanish' tweens this to 0
 
     def __init__(self, tile_x: int, tile_y: int, blocking: bool = True):
         super().__init__(tile_x, tile_y, blocking=blocking)
@@ -133,6 +134,16 @@ class Humanoid(GameObject):
         screen.blit(rot, rot.get_rect(center=(int(self.x), int(self.y) + 5)))
 
     def draw(self, screen: pygame.Surface):
+        if self.fade >= 255:
+            self._render(screen)
+        elif self.fade > 0:                 # fading out: render through a translucent layer
+            scratch = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+            self._render(scratch)
+            scratch.fill((255, 255, 255, int(self.fade)), special_flags=pygame.BLEND_RGBA_MULT)
+            screen.blit(scratch, (0, 0))
+        # fade <= 0: fully gone, draw nothing
+
+    def _render(self, screen: pygame.Surface):
         if self.diving:
             self._draw_diving(screen)
             return

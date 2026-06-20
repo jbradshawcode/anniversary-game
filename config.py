@@ -682,8 +682,8 @@ STORY_WEEKS = [
                 'locked_exits': {1: 'all'},
                 'cutscene': [
                     ('say', ["GG, everyone! I must away — auf Wiedersehen!"], "Leonard"),
-                    ('say', ["Leonard strides off into the evening.",
-                             "(He is never seen again.)"]),
+                    ('vanish', 'leonard', 1.3),            # fades into the evening...
+                    ('say', ["(He is never seen again.)"]),
                     ('move', {'dan': (10, 2), 'james': (11, 3)}),
                     ('face', 'sarah', 'down'),
                     ('say', ["Good game!"], "Dan"),
