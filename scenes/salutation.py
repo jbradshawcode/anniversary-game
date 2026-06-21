@@ -128,8 +128,9 @@ _FIRE_BACK = [(14, 11), (15, 11)]
 _BANQ_B1 = [(c, 11) for c in range(10, 14)]
 _BANQ_B2 = [(c, 11) for c in range(16, 21)]
 _BANQ_CONSV = [(c, 3) for c in range(24, 31)]
-_TABLES = ([(3, 8), (6, 8), (3, 10), (2, 6)]              # front-room bistros + dining (lower)
-           + [(3, 3), (6, 3), (8, 3), (4, 5), (7, 5)]    # front-room tables (upper, by the entry)
+_TABLES = ([(2, 2), (2, 4), (2, 6), (6, 8)]              # window-wall banquette run + one lower table
+           + [(4, 3), (6, 3), (8, 3), (5, 5), (7, 5)]    # front-room tables, set back from the door
+           # (the area just inside the entrance, cols 3-5 rows 8-10, is kept clear)
            + [(c, 10) for c in range(10, 14)]            # bottom-wall long table (run 1)
            + [(c, 10) for c in range(16, 21)]            # bottom-wall long table (run 2)
            + [(8, 7), (8, 8)]                            # poseurs (off the chair row)
@@ -528,20 +529,20 @@ def _draw_seating(surf):
     _armchair(surf, 20, 7)
     _low_table(surf, 21, 7)
     _armchair(surf, 22, 7)
-    # front-window bench: a pale-green banquette runs up the west wall under the leaded
-    # bays (gallery/28), with café/dining tables drawn in front of it.
+    # front-window bench: a check banquette runs up the west wall under the leaded bays
+    # (gallery/12, 28), with a run of small tables in front of it (one chair room-side).
     _banq_run_v(surf, 1, 1, 7, _CHECK, _CHECK_DK)
-    # front room — a busy public bar: mostly square/rectangular wooden tables, with a
-    # couple of round cast-iron café tables by the windows.
-    _wood_table(surf, 3, 3, {'N', 'S', 'E', 'W'})
+    for r in (2, 4, 6):
+        _wood_table(surf, 2, r, {'E'}, landscape=False)
+    # front room — square/rect wooden tables set back from the door + a couple of round
+    # cast-iron café tables. The area just inside the entrance (cols 3-5, rows 8-10) is
+    # left OPEN as circulation, so the doorway isn't blocked.
+    _wood_table(surf, 4, 3, {'N', 'S', 'E'})
     _bistro(surf, 6, 3, {'S', 'E', 'W'})
     _wood_table(surf, 8, 3, {'S', 'W'}, landscape=False)
-    _wood_table(surf, 4, 5, {'N', 'S', 'E'})
+    _wood_table(surf, 5, 5, {'N', 'S', 'E'})
     _bistro(surf, 7, 5, {'S', 'W', 'N'})
-    _wood_table(surf, 3, 8, {'S', 'E', 'W'})
-    _wood_table(surf, 6, 8, {'S', 'W', 'N'})
-    _bistro(surf, 2, 6, {'S', 'E'})
-    _wood_table(surf, 3, 10, {'N', 'E'}, landscape=False)
+    _wood_table(surf, 6, 8, {'N', 'E', 'W'})
 
 
 def _draw_conservatory_seating(surf):
