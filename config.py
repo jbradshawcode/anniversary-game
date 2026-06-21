@@ -455,7 +455,7 @@ def stars_for_attempts(attempts: int) -> int:
 # Week 2's "ready to start?" prompt — fired both automatically (after greeting) and on
 # talking to James again, so declining lets you wander back to him.
 _W2_READY_ASK = [
-    ('ask', "Sweet — are we ready to start?", {
+    ('ask', "Now that I've answered all your questions, are we ready to start?", {
         'Yes': ('flag', 'w2_ready_done'),
         'No': [('say', ["Oh ok — come back when you're ready."], "James")],
     }, "James"),
@@ -804,23 +804,22 @@ STORY_WEEKS = [
                 'cutscene': [
                     ('say', ["Hey guys.",
                              "I got you guys stuff from Comic-Con!"], "Matt"),
-                    ('say', ["(oh yeah)", "...", "(uh oh)",
-                             "(...I forgot about this)"], "James"),
-                    ('say', ["For you, James..."], "Matt"),
+                    ('say', ["Oh! Really? (...)"], "James"),
+                    ('say', ["For you, James:"], "Matt"),
                     ('say', ["Matt rummages around in his bag."]),
                     ('say', ["Here ya go!"], "Matt"),
                     ('say', ["Matt hands over two large anime figurines."]),
-                    ('say', ["...", "(Is this guy tryna set me up or what)",
-                             "...hey, thanks man.", "This is really cool."], "James"),
-                    ('say', ["No worries, dude!",
-                             "And I got something for you too, Dan!"], "Matt"),
-                    ('say', ["(In front of da hoes??????)"], "Dan"),
+                    ('say', ["(Dawg I'm actually being set up right now)",
+                             "... Hey, thanks man! This is really cool."], "James"),
+                    ('say', ["And I got something for you too, Dan!"], "Matt"),
                     ('say', ["Matt pulls out a large anime poster."]),
                     ('say', ["Kay, here ya go!"], "Matt"),
-                    ('say', ["(LMAO ok — coulda been worse)"], "James"),
-                    ('say', ["Dude... ... ..."], "Dan"),
+                    ('say', ["In front of the hoes?!"], "Dan"),
+                    ('say', ["(LMAO OK, coulda been worse)"], "James"),
                     ('say', ["Dan looks to James, then back."]),
-                    ('say', ["...thanks!"], "Dan"),
+                    ('say', ["Dude...thanks so much!",
+                             "This is really thoughful of you"], "Dan"),
+                    ('say', ["No problem, guys!"], "Matt"),
                     ('say', ["..."]),
                     ('flag', 'w1_gifts'),
                 ],
@@ -835,36 +834,44 @@ STORY_WEEKS = [
                              "You feel a strong urge to fill it."]),
                     ('hub', "", {
                         'In-ground pool': [
-                            ('say', ["What the hell is that?"], "James"),
-                            ('ask', "Aren't all pools in the ground?",
-                             {'Yes': [], 'No': []}, "James"),
-                            ('say', ["Somehow that didn't really answer my question.",
-                                     "Can I see a picture?"], "James"),
+                            ('ask', "Uhm, not to kill your vibe, but aren't all "
+                                    "pools in the ground?", {
+                                "That's just what they're called": [
+                                    ('say', ["Okay well I appreciate your honesty."],
+                                     "James")],
+                                'No': [
+                                    ('ask', "What kind of pool isn't in ground?", {
+                                        'Paddling pool': [
+                                            ('say', ["I'll give you that but feels "
+                                                     "like a TKO"], "James")],
+                                        'Infinity pool': [],
+                                    }, "James"),
+                                ],
+                            }, "James"),
+                            ('say', ["So you're rich rich huh?"], "James"),
                         ],
                         'Family': [
-                            ('say', ["I'm the youngest of 5.",
-                                     "My siblings are wayyy older — and I've got "
-                                     "5 nieces and nephews."], "Sarah"),
-                            ('ask', "Damn — what's that like?",
-                             {'Fun': [], 'Not fun': []}, "James"),
-                            ('say', ["I can see that.",
-                                     "(...man, I suck at socializing)"], "James"),
+                            ('say', ["I'm the youngest of 5, and I have 5 nieces "
+                                     "and nephews."], "Sarah"),
+                            ('ask', "Wow you must love kids so much", {
+                                'I do': [
+                                    ('say', ["That's awesome, I'm sure we won't have "
+                                             "any turbulence",
+                                             "in our future related to you and "
+                                             "kids."], "James")],
+                                "I don't": [
+                                    ('say', ["(I wonder what she means by this?",
+                                             "Oh well, no harm in leaving this open "
+                                             "to interpretation)"], "James")],
+                            }, "James"),
                         ],
                         'Crazy family': [
-                            ('say', ["My sister's in a legal battle with her ex-husband...",
-                                     "...and her new boyfriend is #!$%."], "Sarah"),
-                            ('say', ["Wow.",
-                                     "(I have no idea how to respond to that)"], "James"),
-                        ],
-                        'Bridge to Canada': [
-                            ('say', ["Did you know there's a bridge to Canada you "
-                                     "can turn onto by accident...",
-                                     "...and then you can't turn off?"], "Sarah"),
-                            ('say', ["LMAO that's hilarious.",
-                                     "Have you ever taken it?"], "James"),
-                            ('say', ["Nah — but my family did, once.",
-                                     "They got detained for like 3 hours lol."], "Sarah"),
-                            ('say', ["That's pretty funny... (I hope)"], "James"),
+                            ('say', ["My sister's in a legal battle with her "
+                                     "ex-husband and her boyfriend sucks."], "Sarah"),
+                            ('say', ["(Graphic detail follows)"], "Sarah"),
+                            ('say', ["Wow. That's terrible.",
+                                     "We just met today, you know that "
+                                     "right?"], "James"),
                         ],
                     }),
                     ('flag', 'w1_chat'),
@@ -881,14 +888,13 @@ STORY_WEEKS = [
                     ('say', ["You're feeling pretty tired.",
                              "Might be time to head out."]),
                 ],
-                'talk_default': ["Cool — see ya!"],
-                'talk': {'james': ["See you next week?"],
-                         'dan': ["Get home safe!"],
+                'talk': {'james': ["Hope I'll see you next week!"],
+                         'dan': ["Peace out."],
                          'matt': ["Laters! Good to see you."],
                          'nat': ["Byee! Text me when you're home."],
-                         'bailey': ["That was really fun. Bye!"],
-                         'mayu': ["See you around!"],
-                         'wallace': ["Take it easy, yeah?"]},
+                         'bailey': ["See you!"],
+                         'mayu': ["Bye bye!"],
+                         'wallace': ["Bye"]},
                 'advance_when': 'w1_left',
             },
         ],
@@ -921,19 +927,28 @@ STORY_WEEKS = [
                     (14, 7): {'flag': 'w2_g_dan', 'speaker': 'Dan',
                               'lines': ["Wagwan g."]},
                     (5, 7):  {'flag': 'w2_g_james', 'speaker': 'James',
-                              'lines': ["Oh hey, what's up.",
-                                        "When am I playing? Um... that's a funny story."]},
+                              'steps': [
+                                  ('say', ["Oh hey, what's up!"], "James"),
+                                  ('ask', "", {
+                                      'When are you playing?': [
+                                          ('say', ["Uhh that's a funny story."],
+                                           "James")],
+                                      'Good evening handsome': ('game_over', [
+                                          "James panicks and runs out the door, "
+                                          "into the night.",
+                                          "You lose, I guess.",
+                                          "...let's run that back."]),
+                                  }, "James"),
+                              ]},
                     (8, 1):  {'flag': 'w2_g_nat', 'speaker': 'Nat',
                               'lines': ["Huh, where did Leonard get to today?",
-                                        "(...he was never seen again.)", "(...)",
-                                        "(...not in a creepy way tho.)"]},
+                                        "I'm sure we'll see him again."]},
                     (3, 4):  {'flag': 'w2_g_matt', 'speaker': 'Matt',
                               'lines': ["Good evening, m'lady!", "(Tips fedora.)"]},
                     (15, 10): {'flag': 'w2_g_mayu', 'speaker': 'Mayu',
-                               'lines': ["Heyy! Good to see you again.",
-                                         "Let's get a win tonight."]},
+                               'lines': ["Heyy! Good to see you again."]},
                     (8, 10): {'flag': 'w2_g_wallace', 'speaker': 'Wallace',
-                              'lines': ["Oh — hey.", "Ready when you are."]},
+                              'lines': ["Oh — hey!."]},
                 },
                 'checked_again': ["..."],
                 'advance_when': 'w2_greeted',
@@ -943,8 +958,9 @@ STORY_WEEKS = [
                 'objective': "Talk to James when you're ready",
                 'locked_exits': {1: 'all'},
                 'cutscene': [
-                    ('say', ["Quick heads up — they've stepped it up since last week.",
-                             "Proper game tonight. Let's bring it!"], "James"),
+                    ('say', ["Oh by the way, everyone is slightly better at "
+                             "volleyball this week."], "James"),
+                    ('say', ["How come? Uhm the plot"], "James"),
                 ] + _W2_READY_ASK,
                 'interact_ask': {'who': 'James', 'steps': _W2_READY_ASK},
                 'advance_when': 'w2_ready_done',
@@ -981,43 +997,42 @@ STORY_WEEKS = [
                     ('face', 'matt', 'down'),
                     ('face', 'bailey', 'down'),
                     ('sit_all',),
-                    ('ask', "So... what do you do right now? Like — in general?", {
+                    ('say', ["(I'm sitting next to Sarah...)"], "James"),
+                    ('say', ["(I should try to make an effort)"], "James"),
+                    ('ask', "So what do you do?", {
                         'I study at Imperial': [
-                            ('say', ["Oh, awesome — what are you studying?"], "James"),
-                            ('ask', "...", {
-                                'Drugs': [('say', ["Huh? ...Oh, right.",
-                                                   "Damn, you're super smart."], "James")],
-                            }, "Sarah"),
+                            ('say', ["Oh, that's an awesome university"], "James"),
+                            ('say', ["Have you heard of UCL? That, on the other "
+                                     "hand, is not an awesome university"], "James"),
+                            ('ask', "What are you studying?", {
+                                'Neuroscience': [
+                                    ('say', ["Bullshit."], "James"),
+                                    ('ask', "What am I thinking of right now.", {
+                                        "That's not how it works.": [
+                                            ('say', ["Wrong, I was thinking of a "
+                                                     "banana."], "James")],
+                                        'Banana.': [
+                                            ('say', ["Holy shit."], "James")],
+                                    }, "James"),
+                                ],
+                            }, "James"),
                         ],
-                        'Drugs': [('say', ["Huh? ...Oh, right.",
-                                           "Damn, you're super smart."], "James")],
                     }, "James"),
-                    ('say', ["...hold on. I've heard of Western Blotting.",
-                             "...do I want you to explain it in excruciating detail?",
-                             "(She is really pretty, after all.)",
-                             "...sure. Let's do science!"], "James"),
+                    ('say', ["I'm somethnig of a scientist myself."], "James"),
+                    ('ask', "I worked a Biotech for 5 months. Then got fired lol", {
+                        "I'm working on my Western Blotting right now.": [],
+                    }, "James"),
+                    ('say', ["Ooh you should explain it to me in excruciating "
+                             "detail"], "James"),
                     ('fade_out', 1.0),
                     ('wait', 0.9),
                     ('say', ["(Half an hour passes. They discussed Western Blotting.)"]),
                     ('fade_in', 1.0),
-                    ('say', ["Okay, okay! So — you take some goo, run it through a "
-                             "wiggly machine, and a sticker tells you if the thing's "
-                             "in there!"], "James"),
-                    ('ask', "Did he get it?", {
-                        'Not really': [], 'Not really...': [],
-                    }, "Sarah"),
-                    ('say', ["Welp. I tried.",
-                             "I worked at a Biotech for a while. Didn't work out."], "James"),
-                    ('ask', "...", {
-                        'Because of the science?': [
-                            ('say', ["Uh... you could say that."], "James")],
-                        'How come?': [
-                            ('say', ["Because of the science, lol."], "James")],
-                    }, "Sarah"),
-                    ('say', ["I'm late-stage with an Insurtech, so fingers crossed I "
-                             "get that!", "...", "I work at a pub right now tho."], "James"),
+                    ('ask', "Okay okay! Did I get it?", {
+                        'Not really': [], 'Definitely not': [],
+                    }, "James"),
+                    ('say', ["Welp. I tried."], "James"),
                     ('say', ["Hey guys — time to come inside!"], "Milla"),
-                    ('say', ["Rip. Ok."], "Dan"),
                     ('flag', 'w2_garden_done'),
                 ],
                 'advance_when': 'w2_garden_done',
@@ -1046,16 +1061,17 @@ STORY_WEEKS = [
                     ('walk', 'nat', (13, 9)),           # she comes over to the table
                     ('sit', 'nat', 'down'),
                     ('say', ["Oh really? I'm from Martinique!"], "Nat"),
-                    ('say', ["..."], "James"),
                     ('say', ["So... you speak fluent French."], "James"),
                     ('say', ["Native."], "Nat"),
-                    ('say', ["(Oh fuck.) ...lol."], "James"),
+                    ('say', ["... did I say fluent French? What I actually "
+                             "meant, was uh"], "James"),
                     ('say', ["James slowly backs away..."]),
                     ('walk', 'james', (6, 9)),
                     ('walk', 'james', (1, 9)),          # bolts for the front door
                     ('say', ["...and bolts out the door."]),
-                    ('say', ["(Ugh, I don't feel great.)",
-                             "(...damn, that chicken sucked.)",
+                    ('say', ["(The power of undercooked chicken courses through "
+                             "your veins)"]),
+                    ('say', ["(Damn I feel awful.)",
                              "(I think I'll head home.)"], "Sarah"),
                     ('flag', 'w2_inside_done'),
                 ],

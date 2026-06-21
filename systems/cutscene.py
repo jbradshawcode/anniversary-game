@@ -314,6 +314,7 @@ class Cutscene:
                 return
             self._begin_step()
         elif kind == 'game_over':
+            self._finish()                     # drop this cutscene; retry replays the beat fresh
             if self.on_game_over is not None:
                 self.on_game_over(outcome[1])
         else:                                  # a list of spliced steps

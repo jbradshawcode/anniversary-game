@@ -90,8 +90,6 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 
   → choose **“Not today”**
 
-    > *[ GAME OVER screen ]*
-
     > *That's not what happened, dummy.*
 
     > *You lose, I guess.*
@@ -186,19 +184,19 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 
 **    James:** Uhm, not to kill your vibe, but aren't all pools in the ground?  *(choice)*
 
-      → choose **“That's just what they're called”**
+      → choose **"That's just what they're called"**
 
-**        James:** Okay well I appreciate your honesty.
+          **    James:** Okay well I appreciate your honesty.
 
-      → choose **“No”**
+      → choose **"No"**
 
-**        James:** What kind of pool isn't in ground?  *(choice)*
+          **    James:** What kind of pool isn't in ground?  *(choice)*
 
-          → choose **“Paddling pool”**
+              → choose **"Paddling pool"**
 
-**            James:** I'll give you that but feels like a TKO
+                  **  James:** I'll give you that but feels like a TKO
 
-          → choose **“Infinity pool”**
+              → choose **"Infinity pool"**
 
 **    James:** So you're rich rich huh?
 
@@ -208,17 +206,13 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 
 **    James:** Wow you must love kids so much  *(choice)*
 
-      → choose **“I do”**
+      → choose **"I do"**
 
-**        James:** That's awesome, I'm sure we won't have any turbulence
+          **    James:** That's awesome, I'm sure we won't have any turbulence in our future related to you and kids.
 
-**        James:** in our future related to you and kids.
+      → choose **“I don't"**
 
-      → choose **“I don't”**
-
-**        James:** (I wonder what she means by this?
-
-**        James:** Oh well, no harm in leaving this open to interpretation)
+          **    James:** (I wonder what she means by this? Oh well, no harm in leaving this open to interpretation)
 
   → topic **“Crazy family”**
 
@@ -272,19 +266,18 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 
 **James:** Oh hey, what's up!
 
-  → choose **“When are you playing?”**
+    → choose **"When are you playing?"**
 
-**    James:** Uhh that's a funny story.
+        **    James:** Uhh that's a funny story.
 
-  → choose **“Good evening handsome”**
+    → choose **"Good evening handsome"**
 
-    > *[ GAME OVER screen ]*
+        (Game over screen)
+        > *James panicks and runs out the door, into the night.*
 
-    > *James panicks and runs out the door, into the night.*
+        > *You lose, I guess.*
 
-    > *You lose, I guess.*
-
-    > *...let's run that back.*
+        > *...let's run that back.*
 
 **Nat:** Huh, where did Leonard get to today?
 
@@ -336,37 +329,37 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 
 **    James:** Have you heard of UCL? That, on the other hand, is not an awesome university
 
-**    James:** What are you studying?  *(choice)*
+**    James:** What are you studying?   *(choice)*
 
-      → choose **“Neuroscience”**
+      → choose **Neuroscience**
 
 **        James:** Bullshit.
 
 **        James:** What am I thinking of right now.  *(choice)*
 
-          → choose **“That's not how it works.”**
+      → choose **That's not how it works.**
 
-**            James:** Wrong, I was thinking of a banana.
+**        James:** Wrong, I was thinking of a banana.
 
-          → choose **“Banana.”**
+      → choose **Banana.**
 
-**            James:** Holy shit.
+**        James:** Holy shit.
 
 **James:** I'm somethnig of a scientist myself.
 
 **James:** I worked a Biotech for 5 months. Then got fired lol  *(choice)*
 
-  → choose **“I'm working on my Western Blotting right now.”**
+      → choose **I'm working on my Western Blotting right now.**
 
 **James:** Ooh you should explain it to me in excruciating detail
 
 > *(Half an hour passes. They discussed Western Blotting.)*
 
-**James:** Okay okay! Did I get it?  *(choice)*
+**James:** Okay okay! Did I get it? *(choice)*
 
   → choose **“Not really”**
 
-  → choose **“Definitely not”**
+  → choose **"Definitely not”**
 
 **James:** Welp. I tried.
 
@@ -394,7 +387,7 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 
 > *...and bolts out the door.*
 
-> *(The power of undercooked chicken courses through your veins)*
+(The power of undercooked chicken courses through your veins)
 
 **Sarah:** (Damn I feel awful.)
 
@@ -717,6 +710,14 @@ Every voice line in the game, in story order. Auto-generated from `config.py` (`
 **James:** ...
 
 **James:** Let's have fun playing. See ya.
+
+**James:** Let's have fun playing — ready?  *(choice)*
+
+  → choose **“Yes”**
+
+  → choose **“No”**
+
+**    James:** Oh, ok. Come find me when you're ready.
 
 **James:** Let's have fun playing — ready?  *(choice)*
 
