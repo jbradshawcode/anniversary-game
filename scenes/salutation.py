@@ -25,8 +25,8 @@ _PINE_SEAM  = (146, 116, 70)
 _SLATE      = (96, 102, 108)
 _SLATE_ALT  = (88, 94, 100)
 _GROUT      = (74, 80, 86)
-_SAGE       = (110, 122, 104)
-_SAGE_DK    = (88, 100, 82)
+_SAGE       = (58, 90, 94)        # deep teal-green dado (the signature wall finish)
+_SAGE_DK    = (42, 70, 74)
 _CREAM      = (238, 230, 214)
 _CREAM_DK   = (226, 217, 200)
 _FIRE       = (46, 70, 60)
@@ -265,6 +265,19 @@ def _draw_bar(surf):
         for cx in range(fx + 5, fx + 38, 6):
             pygame.draw.line(surf, _FRIDGE_DK, (cx, gy + 42, ), (cx, gy + 57), 1)
         pygame.draw.rect(surf, _GLASS_DK, (fx + 2, gy + 40, 36, 18), 1)
+
+    # carved corbels at the bar's chamfered front corners (gallery: unnamed 2)
+    for ccx in (12 * _TS, 20 * _TS):
+        pygame.draw.polygon(surf, _BAR_DK, [(ccx - 4, 3 * _TS), (ccx + 4, 3 * _TS),
+                                            (ccx, 4 * _TS - 4)])
+    # illuminated "SALUTATION" sign + a brass last-orders bell on the gantry
+    sgx = mid - 24
+    pygame.draw.rect(surf, _BAR_DK, (sgx, gy + 9, 48, 7))
+    pygame.draw.rect(surf, _BRASS, (sgx, gy + 9, 48, 7), 1)
+    for lx in range(sgx + 4, sgx + 44, 5):                                 # gilt lettering hint
+        pygame.draw.rect(surf, _BRASS, (lx, gy + 11, 2, 3))
+    pygame.draw.circle(surf, _BRASS, (gx + gw - 14, gy + 12), 3)           # brass bell
+    pygame.draw.rect(surf, _BRASS_DK, (gx + gw - 15, gy + 8, 2, 3))
 
 
 # ── Fireplaces (bottom wall) ─────────────────────────────────────────────────
@@ -588,6 +601,24 @@ def _draw_lights(surf):
         pygame.draw.rect(surf, _SCONCE_GL, (px - 3, py - 6, 6, 9))
 
 
+def _draw_bunting(surf):
+    """A festoon of little triangular flags strung across the back room (gallery: unnamed 11)."""
+    pts = [(2 * _TS, 5 * _TS + 6), (7 * _TS, 4 * _TS + 10), (12 * _TS, 5 * _TS + 6),
+           (17 * _TS, 4 * _TS + 10), (22 * _TS, 5 * _TS + 6)]
+    flags = [(190, 60, 55), (236, 236, 230), (70, 100, 150)]
+    k = 0
+    for i in range(len(pts) - 1):
+        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+        pygame.draw.line(surf, (44, 38, 30), (x0, y0), (x1, y1), 1)
+        for j in range(5):
+            t = (j + 0.5) / 5
+            fx, fy = int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t)
+            c = flags[k % 3]
+            k += 1
+            pygame.draw.polygon(surf, c, [(fx - 3, fy), (fx + 3, fy), (fx, fy + 6)])
+            pygame.draw.polygon(surf, _dk(c), [(fx - 3, fy), (fx + 3, fy), (fx, fy + 6)], 1)
+
+
 def _glow(ov, cx, cy, r, color):
     g = pygame.Surface((2 * r, 2 * r), pygame.SRCALPHA)
     for rr in range(r, 4, -7):
@@ -616,6 +647,7 @@ class Salutation(Scene):
         _draw_conservatory_seating(screen)
         _draw_front_door(screen)
         _draw_garden_doors(screen)
+        _draw_bunting(screen)
         _draw_lights(screen)
         self._draw_objects(screen)
 
@@ -632,6 +664,15 @@ class Salutation(Scene):
             for bc in (5, 9, 13, 17, 21):
                 pygame.draw.rect(ov, (_BEAM[0], _BEAM[1], _BEAM[2], 34),
                                  (bc * _TS - 3, _MAIN.y * _TS, 6, _MAIN.h * _TS))
+            # rear skylight over the back of the main room (CAMRA: lit by a ceiling lantern)
+            sk = pygame.Rect(12 * _TS, 5 * _TS, 7 * _TS, 3 * _TS)
+            day = pygame.Surface((sk.w, sk.h), pygame.SRCALPHA)
+            day.fill((255, 250, 236, 24))
+            ov.blit(day, sk.topleft, special_flags=pygame.BLEND_RGBA_ADD)
+            for gx in range(sk.x, sk.right + 1, _TS):                  # glazing bars
+                pygame.draw.rect(ov, (236, 232, 222, 60), (gx, sk.y, 2, sk.h))
+            for gy in range(sk.y, sk.bottom + 1, 16):
+                pygame.draw.rect(ov, (236, 232, 222, 60), (sk.x, gy, sk.w, 2))
             for cx, cr in _PENDANTS:
                 _glow(ov, cx * _TS + _TS // 2, cr * _TS + _TS // 2 - 6, 40, (255, 222, 150))
             for cx, cr in _LANTERNS:
