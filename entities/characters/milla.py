@@ -24,14 +24,14 @@ class Milla(Humanoid):
     name = "Milla"
 
     def __init__(self, tile_x: int, tile_y: int):
-        super().__init__(tile_x, tile_y)
+        super().__init__(tile_x, tile_y, blocking=False)   # behind the counter (already solid)
         self.interaction_text = ["What'll it be?"]
 
     def draw(self, screen):
-        # Her tile is the order spot in FRONT of the bar (so you can face her to
-        # order), but she's drawn ~2 tiles back, behind the counter.
+        # Her tile is a counter tile, so the player can stand in front of the bar and
+        # talk to her THROUGH it; she's drawn a tile back, standing behind the bar.
         oy = self.y
-        self.y = oy - 2 * TILE_SIZE
+        self.y = oy - TILE_SIZE
         super().draw(screen)
         self.y = oy
 

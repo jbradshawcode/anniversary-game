@@ -42,6 +42,10 @@ PUB_SEATS = [(11, 9), (12, 11), (13, 11), (13, 9),
              (10, 9), (11, 11), (10, 11)]
 SARAH_PUB_SEAT = (12, 9)        # Sarah's chair (between James and Nat)
 _SEATED_BEATS = {'pub_queue', 'gifts', 'where_from', 'wind_down'}
+# Crew drinks at the Ch1 Salutation table — MUST match the 'hold' steps in the
+# pub_queue cutscene, so a load/dev-jump into a seated beat restores the same table.
+PUB_DRINKS = {'James': 'beer', 'Dan': 'beer', 'Matt': 'beer', 'Wallace': 'beer',
+              'Nat': 'white_wine', 'Bailey': 'cider', 'Mayu': 'white_wine'}
 
 
 class StoryManager:
@@ -365,10 +369,17 @@ class StoryManager:
         # seats the queue cutscene leaves them in (WEEK1_CREW order), and seat Sarah
         # in her chair too (the 8th seat) so she isn't stranded at the door.
         if self._party.active and self.beat['name'] in _SEATED_BEATS:
-            self._party.settle(3, PUB_SEATS)
+            for f in self._party.followers:        # hand the crew their drinks first...
+                f.holding = PUB_DRINKS.get(f.name)
+            self._party.settle(3, PUB_SEATS)       # ...settle() rests them on the table
             if player is not None:
                 player.teleport(*SARAH_PUB_SEAT)
                 player.sitting = True
                 player.facing = 'up' if SARAH_PUB_SEAT[1] >= 10 else 'down'
                 if hasattr(player, '_sit_x'):
                     player._sit_x = player.x
+                player.holding = ('cider' if 'sarah_cider' in self.flags else
+                                  'red_wine' if 'sarah_red' in self.flags else
+                                  'white_wine' if 'sarah_wine' in self.flags else None)
+                if player.holding:
+                    player.place_drink()

@@ -5,6 +5,7 @@ use the default draw(); the Player overrides draw() to add facing + a walk bob.
 A mover (e.g. the follower party) can set `walking`/`walk_phase` to bob too.
 """
 import math
+import random
 import pygame
 from typing import NamedTuple, Tuple
 from .base import GameObject
@@ -33,6 +34,43 @@ def draw_shadow(screen, px, py):
         _shadow_surf = pygame.Surface((18, 7), pygame.SRCALPHA)
         pygame.draw.ellipse(_shadow_surf, (0, 0, 0, 70), (0, 0, 18, 7))
     screen.blit(_shadow_surf, (int(px) - 9, int(py) + 12))
+
+
+# Drink glasses carried/rested by a humanoid. Each kind reads by glass shape +
+# liquid colour: pints (beer/cider) are tall tumblers; wines are stemmed.
+DRINKS = ('beer', 'cider', 'white_wine', 'red_wine')
+_GLASS    = (214, 228, 238)     # glass highlight
+_GLASS_SH = (150, 170, 186)     # glass edge / stem
+_FOAM     = (250, 248, 240)
+_LIQUID = {'beer': (240, 178, 36), 'cider': (228, 196, 104),
+           'white_wine': (236, 228, 156), 'red_wine': (146, 30, 46)}
+_LIQUID_SH = {'beer': (208, 150, 22), 'cider': (198, 166, 80),
+              'white_wine': (206, 196, 120), 'red_wine': (110, 20, 34)}
+
+
+def draw_drink(screen, gx, gy, kind):
+    """A small drink sprite resting on its base at (gx, gy) — the bottom centre."""
+    if kind not in _LIQUID:
+        return
+    fill, fill_sh = _LIQUID[kind], _LIQUID_SH[kind]
+
+    def r(x, y, w, h, c):
+        pygame.draw.rect(screen, c, (int(gx) + x, int(gy) + y, w, h))
+
+    if kind in ('beer', 'cider'):                # tall pint tumbler
+        r(-3, -10, 6, 10, _GLASS_SH)             # glass body outline
+        r(-2,  -9, 4,  9, fill)                  # liquid
+        r(-2,  -9, 1,  9, fill_sh)               # shaded left edge
+        r( 2,  -9, 1,  9, _GLASS)                # highlight
+        if kind == 'beer':
+            r(-2, -10, 4, 2, _FOAM)              # foam head
+    else:                                        # stemmed wine glass
+        r(-3,  -9, 6, 3, _GLASS_SH)              # bowl
+        r(-2,  -8, 4, 2, fill)
+        r(-2,  -8, 1, 2, fill_sh)
+        r( 2,  -9, 1, 3, _GLASS)
+        r(-1,  -6, 2, 4, _GLASS_SH)              # stem
+        r(-2,  -2, 4, 1, _GLASS_SH)              # foot
 
 
 def draw_body(screen, px, py, p: Palette):
@@ -71,9 +109,33 @@ class Humanoid(GameObject):
     diving = None          # None | 'left' | 'right' — a sprawled, near-horizontal dive
     sitting = False        # seated side-pose (on a bench)
     fade = 255             # 0..255 sprite opacity; a cutscene 'vanish' tweens this to 0
+    holding = None         # None | one of DRINKS — a glass carried in hand / set on the table
+    _drink_xy = None       # frozen table spot for the held drink once seated
 
     def __init__(self, tile_x: int, tile_y: int, blocking: bool = True):
         super().__init__(tile_x, tile_y, blocking=blocking)
+
+    def place_drink(self) -> None:
+        """Freeze where a seated character's drink rests on the table — pushed far
+        enough toward the table (the way they're facing as they sit) to land ON the
+        table sprite, not their lap. Stays put even if they later turn to chat, and a
+        little random scatter keeps the glasses from lining up unnaturally."""
+        bx = float(getattr(self, '_sit_x', self.x))
+        off = {'up': (0, -22), 'down': (0, 32), 'left': (-28, 4), 'right': (28, 4)}
+        ox, oy = off.get(self.facing, (0, 32))
+        self._drink_xy = (bx + ox + random.uniform(-3.5, 3.5),
+                          self.y + oy + random.uniform(-2.0, 2.0))
+
+    def _blit_drink(self, screen: pygame.Surface) -> None:
+        if not self.holding:
+            return
+        if self.sitting:                          # resting on the table in front of them
+            if self._drink_xy is None:
+                self.place_drink()
+            gx, gy = self._drink_xy
+        else:                                     # carried in hand, beside the body
+            gx, gy = self.x + 8, self.y + 6
+        draw_drink(screen, gx, gy, self.holding)
 
     def _draw_sitting(self, screen: pygame.Surface, px: int, py: int):
         """Seated pose. Facing left/right gives a side pose with the legs folded
@@ -150,6 +212,7 @@ class Humanoid(GameObject):
         if self.sitting:
             draw_shadow(screen, self.x, self.y)
             self._draw_sitting(screen, int(self.x), int(self.y))
+            self._blit_drink(screen)
             return
         py = self.y
         if self.walking:
@@ -166,6 +229,7 @@ class Humanoid(GameObject):
         self._draw_body(screen, self.x, py)
         if self.facing == 'up':
             self._draw_back_hair(screen, self.x, py)
+        self._blit_drink(screen)
 
     # Direction dispatch. left/right share one bespoke profile head (auto-mirrored);
     # characters without turned art fall back to the front head, as before.

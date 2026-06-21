@@ -85,6 +85,7 @@ class Game:
         self.scene_manager.start(1, self.player)
 
         self.party = Party()
+        king_st.set_party(self.party)      # crossing lights hold green while the crew cross
         self.story = StoryManager()
         self.cutscene = Cutscene()
         self.story.bind(self.dialogue, self.scene_manager, self.player,

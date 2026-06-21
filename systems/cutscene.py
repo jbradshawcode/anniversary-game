@@ -15,11 +15,15 @@ Steps:
                                     removed; once all are explored, continue.
                                     ('hub', text, topics, 'Name') for a speaker.
   ('walk', who, (col, row))         tween one actor to a tile; wait until arrived
+  ('walkto', who, (col, row))       like walk, but pathfind around solid tiles
   ('move', {who: (col, row), ...})  tween several actors in parallel; wait for all
   ('face', who, 'down'|'up'|...)    set facing (player only draws facing)
   ('pose', who, 'left'|'right'|None) sprawled dive/prone pose (None clears it)
   ('vanish', who[, seconds])        fade the actor's sprite out, then remove it from
                                     the scene (gone for good — no re-interaction)
+  ('hold', who, kind)               give the actor a drink to carry (entities DRINKS);
+                                    rendered in-hand, or on the table once they sit
+  ('if_flag', name, [steps])        splice the steps in only if the story flag is set
   ('wait', seconds)                 hold
   ('fade_out', seconds)             fade screen to black
   ('fade_in', seconds)              fade screen up from black
@@ -35,6 +39,7 @@ continues). A 'hub' topic value is always a list of steps.
 party follower or current-scene object matched on its class/display name.
 """
 import pygame
+from collections import deque
 from typing import List, Optional, Tuple, TYPE_CHECKING
 from config import TILE_SIZE, TILE_MOVE_SPEED
 
@@ -122,6 +127,33 @@ class Cutscene:
                     return o
         return None
 
+    def _bfs_path(self, actor, target: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """Tile path (adjacent steps, excluding the start) from the actor's tile to
+        `target`, routing around solid tiles via the scene's walkability. Falls back to
+        a straight step if there's no route or no scene. The target itself is allowed
+        even if technically blocked, so a seat tucked against furniture is reachable."""
+        sc = self._scenes.current if self._scenes is not None else None
+        if sc is None:
+            return [target]
+        start = (int(actor.x // TILE_SIZE), int(actor.y // TILE_SIZE))
+        if start == target:
+            return [target]
+        seen = {start}
+        q = deque([(start, [])])
+        while q:
+            (x, y), path = q.popleft()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                n = (x + dx, y + dy)
+                if n in seen:
+                    continue
+                if n == target:
+                    return path + [n]
+                if not sc.is_walkable(*n):
+                    continue
+                seen.add(n)
+                q.append((n, path + [n]))
+        return [target]
+
     def _face_actor(self, a, b) -> None:
         """Turn actor a to face actor b's tile (4-way)."""
         if a is None or b is None or a is b or not hasattr(a, 'facing'):
@@ -175,6 +207,13 @@ class Cutscene:
                 self._setup_move(step)
                 if self._movers:
                     return
+            elif verb == 'walkto':                # ('walkto', who, (col,row)) — pathfind round solids
+                actor = self._resolve(step[1])
+                self._i += 1
+                if actor is not None:             # splice tile-by-tile straight walks along the path
+                    path = self._bfs_path(actor, tuple(step[2]))
+                    self._steps[self._i:self._i] = [('walk', step[1], t) for t in path]
+                continue
             elif verb == 'face':
                 actor = self._resolve(step[1])
                 if actor is not None and hasattr(actor, 'facing'):
@@ -183,6 +222,17 @@ class Cutscene:
                 actor = self._resolve(step[1])
                 if actor is not None:
                     actor.diving = step[2]
+            elif verb == 'hold':                  # ('hold', who, kind) — carry a drink (DRINKS)
+                actor = self._resolve(step[1])
+                if actor is not None:
+                    actor.holding = step[2]
+                    if getattr(actor, 'sitting', False) and hasattr(actor, 'place_drink'):
+                        actor.place_drink()
+            elif verb == 'if_flag':               # ('if_flag', name, [steps]) — splice if flag set
+                self._i += 1
+                if self._story is not None and step[1] in self._story.flags:
+                    self._steps[self._i:self._i] = list(step[2])
+                continue
             elif verb == 'vanish':                # ('vanish', who[, secs]) — fade out, then remove
                 actor = self._resolve(step[1])
                 if actor is not None and hasattr(actor, 'fade'):
@@ -322,6 +372,8 @@ class Cutscene:
             actor.facing = facing
         if hasattr(actor, '_sit_x'):
             actor._sit_x = actor.x        # the player sits in place, not bench-shifted
+        if getattr(actor, 'holding', None) and hasattr(actor, 'place_drink'):
+            actor.place_drink()           # rest their drink on the table in front
 
     @staticmethod
     def _face_toward(actor, tx, ty) -> None:

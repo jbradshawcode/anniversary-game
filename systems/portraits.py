@@ -33,7 +33,9 @@ def bust(name, size: int = 88):
             tmp = pygame.Surface((32, 44), pygame.SRCALPHA)
             ch = cls(0, 0)
             ch.x, ch.y = 16, 24
-            ch.draw(tmp)                       # faces down; shadow sits below the crop
+            # base render only: Milla's draw() shifts her up a tile (the behind-the-bar
+            # offset), which would push her off this crop — so go straight to _render.
+            ch._render(tmp)                    # faces down; shadow sits below the crop
             crop = tmp.subsurface((5, 5, 22, 26)).copy()
             surf = pygame.transform.scale(crop, (int(22 * size / 26), size))
         _cache[key] = surf

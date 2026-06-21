@@ -239,14 +239,9 @@ SCENE_CONFIGS = {
             ],
         },
         'entry_points': {'down': (4, 10)},
-        'objects': {
-            'trees': [
-                (5, 4), (16, 4), (30, 4), (38, 4), (50, 4),
-                (56, 4), (68, 4), (75, 4), (84, 4), (95, 4),
-                (8, 10), (20, 10), (35, 10), (48, 10),
-                (58, 10), (70, 10), (84, 10), (94, 10),
-            ],
-        },
+        # No trees: King St is a paved high street. Street furniture (bollards lining
+        # the kerb, bins, a post box) is drawn into the scene background instead.
+        'objects': {},
     },
     'salutation': {
         'id': 3,
@@ -258,11 +253,14 @@ SCENE_CONFIGS = {
         'walkable_cols': (1, 32),
         'walkable_rows': (1, 11),
         'exits': {
-            'left': {'scene': 2, 'target': (97, 6), 'rows': (8, 10)},   # front door -> King St
+            'left': {'scene': 2, 'target': (97, 5), 'rows': (8, 10)},   # front door -> King St (north pavement)
             'right': {'scene': 4, 'target': (2, 7), 'rows': (3, 5)},    # garden doors -> garden
         },
         'entry_points': {'left': (2, 9), 'right': (32, 5)},
-        'objects': {'milla': [(15, 4)]},     # order spot: stand at (15,5), face up
+        # Milla stands at the right end of the bar (a counter tile, drawn a row back):
+        # order from (18, 4) facing up. The entry cutscene walks her to the left end
+        # to serve the team, then back here for later "regular" ordering.
+        'objects': {'milla': [(18, 3)]},
     },
     'garden': {
         'id': 4,
@@ -712,22 +710,78 @@ STORY_WEEKS = [
                 'locked_exits': {3: ['left', 'right']},
                 'cutscene': [
                     ('say', ["The whole team piles into The Salutation."]),
-                    ('move', {'james': (3, 8), 'dan': (4, 8), 'matt': (3, 9),
-                              'nat': (4, 9), 'bailey': (2, 8), 'mayu': (3, 10),
-                              'wallace': (2, 10)}),
-                    ('walk', 'dan', (12, 5)),               # Dan heads to the bar
-                    ('say', ["Could I have one million beers please.", "James?"], "Dan"),
-                    ('say', ["Um yeah sure, me too"], "James"),
-                    ('walk', 'james', (15, 5)),             # James gets the round in
-                    # two rows of four facing each other across the booth (must match PUB_SEATS):
+                    # The team queue from the front door up to the bar — Dan at the front (he's
+                    # getting the round in), then James, then Sarah, then the rest. After each
+                    # person collects, the rest shuffle forward one slot so the line advances.
+                    # Seat-walks use 'walkto' so they pathfind round the table/fireplace.
+                    ('move', {'dan': (10, 4), 'james': (9, 5), 'sarah': (8, 6),
+                              'matt': (7, 6), 'nat': (6, 7), 'bailey': (5, 7),
+                              'mayu': (4, 8), 'wallace': (3, 9)}),
+                    ('walk', 'milla', (11, 3)),             # Milla comes over to serve
+                    ('face', 'milla', 'down'),
+                    # ── Dan (front) ──
+                    ('walk', 'dan', (10, 3)), ('face', 'dan', 'right'),
+                    ('say', ["Could I have one million beers please."], "Dan"),
+                    ('hold', 'dan', 'beer'), ('walkto', 'dan', (12, 11)),
+                    ('move', {'james': (10, 4), 'sarah': (9, 5), 'matt': (8, 6), 'nat': (7, 6),
+                              'bailey': (6, 7), 'mayu': (5, 7), 'wallace': (4, 8)}),
+                    # ── James ──
+                    ('walk', 'james', (10, 3)), ('face', 'james', 'right'),
+                    ('say', ["Um, same again for me, ta."], "James"),
+                    ('hold', 'james', 'beer'), ('walkto', 'james', (11, 9)),
+                    ('move', {'sarah': (10, 4), 'matt': (9, 5), 'nat': (8, 6),
+                              'bailey': (7, 6), 'mayu': (6, 7), 'wallace': (5, 7)}),
+                    # ── Sarah orders her own drink ──
+                    ('walk', 'sarah', (10, 3)), ('face', 'sarah', 'right'),
+                    ('say', ["And for you?"], "Milla"),
+                    ('ask', "", {
+                        'Cider': [('hold', 'sarah', 'cider'), ('flag', 'sarah_cider')],
+                        'White Wine': [('hold', 'sarah', 'white_wine'),
+                                       ('flag', 'sarah_wine'), ('flag', 'sarah_white')],
+                        'Red Wine': [('hold', 'sarah', 'red_wine'),
+                                     ('flag', 'sarah_wine'), ('flag', 'sarah_red')],
+                    }, "Milla"),
+                    ('say', ["Coming right up."], "Milla"),
+                    ('walkto', 'sarah', (12, 9)),
+                    ('move', {'matt': (10, 4), 'nat': (9, 5), 'bailey': (8, 6),
+                              'mayu': (7, 6), 'wallace': (6, 7)}),
+                    # ── Matt ──
+                    ('walk', 'matt', (10, 3)), ('face', 'matt', 'right'),
+                    ('hold', 'matt', 'beer'), ('walkto', 'matt', (13, 11)),
+                    ('move', {'nat': (10, 4), 'bailey': (9, 5), 'mayu': (8, 6), 'wallace': (7, 6)}),
+                    # ── Nat ──
+                    ('walk', 'nat', (10, 3)), ('face', 'nat', 'right'),
+                    ('hold', 'nat', 'white_wine'), ('walkto', 'nat', (13, 9)),
+                    ('move', {'bailey': (10, 4), 'mayu': (9, 5), 'wallace': (8, 6)}),
+                    # ── Bailey ──
+                    ('walk', 'bailey', (10, 3)), ('face', 'bailey', 'right'),
+                    ('hold', 'bailey', 'cider'), ('walkto', 'bailey', (10, 9)),
+                    ('move', {'mayu': (10, 4), 'wallace': (9, 5)}),
+                    # ── Mayu ──
+                    ('walk', 'mayu', (10, 3)), ('face', 'mayu', 'right'),
+                    ('hold', 'mayu', 'white_wine'), ('walkto', 'mayu', (11, 11)),
+                    ('move', {'wallace': (10, 4)}),
+                    # ── Wallace (last) ──
+                    ('walk', 'wallace', (10, 3)), ('face', 'wallace', 'right'),
+                    ('hold', 'wallace', 'beer'), ('walkto', 'wallace', (10, 11)),
+                    ('walk', 'milla', (18, 3)),             # Milla heads back to her end of the bar
+                    ('face', 'milla', 'down'),
                     # chairs (row 9): Bailey, James, Sarah, Nat / banquette (row 11): Wallace, Mayu, Dan, Matt
-                    ('move', {'bailey': (10, 9), 'james': (11, 9), 'sarah': (12, 9), 'nat': (13, 9),
-                              'wallace': (10, 11), 'mayu': (11, 11), 'dan': (12, 11), 'matt': (13, 11)}),
                     ('settle',),
                     ('sit', 'bailey', 'down'), ('sit', 'james', 'down'),
                     ('sit', 'sarah', 'down'), ('sit', 'nat', 'down'),
                     ('sit', 'wallace', 'up'), ('sit', 'mayu', 'up'),
                     ('sit', 'dan', 'up'), ('sit', 'matt', 'up'),
+                    ('say', ["Hey, is that any good?"], "James"),
+                    ('ask', "", {
+                        'Yeah': [],
+                        'Nope': [
+                            ('if_flag', 'sarah_cider',
+                             [('say', ["Damn, sucks to be you I guess."], "James")]),
+                            ('if_flag', 'sarah_wine',
+                             [('say', ["Don't know what you expected from pub wine tbh."], "James")]),
+                        ],
+                    }, "Sarah"),
                     ('flag', 'w1_seated'),
                 ],
                 'advance_when': 'w1_seated',

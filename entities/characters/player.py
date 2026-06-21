@@ -95,6 +95,7 @@ class Player(Humanoid):
         if self.sitting:
             draw_shadow(screen, self._sit_x, self.y)
             self._draw_sitting(screen, int(self._sit_x), py)
+            self._blit_drink(screen)
             return
         draw_shadow(screen, self.x, self.y)        # grounded under the walk bob
         if self.moving:
@@ -114,6 +115,7 @@ class Player(Humanoid):
         self._draw_body(screen, px, py)
         if self.facing == 'up':
             self._draw_back_hair(screen, px, py)
+        self._blit_drink(screen)
 
     def _draw_head_down(self, screen, px, py):
         def r(x, y, w, h, c):

@@ -1,14 +1,16 @@
 """Follower party — the gym crew trailing the player in a conga line.
 
-Followers chase a breadcrumb trail of the player's recent tile centres, so they
-trace the actual path (no corner-cutting) and settle one tile apart when the
-player stops. They are never added to any scene's tile map, so they can't jam
-the player. Presence is derived from the story beat, so nothing here is saved.
+Followers retrace the exact tile-centres the player walked, single file and one
+real tile apart, so they always start and stay on real tiles (no half-step
+stagger, nothing straddling a wall edge). Their logical tile is kept in sync with
+their pixel position each frame, and a move-then-resolve pass is a safety net that
+shoves anyone out of a solid tile. They are never added to any scene's tile map,
+so they can't jam the player. Presence is derived from the story beat, so nothing
+here is saved.
 """
 import pygame
 from typing import List, Optional, Tuple, TYPE_CHECKING
-from config import (TILE_SIZE, TILE_MOVE_SPEED,
-                    PARTY_GROUP_SIZE, PARTY_RANK_GAP, PARTY_LATERAL)
+from config import TILE_SIZE, TILE_MOVE_SPEED
 from entities import James, Dan, Matt, Nat, Bailey, Mayu, Wallace
 
 if TYPE_CHECKING:
@@ -31,6 +33,7 @@ class Party:
         self._trail: List[_Pt] = []
         self._last_tile: Optional[Tuple[int, int]] = None
         self._following = False
+        self._scenes = None              # to honour the same walkability the player obeys
 
     @property
     def active(self) -> bool:
@@ -45,6 +48,7 @@ class Party:
     def form(self, player: 'Player', scene_manager, exclude=()) -> None:
         """Spawn the crew stacked on the player and stop drawing them as scenery.
         `exclude` (names) stay behind as scenery and don't join the party."""
+        self._scenes = scene_manager
         roster = [cls for cls in WEEK1_CREW if cls.name not in exclude]
         self.followers = [cls(player.tile_x, player.tile_y) for cls in roster]
         for f in self.followers:
@@ -65,6 +69,8 @@ class Party:
             f.walking = False
             f.sitting = True              # settled crew are sat down (at the pub table)
             f.facing = 'up' if tile[1] >= 10 else 'down'   # face the table (row 10 between rows)
+            if getattr(f, 'holding', None):
+                f.place_drink()           # rest their drink on the table
         self._following = False
 
     def stop_following(self) -> None:
@@ -92,57 +98,91 @@ class Party:
         if cur != self._last_tile:
             self._trail.append(_tile_center(cur[0], cur[1]))
             self._last_tile = cur
-            ranks = (len(self.followers) - 1) // PARTY_GROUP_SIZE + 1
-            cap = ranks * PARTY_RANK_GAP + 3
+            cap = len(self.followers) + 2                 # keep just enough path for the tail
             if len(self._trail) > cap:
                 self._trail = self._trail[-cap:]
         for i, f in enumerate(self.followers):
-            rank = i // PARTY_GROUP_SIZE                  # walk in staggered ranks of a pair
-            idx = len(self._trail) - 2 - rank * PARTY_RANK_GAP
+            idx = len(self._trail) - 2 - i                # single file, one real tile apart
             if idx < 0:
                 idx = 0
-            tx, ty = self._trail[idx]
-            # spread paired members symmetrically to either side of the trail
-            if PARTY_GROUP_SIZE > 1:
-                side = (i % PARTY_GROUP_SIZE) - (PARTY_GROUP_SIZE - 1) / 2.0
-                ox, oy = self._perp(idx)
-                tx += ox * side * PARTY_LATERAL
-                ty += oy * side * PARTY_LATERAL
-            self._step(f, (tx, ty), dt)
+            self._step(f, self._trail[idx], dt)
+        self._resolve_collisions()           # move-then-resolve: shove anyone out of a solid tile
 
-    def _perp(self, idx: int) -> _Pt:
-        """Unit vector perpendicular to the trail's local direction at idx (for the
-        side-by-side offset); zero if the trail is too short to have a direction."""
-        a = self._trail[idx]
-        b = self._trail[idx - 1] if idx > 0 else (self._trail[idx + 1]
-                                                  if idx + 1 < len(self._trail) else a)
-        dx, dy = a[0] - b[0], a[1] - b[1]
-        d = (dx * dx + dy * dy) ** 0.5
-        if d < 1e-6:
-            return (0.0, 0.0)
-        return (-dy / d, dx / d)
+    def _walkable_px(self, px: float, py: float) -> bool:
+        sc = self._scenes.current if self._scenes is not None else None
+        if sc is None:
+            return True
+        return sc.is_walkable(int(px // TILE_SIZE), int(py // TILE_SIZE))
 
-    @staticmethod
-    def _step(f, target: _Pt, dt: float) -> None:
+    def _resolve_collisions(self) -> None:
+        """Move-then-resolve: after everyone has stepped, shove any follower whose body
+        overlaps a solid tile back out of it (minimum-penetration push, a few passes for
+        corners). The rule is simply: a follower never overlaps a solid sprite."""
+        sc = self._scenes.current if self._scenes is not None else None
+        if sc is None:
+            return
+        r = 8                                       # follower half-extent in px
+        for f in self.followers:
+            for _ in range(8):
+                moved = False
+                lo_x, hi_x = int((f.x - r) // TILE_SIZE), int((f.x + r) // TILE_SIZE)
+                lo_y, hi_y = int((f.y - r) // TILE_SIZE), int((f.y + r) // TILE_SIZE)
+                for tx in range(lo_x, hi_x + 1):
+                    for ty in range(lo_y, hi_y + 1):
+                        if sc.is_walkable(tx, ty):
+                            continue
+                        left, right = tx * TILE_SIZE, (tx + 1) * TILE_SIZE
+                        top, bot = ty * TILE_SIZE, (ty + 1) * TILE_SIZE
+                        pens = ((f.x + r) - left, right - (f.x - r),
+                                (f.y + r) - top, bot - (f.y - r))
+                        m = min(pens)
+                        if m <= 0:
+                            continue
+                        if m == pens[0]:
+                            f.x -= m
+                        elif m == pens[1]:
+                            f.x += m
+                        elif m == pens[2]:
+                            f.y -= m
+                        else:
+                            f.y += m
+                        moved = True
+                if not moved:
+                    break
+
+    def _step(self, f, target: _Pt, dt: float) -> None:
         dx = target[0] - f.x
         dy = target[1] - f.y
         dist = (dx * dx + dy * dy) ** 0.5
-        if dist < 0.5:
+        if dist < 0.5:                        # arrived -> rest exactly on the tile
+            f.x, f.y = target
+            f.tile_x, f.tile_y = int(f.x // TILE_SIZE), int(f.y // TILE_SIZE)
             f.walking = False
             return
         if abs(dx) >= abs(dy):                # face the way we're walking
             f.facing = 'right' if dx > 0 else 'left'
         else:
             f.facing = 'down' if dy > 0 else 'up'
-        step = TILE_MOVE_SPEED * dt
+        # double-time when lagging (e.g. after waiting at a crossing) to catch up
+        speed = TILE_MOVE_SPEED * (1.7 if dist > TILE_SIZE * 2.2 else 1.0)
+        step = speed * dt
         if step >= dist:
-            moved = dist
-            f.x, f.y = target
+            nx, ny, moved = target[0], target[1], dist
         else:
-            moved = step
-            f.x += dx / dist * step
-            f.y += dy / dist * step
-        f.walking = True
+            nx, ny, moved = f.x + dx / dist * step, f.y + dy / dist * step, step
+        # Collision: a follower must obey the same solid tiles the player does — never
+        # step from valid ground into a blocked sprite; slide along the free axis instead.
+        # (If it's somehow already inside a blocked tile, let it move out unimpeded.)
+        if not self._walkable_px(nx, ny) and self._walkable_px(f.x, f.y):
+            if self._walkable_px(nx, f.y):
+                ny = f.y
+            elif self._walkable_px(f.x, ny):
+                nx = f.x
+            else:
+                nx, ny, moved = f.x, f.y, 0.0
+        f.x, f.y = nx, ny
+        f.tile_x, f.tile_y = int(f.x // TILE_SIZE), int(f.y // TILE_SIZE)  # logical tile = where we are
+        f.walking = moved > 0
         f.walk_phase += moved * 0.2       # ~one bob cadence per tile
 
     def draw(self, surface: pygame.Surface) -> None:
