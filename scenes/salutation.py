@@ -49,8 +49,8 @@ _BOTTLE_C   = (188, 202, 212)
 _BOTTLE_R   = (150, 60, 60)
 _BOTTLE_B   = (70, 100, 150)
 _SHELF      = (96, 72, 44)
-_TABLE      = (158, 122, 76)
-_TABLE_DK   = (132, 100, 60)
+_TABLE      = (174, 138, 90)      # warm honey-oak table tops
+_TABLE_DK   = (144, 110, 66)
 _CHAIR      = (120, 90, 56)
 _LEATHER    = (150, 88, 52)
 _LEATHER_DK = (122, 68, 38)
@@ -80,6 +80,28 @@ _BACKBAR_DK = (38, 64, 70)
 _BANQ_GRN   = (150, 170, 122)     # pale-green front-window banquette (gallery/28)
 _BANQ_GRN_DK = (116, 134, 92)
 _BEAM       = (228, 222, 208)     # painted ceiling beams
+_FLAG       = (150, 145, 132)     # york-stone flagstone apron along the bar
+_FLAG_DK    = (126, 121, 110)
+_FLAG_GR    = (104, 100, 90)
+_POT        = (150, 92, 60)       # terracotta plant pot
+_POT_DK     = (118, 70, 44)
+_LEAF       = (74, 122, 74)
+_LEAF_DK    = (52, 96, 56)
+_VASE       = (226, 222, 214)
+_BLOOM      = [(214, 92, 96), (236, 196, 90), (224, 140, 72), (200, 120, 160)]
+_CHALK      = (30, 32, 32)
+_CHALK_FR   = (92, 66, 42)
+_OXBLOOD    = (124, 50, 54)        # oxblood leather tub chairs
+_OXBLOOD_DK = (96, 36, 40)
+_BLACKLEA   = (56, 50, 54)         # black leather tub chairs
+_BLACKLEA_DK = (38, 34, 38)
+_SEATPAD    = (196, 200, 196)      # pale upholstered seat pads (booth/conservatory chairs)
+_CHECK      = (118, 150, 140)      # blue-green check (front-window banquette)
+_CHECK_DK   = (88, 116, 106)
+_CHECK_LN   = (198, 206, 192)
+_TILE_A     = (54, 52, 50)         # entrance-lobby floor tiles
+_TILE_B     = (66, 64, 62)
+_MAT        = (120, 94, 58)        # coir entry mat
 
 
 def _dk(c, n=25):
@@ -152,6 +174,15 @@ def _draw_floor(surf):
         if i % 2:
             pygame.draw.rect(surf, _PINE_ALT, (x, fy, 11, fh))
         pygame.draw.line(surf, _PINE_SEAM, (x, fy), (x, fy + fh), 1)
+
+    # york-stone flagstone apron along the front of the bar (gallery: unnamed 2, 4)
+    ax, ay, aw, ah = 10 * _TS, 4 * _TS, 11 * _TS, _TS
+    pygame.draw.rect(surf, _FLAG, (ax, ay, aw, ah))
+    for i, x in enumerate(range(ax, ax + aw, 26)):
+        pygame.draw.line(surf, _FLAG_GR, (x, ay), (x, ay + ah), 1)
+        if i % 2:
+            pygame.draw.rect(surf, _FLAG_DK, (x + 1, ay + 1, 24, ah - 2))
+    pygame.draw.line(surf, _FLAG_GR, (ax, ay + ah // 2), (ax + aw, ay + ah // 2), 1)
 
     px, py = _CONSV.x * _TS, _CONSV.y * _TS               # slate conservatory
     pw, ph = _CONSV.w * _TS, _CONSV.h * _TS
@@ -307,20 +338,24 @@ _OFF = {'N': (0, -16), 'S': (0, 16), 'W': (-16, 0), 'E': (16, 0)}
 
 
 def _chair(surf, cx, cy, side):
-    """A wooden chair seen from above: seat pad + a backrest slat on its outer edge."""
+    """An upholstered leather tub chair (oxblood / black, alternating): a rounded seat
+    with a padded back roll on its outer edge, and a button tuft."""
     dx, dy = _OFF[side]
     sx, sy = cx + dx, cy + dy
-    pygame.draw.rect(surf, _CHAIR, (sx - 5, sy - 5, 10, 10))
-    pygame.draw.rect(surf, _lt(_CHAIR), (sx - 5, sy - 5, 10, 3))       # seat highlight
-    pygame.draw.rect(surf, _dk(_CHAIR), (sx - 5, sy - 5, 10, 10), 1)
-    if dy < 0:                                                          # backrest on the far edge
-        pygame.draw.rect(surf, _dk(_CHAIR, 35), (sx - 5, sy - 7, 10, 2))
+    ox = ((sx + sy) // 8) % 2 == 0
+    col, cdk = (_OXBLOOD, _OXBLOOD_DK) if ox else (_BLACKLEA, _BLACKLEA_DK)
+    pygame.draw.rect(surf, col, (sx - 5, sy - 5, 10, 10), border_radius=3)
+    pygame.draw.rect(surf, _lt(col), (sx - 4, sy - 4, 8, 3), border_radius=2)   # leather sheen
+    pygame.draw.rect(surf, cdk, (sx - 5, sy - 5, 10, 10), 1, border_radius=3)
+    pygame.draw.circle(surf, cdk, (sx, sy), 1)                                  # button tuft
+    if dy < 0:                                                                  # padded back roll
+        pygame.draw.rect(surf, cdk, (sx - 5, sy - 7, 10, 3), border_radius=2)
     elif dy > 0:
-        pygame.draw.rect(surf, _dk(_CHAIR, 35), (sx - 5, sy + 5, 10, 2))
+        pygame.draw.rect(surf, cdk, (sx - 5, sy + 4, 10, 3), border_radius=2)
     elif dx < 0:
-        pygame.draw.rect(surf, _dk(_CHAIR, 35), (sx - 7, sy - 5, 2, 10))
+        pygame.draw.rect(surf, cdk, (sx - 7, sy - 5, 3, 10), border_radius=2)
     else:
-        pygame.draw.rect(surf, _dk(_CHAIR, 35), (sx + 5, sy - 5, 2, 10))
+        pygame.draw.rect(surf, cdk, (sx + 4, sy - 5, 3, 10), border_radius=2)
 
 
 def _banq_run(surf, c0, c1, row, back, color, dk):
@@ -355,6 +390,8 @@ def _wood_table(surf, col, row, chairs, landscape=True):
     pygame.draw.rect(surf, _lt(_TABLE), (r.x + 1, r.y + 1, w - 2, 3))   # top sheen
     for gx in range(r.x + 3, r.right - 2, 5):             # plank grain
         pygame.draw.line(surf, _TABLE_DK, (gx, r.y + 2), (gx, r.bottom - 2), 1)
+    pygame.draw.rect(surf, _VASE, (cx - 2, cy - 1, 4, 5))            # the ubiquitous flower vase
+    pygame.draw.circle(surf, _BLOOM[(col + row) % len(_BLOOM)], (cx, cy - 2), 2)
     for s in chairs:
         _chair(surf, cx, cy, s)
 
@@ -368,11 +405,13 @@ def _banq_run_v(surf, col, r0, r1, color, dk):
     pygame.draw.rect(surf, dk, (x, y, 9, h))                       # backrest against the wall
     seat = pygame.Rect(x + 8, y + 3, _TS - 16, h - 6)
     pygame.draw.rect(surf, color, seat)
+    for ly in range(seat.y + 3, seat.bottom, 6):                  # plaid check: warp + weft
+        pygame.draw.line(surf, _CHECK_LN, (seat.x, ly), (seat.right, ly), 1)
+    for lx in range(seat.x + 1, seat.right, 5):
+        pygame.draw.line(surf, _CHECK_DK, (lx, seat.y), (lx, seat.bottom), 1)
     pygame.draw.rect(surf, dk, seat, 1)
-    for ly in range(seat.y + 4, seat.bottom, 7):                  # stripe piping
-        pygame.draw.line(surf, _lt(color), (seat.x, ly), (seat.right, ly), 1)
-    for sy in range(y + _TS, y + h, _TS):                         # cushion seams
-        pygame.draw.line(surf, dk, (x + 1, sy), (seat.right, sy), 1)
+    pygame.draw.rect(surf, _LEATHER, (x + 4, y + h - 11, _TS - 13, 10))   # tan leather end bolster
+    pygame.draw.rect(surf, _LEATHER_DK, (x + 4, y + h - 11, _TS - 13, 10), 1)
 
 
 def _dining_table(surf, col, row, chairs):
@@ -454,7 +493,9 @@ def _draw_column(surf):
 
 def _chair_at(surf, col, row, facing):
     cx, cy = col * _TS + _TS // 2, row * _TS + _TS // 2
-    pygame.draw.rect(surf, _CHAIR, (cx - 6, cy - 6, 12, 12))
+    pygame.draw.rect(surf, _CHAIR, (cx - 6, cy - 6, 12, 12))            # wood frame
+    pygame.draw.rect(surf, _SEATPAD, (cx - 4, cy - 4, 8, 8))           # upholstered seat pad
+    pygame.draw.rect(surf, _dk(_SEATPAD), (cx - 4, cy - 4, 8, 8), 1)
     pygame.draw.rect(surf, _dk(_CHAIR), (cx - 6, cy - 6, 12, 12), 1)
     by = cy - 7 if facing == 'down' else cy + 4          # backrest away from the table
     pygame.draw.rect(surf, _dk(_CHAIR, 35), (cx - 6, by, 12, 3))
@@ -489,7 +530,7 @@ def _draw_seating(surf):
     _armchair(surf, 22, 7)
     # front-window bench: a pale-green banquette runs up the west wall under the leaded
     # bays (gallery/28), with café/dining tables drawn in front of it.
-    _banq_run_v(surf, 1, 1, 7, _BANQ_GRN, _BANQ_GRN_DK)
+    _banq_run_v(surf, 1, 1, 7, _CHECK, _CHECK_DK)
     # front room — a busy public bar: mostly square/rectangular wooden tables, with a
     # couple of round cast-iron café tables by the windows.
     _wood_table(surf, 3, 3, {'N', 'S', 'E', 'W'})
@@ -544,22 +585,45 @@ def _draw_windows_prints(surf):
 
 # ── Doors ────────────────────────────────────────────────────────────────────
 
+def _door_leaves(surf, x, dy, dh, w, stained):
+    """A pair of double-door leaves (stacked as two panes per leaf), stained-glass for
+    the street doors, clear-glazed for the inner lobby doors."""
+    pygame.draw.rect(surf, _DOOR_DK, (x, dy, w, dh))
+    half = dh // 2 - 3
+    inset = 2 if w >= _TS - 2 else 1
+    for ddy in (dy + 2, dy + dh // 2 + 1):
+        pygame.draw.rect(surf, _DOOR_WOOD, (x + inset, ddy, w - 2 * inset, half))
+        pygame.draw.rect(surf, _DOOR_DK, (x + inset, ddy, w - 2 * inset, half), 1)
+        gx, gy, gw, gh = x + inset + 2, ddy + 3, w - 2 * inset - 4, half - 6
+        if gw > 2 and gh > 2:
+            if stained:
+                third = max(1, gh // 3)
+                pygame.draw.rect(surf, _STAINED_B, (gx, gy, gw, third))
+                pygame.draw.rect(surf, _STAINED_R, (gx, gy + third, gw, third))
+                pygame.draw.rect(surf, _STAINED_G, (gx, gy + 2 * third, gw, gh - 2 * third))
+            else:
+                pygame.draw.rect(surf, _GLASS, (gx, gy, gw, gh))
+                pygame.draw.rect(surf, _GLASS_HI, (gx, gy, max(1, gw // 2), max(1, gh // 2)))
+    pygame.draw.rect(surf, _BRASS, (x + w - 3, dy + dh // 2 - 3, 2, 6))   # handle
+
+
 def _draw_front_door(surf):
-    dx = 0
     dy = _FRONT_DOOR_ROWS[0] * _TS
     dh = (_FRONT_DOOR_ROWS[1] - _FRONT_DOOR_ROWS[0] + 1) * _TS
-    pygame.draw.rect(surf, _DOOR_DK, (dx, dy, _TS, dh))
-    half = dh // 2 - 3
-    for ddy in (dy + 2, dy + dh // 2 + 1):
-        pygame.draw.rect(surf, _DOOR_WOOD, (dx + 2, ddy, _TS - 6, half))
-        pygame.draw.rect(surf, _DOOR_DK, (dx + 2, ddy, _TS - 6, half), 1)
-        gx, gy, gw, gh = dx + 5, ddy + 4, _TS - 12, half - 8
-        if gw > 4 and gh > 2:
-            third = max(1, gh // 3)
-            pygame.draw.rect(surf, _STAINED_B, (gx, gy, gw, third))
-            pygame.draw.rect(surf, _STAINED_R, (gx, gy + third, gw, third))
-            pygame.draw.rect(surf, _STAINED_G, (gx, gy + 2 * third, gw, gh - 2 * third))
-    pygame.draw.rect(surf, _BRASS, (dx + _TS - 6, dy + dh // 2 - 3, 4, 6))
+    # short draught lobby just inside the street doors (cols 1-2): tiled floor + coir mat,
+    # so you pass through a little entry way before emerging into the pub (gallery: entrance).
+    lx, lw = _TS, 2 * _TS
+    pygame.draw.rect(surf, _TILE_A, (lx, dy, lw, dh))
+    for ty in range(dy, dy + dh, 11):
+        for tx in range(lx, lx + lw, 11):
+            if ((tx // 11) + (ty // 11)) % 2:
+                pygame.draw.rect(surf, _TILE_B, (tx, ty, 11, 11))
+    pygame.draw.rect(surf, _MAT, (lx + 7, dy + 8, lw - 30, dh - 16))      # coir entry mat
+    pygame.draw.rect(surf, _dk(_MAT), (lx + 7, dy + 8, lw - 30, dh - 16), 1)
+    pygame.draw.rect(surf, _DOOR_DK, (lx, dy, lw, 3))                     # porch returns
+    pygame.draw.rect(surf, _DOOR_DK, (lx, dy + dh - 3, lw, 3))
+    _door_leaves(surf, 0, dy, dh, _TS, True)                              # street doors (stained)
+    _door_leaves(surf, 3 * _TS - 8, dy, dh, 8, False)                     # inner lobby doors (glazed)
 
 
 def _draw_garden_doors(surf):
@@ -599,6 +663,33 @@ def _draw_lights(surf):
         px, py = cx * _TS + _TS // 2, cr * _TS + _TS // 2
         pygame.draw.rect(surf, _IRON, (px - 5, py - 8, 10, 13), 1)
         pygame.draw.rect(surf, _SCONCE_GL, (px - 3, py - 6, 6, 9))
+
+
+def _flowers(surf, px, py):
+    """A potted floral arrangement (orchids/foliage) — they're on the bar and mantels."""
+    pygame.draw.rect(surf, _POT, (px - 4, py, 8, 6))
+    pygame.draw.rect(surf, _POT_DK, (px - 4, py, 8, 6), 1)
+    pygame.draw.circle(surf, _LEAF_DK, (px, py - 4), 6)
+    pygame.draw.circle(surf, _LEAF, (px - 2, py - 5), 3)
+    for i, dx in enumerate((-3, 1, 3)):
+        pygame.draw.circle(surf, _BLOOM[i % len(_BLOOM)], (px + dx, py - 6 - (i % 2)), 2)
+
+
+def _chalkboard(surf, x, y, w, h):
+    pygame.draw.rect(surf, _CHALK_FR, (x, y, w, h))
+    pygame.draw.rect(surf, _CHALK, (x + 2, y + 2, w - 4, h - 4))
+    for ly in range(y + 6, y + h - 3, 4):                          # chalk scrawl
+        pygame.draw.line(surf, (206, 210, 200), (x + 5, ly), (x + w - 6, ly), 1)
+
+
+def _draw_decor(surf):
+    _flowers(surf, 11 * _TS + 14, 3 * _TS - 1)                     # arrangements on the bar top
+    _flowers(surf, 20 * _TS + 8, 3 * _TS - 1)
+    _chalkboard(surf, 6 * _TS, 3, 2 * _TS + 8, 18)                # specials board, top wall by the bar
+    _flowers(surf, 14 * _TS + 16, 11 * _TS + 2)                    # vase on the teal f/p mantel
+    for i, bx in enumerate((15 * _TS + 2, 15 * _TS + 8, 15 * _TS + 14)):
+        pygame.draw.rect(surf, (_BOTTLE_G, _BOTTLE_A, _BOTTLE_C)[i],
+                         (bx, 11 * _TS + 1, 3, 6))                 # bottles along the mantel
 
 
 def _draw_bunting(surf):
@@ -647,6 +738,7 @@ class Salutation(Scene):
         _draw_conservatory_seating(screen)
         _draw_front_door(screen)
         _draw_garden_doors(screen)
+        _draw_decor(screen)
         _draw_bunting(screen)
         _draw_lights(screen)
         self._draw_objects(screen)

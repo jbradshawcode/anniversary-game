@@ -863,7 +863,8 @@ STORY_WEEKS = [
             {
                 'name': 'wind_down',
                 'objective': 'Say your goodbyes and head out',
-                'locked_exits': {3: ['right']},
+                # garden door stays visible, but it's not time for the garden yet in Ch1
+                'door_block': {4: ["It's time to go home."]},
                 'end_week': 'left',
                 'cutscene': [
                     ('say', ["You're feeling pretty tired.",
