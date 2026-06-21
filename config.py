@@ -721,13 +721,13 @@ STORY_WEEKS = [
                     ('face', 'milla', 'down'),
                     # ── Dan (front) ──
                     ('walk', 'dan', (10, 3)), ('face', 'dan', 'right'),
-                    ('say', ["Could I have one million beers please."], "Dan"),
+                    ('say', ["Could I have one million beers please.", "James?"], "Dan"),
+                    ('say', ["Um yeah sure, me too"], "James"),
                     ('hold', 'dan', 'beer'), ('walkto', 'dan', (12, 11)),
                     ('move', {'james': (10, 4), 'sarah': (9, 5), 'matt': (8, 6), 'nat': (7, 6),
                               'bailey': (6, 7), 'mayu': (5, 7), 'wallace': (4, 8)}),
-                    # ── James ──
+                    # ── James (already called it from the queue) ──
                     ('walk', 'james', (10, 3)), ('face', 'james', 'right'),
-                    ('say', ["Um, same again for me, ta."], "James"),
                     ('hold', 'james', 'beer'), ('walkto', 'james', (11, 9)),
                     ('move', {'sarah': (10, 4), 'matt': (9, 5), 'nat': (8, 6),
                               'bailey': (7, 6), 'mayu': (6, 7), 'wallace': (5, 7)}),

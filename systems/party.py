@@ -1,12 +1,13 @@
 """Follower party — the gym crew trailing the player in a conga line.
 
-Followers retrace the exact tile-centres the player walked, single file and one
-real tile apart, so they always start and stay on real tiles (no half-step
-stagger, nothing straddling a wall edge). Their logical tile is kept in sync with
-their pixel position each frame, and a move-then-resolve pass is a safety net that
-shoves anyone out of a solid tile. They are never added to any scene's tile map,
-so they can't jam the player. Presence is derived from the story beat, so nothing
-here is saved.
+Followers retrace the real tiles the player walked, two abreast where there's
+room: one column on the trail itself, a second flanking onto the adjacent walkable
+tile and falling into single file whenever that tile is blocked (a turn, a wall, a
+doorway). Targets are always real tiles, so nothing straddles a wall edge; their
+logical tile tracks their pixel position, and a move-then-resolve pass is a safety
+net that shoves anyone out of a solid tile. They are never added to any scene's
+tile map, so they can't jam the player. Presence is derived from the story beat,
+so nothing here is saved.
 """
 import pygame
 from typing import List, Optional, Tuple, TYPE_CHECKING
@@ -88,7 +89,7 @@ class Party:
         self._following = True
 
     def _seed(self, player: 'Player') -> None:
-        self._trail = [_tile_center(player.tile_x, player.tile_y)]
+        self._trail = [(player.tile_x, player.tile_y)]      # trail of real tiles
         self._last_tile = (player.tile_x, player.tile_y)
 
     def update(self, dt: float, player: 'Player') -> None:
@@ -96,17 +97,43 @@ class Party:
             return
         cur = (player.tile_x, player.tile_y)
         if cur != self._last_tile:
-            self._trail.append(_tile_center(cur[0], cur[1]))
+            self._trail.append(cur)                       # trail of real tiles the player walked
             self._last_tile = cur
-            cap = len(self.followers) + 2                 # keep just enough path for the tail
+            ranks = (len(self.followers) - 1) // 2 + 1
+            cap = ranks + 3
             if len(self._trail) > cap:
                 self._trail = self._trail[-cap:]
         for i, f in enumerate(self.followers):
-            idx = len(self._trail) - 2 - i                # single file, one real tile apart
+            rank, member = i // 2, i % 2                  # two abreast: a trail column + a flank
+            idx = len(self._trail) - 2 - rank
             if idx < 0:
                 idx = 0
-            self._step(f, self._trail[idx], dt)
+            target = self._trail[idx]
+            if member == 1:                              # the flanking column...
+                perp = self._perp_tile(idx)
+                cand = (target[0] + perp[0], target[1] + perp[1])
+                if self._walkable_tile(cand):
+                    target = cand
+                else:                                    # ...falls into line when there's no room
+                    target = self._trail[max(0, idx - 1)]
+            self._step(f, _tile_center(*target), dt)
         self._resolve_collisions()           # move-then-resolve: shove anyone out of a solid tile
+
+    def _perp_tile(self, idx: int) -> Tuple[int, int]:
+        """A side direction (in tiles) perpendicular to the trail's heading at idx."""
+        a = self._trail[idx]
+        b = self._trail[idx - 1] if idx > 0 else (self._trail[idx + 1]
+                                                  if idx + 1 < len(self._trail) else a)
+        dx, dy = a[0] - b[0], a[1] - b[1]
+        if dx and not dy:
+            return (0, 1)                    # heading horizontally -> flank vertically
+        if dy and not dx:
+            return (1, 0)                    # heading vertically -> flank horizontally
+        return (0, 1)
+
+    def _walkable_tile(self, tile: Tuple[int, int]) -> bool:
+        sc = self._scenes.current if self._scenes is not None else None
+        return sc is None or sc.is_walkable(tile[0], tile[1])
 
     def _walkable_px(self, px: float, py: float) -> bool:
         sc = self._scenes.current if self._scenes is not None else None
