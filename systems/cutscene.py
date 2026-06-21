@@ -17,6 +17,7 @@ Steps:
   ('walk', who, (col, row))         tween one actor to a tile; wait until arrived
   ('walkto', who, (col, row))       like walk, but pathfind around solid tiles
   ('move', {who: (col, row), ...})  tween several actors in parallel; wait for all
+  ('moveto', {who: (col, row), ...}) like move, but each actor pathfinds round solids
   ('face', who, 'down'|'up'|...)    set facing (player only draws facing)
   ('pose', who, 'left'|'right'|None) sprawled dive/prone pose (None clears it)
   ('vanish', who[, seconds])        fade the actor's sprite out, then remove it from
@@ -203,7 +204,7 @@ class Cutscene:
             if verb == 'hub':
                 self._begin_hub(step)
                 return
-            if verb in ('walk', 'move'):
+            if verb in ('walk', 'move', 'moveto'):
                 self._setup_move(step)
                 if self._movers:
                     return
@@ -352,17 +353,19 @@ class Cutscene:
         self._begin_step()
 
     def _setup_move(self, step) -> None:
-        targets = {step[1]: step[2]} if step[0] == 'walk' else step[1]
+        verb = step[0]
+        targets = {step[1]: step[2]} if verb == 'walk' else step[1]
+        pathfind = verb == 'moveto'               # route round solids instead of a straight line
         self._movers = []
         for who, (col, row) in targets.items():
             actor = self._resolve(who)
             if actor is None:
                 continue
-            tx, ty = _tile_center(col, row)
-            actor.tile_x, actor.tile_y = col, row
-            actor.sitting = False              # standing up to move/walk
-            self._face_toward(actor, tx, ty)
-            self._movers.append((actor, tx, ty))
+            actor.sitting = False                 # standing up to move/walk
+            tiles = self._bfs_path(actor, (col, row)) if pathfind else [(col, row)]
+            waypts = [_tile_center(c, r) for c, r in tiles]
+            actor.tile_x, actor.tile_y = col, row     # logical tile = the destination
+            self._movers.append([actor, waypts])
         self._i += 1
 
     @staticmethod
@@ -435,18 +438,23 @@ class Cutscene:
     def _advance_movers(self, dt: float) -> None:
         step = TILE_MOVE_SPEED * dt
         still = []
-        for actor, tx, ty in self._movers:
+        for actor, waypts in self._movers:
+            tx, ty = waypts[0]
             dx, dy = tx - actor.x, ty - actor.y
             dist = (dx * dx + dy * dy) ** 0.5
             if dist <= max(0.5, step):
                 actor.x, actor.y = tx, ty
-                actor.walking = False
+                waypts.pop(0)                      # reached this waypoint -> on to the next
             else:
+                self._face_toward(actor, tx, ty)
                 actor.x += dx / dist * step
                 actor.y += dy / dist * step
                 actor.walking = True
                 actor.walk_phase = getattr(actor, 'walk_phase', 0.0) + step * 0.2
-                still.append((actor, tx, ty))
+            if waypts:
+                still.append([actor, waypts])
+            else:
+                actor.walking = False
         self._movers = still
         if not self._movers:
             self._begin_step()

@@ -4,11 +4,36 @@ the overworld; they draw with the shared `menu` toolkit and step on confirm.
 """
 import pygame
 from typing import List
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, UI_TITLE_FONT_NAME
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, UI_TITLE_FONT_NAME,
+                    END_DEDICATION)
 from systems import menu
 
 _STAR_GOLD = (245, 196, 70)
 _STAR_DARK = (70, 64, 92)
+
+
+def draw_the_end(screen: pygame.Surface, loaded: bool = False) -> None:
+    """The closing card: shown after the finale, and again when a completed save is
+    loaded. CONFIRM starts a fresh playthrough."""
+    menu.title_backdrop(screen)
+    cx = SCREEN_WIDTH // 2
+    if loaded:
+        menu.text(screen, "Complete", cx, 140,
+                  menu.font(UI_TITLE_FONT_NAME, 46, bold=True), menu.INK, shadow=True)
+        menu.text(screen, "This save completed the game.", cx, 214,
+                  menu.font(UI_FONT_NAME, 18), menu.INK)
+        menu.text(screen, "Would you like to start from the beginning?", cx, 244,
+                  menu.font(UI_FONT_NAME, 18), menu.INK)
+        menu.text(screen, "Z — start over     X — back", cx, SCREEN_HEIGHT - 56,
+                  menu.font(UI_FONT_NAME, 15), menu.MUTED)
+    else:
+        menu.text(screen, "The End", cx, 150,
+                  menu.font(UI_TITLE_FONT_NAME, 50, bold=True), menu.INK, shadow=True)
+        fnt = menu.font(UI_FONT_NAME, 18)
+        for i, line in enumerate(END_DEDICATION):
+            menu.text(screen, line, cx, 232 + i * 30, fnt, menu.INK)
+        menu.text(screen, "Z — play again from the beginning", cx, SCREEN_HEIGHT - 56,
+                  menu.font(UI_FONT_NAME, 15), menu.MUTED)
 
 
 def draw_game_over(screen: pygame.Surface, lines: List[str]) -> None:

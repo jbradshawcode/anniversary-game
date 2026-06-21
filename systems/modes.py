@@ -8,7 +8,7 @@ mode itself; dialogue and cutscenes are overlays PlayMode drives.
 """
 import math
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, WHITE
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, WHITE, DEV
 from systems.input_handler import Action, get_held_direction, get_held_vector
 from systems import menu, screens
 from systems.menu_flow import MenuFlow
@@ -85,7 +85,7 @@ class PlayMode(Mode):
     def handle_action(self, action) -> None:
         g = self._game
         scene = g.scene_manager.current
-        if action == Action.DEBUG_CYCLE:         # dev only: cycle through activities
+        if action == Action.DEBUG_CYCLE and DEV:  # dev only: cycle through activities
             g.debug_cycle()
             return
         if action == Action.QUIT and not g.cutscene.active:
@@ -115,7 +115,7 @@ class PlayMode(Mode):
         elif action == Action.MENU:
             if not g.dialogue.active:
                 g.open_pause()               # C opens the menu
-        elif action == Action.DEBUG_GARDEN:
+        elif action == Action.DEBUG_GARDEN and DEV:
             g.story.debug_advance()
         elif action in _MOVE_MAP:
             dtx, dty = _MOVE_MAP[action]
@@ -348,6 +348,23 @@ class ChapterCardMode(Mode):
 
     def draw(self, screen) -> None:
         screens.draw_chapter_card(screen, self._completed, self._starting)
+
+
+class GameEndMode(Mode):
+    """The closing card after the finale, and the prompt shown when a completed save is
+    loaded: CONFIRM starts a fresh playthrough; from a loaded save, CANCEL backs out."""
+    def __init__(self, game, loaded: bool = False) -> None:
+        self._game = game
+        self._loaded = loaded
+
+    def handle_action(self, action) -> None:
+        if action == Action.CONFIRM:
+            self._game.start_new()
+        elif action in (Action.CANCEL, Action.QUIT) and self._loaded:
+            self._game.open_title()
+
+    def draw(self, screen) -> None:
+        screens.draw_the_end(screen, self._loaded)
 
 
 class PhoneMode(Mode):

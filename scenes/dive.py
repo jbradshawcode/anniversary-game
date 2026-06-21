@@ -171,6 +171,14 @@ class DiveGame(Scene):
 
     # ── input ────────────────────────────────────────────────────────────────
     def handle_action(self, action) -> bool:
+        if self._phase == 'done':                          # drill over: pass -> continue;
+            won = self._digs >= DIVE_TARGET                # fall short -> Retry (Z) or Give up (X)
+            if not won and action == Action.CONFIRM:
+                self._restart()
+            elif action == Action.CONFIRM or (not won and action == Action.CANCEL):
+                if self.on_finish is not None:
+                    self.on_finish()
+            return True
         if action != Action.CONFIRM:
             return False
         if self._phase == 'intro':
@@ -183,11 +191,17 @@ class DiveGame(Scene):
             self._streak = 0
             self._feed_or_end()
             return True
-        if self._phase == 'done':
-            if self.on_finish is not None:
-                self.on_finish()
-            return True
         return False
+
+    def _restart(self) -> None:
+        """Run the drill again from the top (the Retry option)."""
+        self._px = SCREEN_WIDTH / 2.0
+        self._pvx = self._move_x = 0.0
+        self._streak = self._best = self._digs = self._feeds = 0
+        self._dig_anim = self._sarah_toss = 0.0
+        self._pop = self._verdict = None
+        self._james.diving = None
+        self._phase = 'intro'
 
     def handle_held(self, vec) -> None:
         self._move_x = -1.0 if vec[0] < -0.3 else (1.0 if vec[0] > 0.3 else 0.0)
@@ -372,5 +386,11 @@ class DiveGame(Scene):
                 "Welp. We'll work on it.")
         menu.text(screen, quip, cx, SCREEN_HEIGHT // 2 + 14,
                   menu.font(UI_FONT_NAME, 18), (200, 204, 210))
-        menu.text(screen, "Z to continue", cx, SCREEN_HEIGHT - 40,
+        if self._digs >= DIVE_TARGET:
+            prompt = "Z to continue"
+        else:
+            menu.text(screen, "{0} / {1} digs".format(self._digs, DIVE_TARGET),
+                      cx, SCREEN_HEIGHT // 2 + 42, menu.font(UI_FONT_NAME, 15), (180, 184, 190))
+            prompt = "Z - Retry     X - Give up"
+        menu.text(screen, prompt, cx, SCREEN_HEIGHT - 40,
                   menu.font(UI_FONT_NAME, 16), (170, 174, 180))

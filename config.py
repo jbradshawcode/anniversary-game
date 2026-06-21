@@ -1,6 +1,17 @@
 """Game configuration constants"""
 import os
 
+# Dev tools (chapter-skip / garden-advance cheat keys, dev prints) are OFF in the
+# shipped build; run with ANNIV_DEV=1 to enable them while testing.
+DEV = os.environ.get('ANNIV_DEV') == '1'
+
+# Closing card shown after the finale (and when loading a completed save).
+# Personalise these two lines — they're the last words of the game.
+END_DEDICATION = [
+    "Thanks for playing.",
+    "Here's to us. Happy anniversary.",
+]
+
 # Screen dimensions
 SCREEN_WIDTH  = 640
 SCREEN_HEIGHT = 480
@@ -960,9 +971,9 @@ STORY_WEEKS = [
                              "garden and piles in around the big table."]),
                     # James & Sarah on the near bench; everyone else round the table,
                     # Mayu & Wallace off at a loose table in their own little chat.
-                    ('move', {'james': (9, 9), 'sarah': (10, 9), 'dan': (7, 6),
-                              'nat': (12, 6), 'matt': (7, 8), 'bailey': (12, 8),
-                              'mayu': (3, 7), 'wallace': (3, 11)}),
+                    ('moveto', {'james': (9, 9), 'sarah': (10, 9), 'dan': (7, 6),
+                                'nat': (12, 6), 'matt': (7, 8), 'bailey': (12, 8),
+                                'mayu': (3, 7), 'wallace': (3, 11)}),
                     ('face', 'james', 'up'),
                     ('face', 'sarah', 'up'),
                     ('face', 'dan', 'down'),
@@ -1154,9 +1165,9 @@ STORY_WEEKS = [
                     ('settle',),
                     ('say', ["Afterwards the group pack into the garden's "
                              "top-right booth."]),
-                    ('move', {'sarah': (14, 5), 'james': (13, 3), 'nat': (13, 4),
-                              'dan': (13, 2), 'matt': (14, 2), 'mayu': (15, 2),
-                              'wallace': (15, 3)}),
+                    ('moveto', {'sarah': (14, 5), 'james': (13, 3), 'nat': (13, 4),
+                                'dan': (13, 2), 'matt': (14, 2), 'mayu': (15, 2),
+                                'wallace': (15, 3)}),
                     ('sit', 'sarah', 'up'),
                     ('sit', 'james', 'right'), ('sit', 'nat', 'right'),
                     ('sit', 'dan', 'down'), ('sit', 'matt', 'down'), ('sit', 'mayu', 'down'),
@@ -1346,12 +1357,12 @@ STORY_WEEKS = [
                     ('say', ["Is Matt not coming to the pub tonight?"], "Dan"),
                     ('say', ["I guess not.", "(...wonder why lol.)"], "James"),
                     ('say', ["The group pack into the garden's top-right booth."]),
-                    ('move', {'sarah': (14, 5), 'dan': (13, 4),
-                              'wallace': (14, 2), 'mayu': (15, 3)}),
+                    ('moveto', {'sarah': (14, 5), 'dan': (13, 4),
+                                'wallace': (14, 2), 'mayu': (15, 3)}),
                     ('sit', 'sarah', 'up'), ('sit', 'dan', 'right'),
                     ('sit', 'wallace', 'down'), ('sit', 'mayu', 'left'),
                     ('say', ["James is last out. He walks over, pauses..."]),
-                    ('walk', 'james', (13, 3)),       # sits by Dan, not the spot beside Sarah
+                    ('walkto', 'james', (13, 3)),       # sits by Dan, not the spot beside Sarah
                     ('sit', 'james', 'right'),
                     ('say', ["...", "Hey, what's good dude.",
                              "I actually wanted to sit over there.",
@@ -1476,6 +1487,7 @@ STORY_WEEKS = [
                 'phone': FINALE_THE_DATE,
                 'phone_with': 'Sarah',
                 'card_date': '21 June 2024',
+                'end_game': True,                 # finale -> roll the closing card
                 'advance_when': 'the_date_done',
             },
         ],

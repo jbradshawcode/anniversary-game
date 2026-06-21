@@ -1,7 +1,7 @@
 """Main game — loop, top-level wiring, and the transitions between modes."""
 import pygame
 import sys
-from config import (SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
+from config import (DEV, SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
                     GYM_MUSIC, SALUTATION_MUSIC, GARDEN_MUSIC, LATIMER_MUSIC,
                     WETHERSPOONS_MUSIC, DIVE_MUSIC, GAME_OVER_MUSIC,
                     CHARACTER_MUSIC, CHAPTER_END_MUSIC, INTERLUDE_MUSIC,
@@ -21,7 +21,7 @@ from systems.party import Party
 from systems.cutscene import Cutscene
 from systems.lighting import Lighting
 from systems.modes import (TitleMode, PlayMode, GameOverMode, ResultsMode,
-                           PhoneMode, InterludeMode, ChapterCardMode)
+                           PhoneMode, InterludeMode, ChapterCardMode, GameEndMode)
 from systems.menu_flow import MenuFlow
 
 
@@ -172,6 +172,9 @@ class Game:
         data = save.load_game(slot)
         if not data:
             return
+        if data.get('completed'):                # a finished file -> offer a fresh start
+            self.active = GameEndMode(self, loaded=True)
+            return
         self.cutscene.active = False
         self._vb_retry = False
         self.story.restore(data['beat'], data['flags'], scene_id=data['scene_id'],
@@ -184,7 +187,7 @@ class Game:
         self.story.sync_party(self.player)
         self.resume()
 
-    def save_to_slot(self, slot):
+    def save_to_slot(self, slot, completed=False):
         data = {
             'scene_id': self.scene_manager.current_id,
             'scene_name': _SCENE_NAMES.get(self.scene_manager.current_id, '?'),
@@ -194,6 +197,8 @@ class Game:
             'beat_name': self.story.beat['name'],
         }
         data.update(self.story.snapshot())
+        if completed:
+            data['completed'] = True
         save.save_game(slot, data)
 
     # ---- helpers PlayMode calls back into -----------------------------------
@@ -291,6 +296,8 @@ class Game:
 
     def debug_cycle(self):
         """Dev only: bail out of whatever's on screen and hop to the next activity."""
+        if not DEV:                              # disabled in the shipped build
+            return
         self.cutscene.active = False
         self.dialogue.active = False
         self.resume()                            # back to PlayMode before the jump
@@ -343,10 +350,21 @@ class Game:
         self.active = InterludeMode(self, kicker, name or kicker, date, start_phone)
 
     def _finish_interlude(self, flag):
+        if self.story.beat.get('end_game'):         # the finale -> closing card, not the overworld
+            self.story.set_flag(flag)
+            self._game_complete()
+            return
         self.resume()
         self.music.reset()                          # interludes sit between chapters -> reset marks
         self.story.set_flag(flag)
         self.update_scene_music(self.scene_manager.current_id)
+
+    def _game_complete(self):
+        """Roll the closing card and stamp the autosave as completed, so loading the
+        'continue' file afterwards offers a fresh start from the beginning."""
+        self.save_to_slot(save.AUTOSAVE, completed=True)
+        self.music.play(CHAPTER_END_MUSIC)
+        self.active = GameEndMode(self)
 
     def run(self):
         while self.running:
