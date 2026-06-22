@@ -1,11 +1,17 @@
-"""Diving minigame (Ch3) — James keeps a dig rally alive.
+"""Diving drill (Ch3) — Sarah coaches James through digging, one stage at a time.
 
-Short balls are fed to your side one after another; run under each (momentum
-movement) and press Z to dig it back. Each feed lands further out as the streak
-grows; balls you can't reach standing need a committed dive — a proper
-launch-extend-land animation. Digs are graded PERFECT/NICE/SHANK (shanks still
-count). Drop one and the rally pauses; press Z to reset the streak and feed on.
-The drill ends at DIVE_TARGET digs. Self-contained real-time scene.
+A fed ball is a three-stage dig, each with its own input and timing:
+
+    STEP   move ←/→ onto the telegraphed landing ring while the ball is up.
+    PUSH   a timing needle sweeps a bar — press Z in the band to load your legs.
+    SLIDE  a second sweep — press Z to extend the platform and pass it back.
+
+Nothing here is a reaction test: the feed lands close (low, capped variation) and
+the two sweeps run at a constant tempo every ball, so the rally is a rhythm you
+learn rather than a twitch you survive. The dive animation is just what the SLIDE
+looks like when you're stretched — there is no "dive" button. Quality is a blend
+of the three stages; you only drop a ball by skipping the slide or positioning so
+badly even a dive can't reach. The drill ends at DIVE_TARGET digs. Self-contained.
 """
 import math
 import random
@@ -13,9 +19,14 @@ from typing import Callable, Optional
 import pygame
 
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, UI_TITLE_FONT_NAME,
-                    DIVE_PLAYER_SPEED, DIVE_PLAYER_ACCEL, DIVE_DIG_REACH,
-                    DIVE_LUNGE_REACH, DIVE_FALL_TIME, DIVE_FALL_MIN, DIVE_DIG_WINDOW,
-                    DIVE_FEED_GAP, DIVE_LUNGE_TIME, DIVE_LUNGE_HOP,
+                    DIVE_PLAYER_SPEED, DIVE_PLAYER_ACCEL, DIVE_STEP_TIME,
+                    DIVE_PUSH_SWEEP, DIVE_SLIDE_SWEEP, DIVE_PUSH_CENTRE,
+                    DIVE_SLIDE_CENTRE, DIVE_BAND_GOOD, DIVE_BAND_PERFECT,
+                    DIVE_SET_GOOD, DIVE_SET_PERFECT, DIVE_REACH,
+                    DIVE_SPREAD_MIN, DIVE_SPREAD_MAX, DIVE_SPREAD_GROW,
+                    DIVE_PERFECT_AT, DIVE_NICE_AT, DIVE_DIVE_CAP,
+                    DIVE_SWING_PREROLL, DIVE_SLIDE_CONNECT,
+                    DIVE_LUNGE_TIME, DIVE_LUNGE_HOP, DIVE_FEED_GAP,
                     DIVE_TARGET, DIVE_MAX_FEEDS)
 from systems.input_handler import Action
 from systems import menu
@@ -32,8 +43,11 @@ _GFLOOR_SHEEN = (78, 143, 192)
 _LINE = (248, 248, 248)
 _BALL = (245, 238, 220)
 _GOOD = (120, 230, 140)
+_GOLD = (250, 210, 90)
 _BAD = (240, 120, 120)
-_LOB_PEAK = 120              # how high Sarah's feed arcs
+_SHANK = (240, 170, 90)
+_TRACK = (28, 32, 38)
+_LOB_PEAK = 132              # how high Sarah's feed arcs
 
 
 def _clamp(v, lo, hi):
@@ -54,7 +68,7 @@ class DiveGame(Scene):
         self._sx = 70                                  # Sarah (the feeder) on the left
         self._left, self._right = 152, SCREEN_WIDTH - 44   # James's run range, right of Sarah
         self._phase = 'done'                 # safe default if drawn before enter()
-        self._streak = self._best = 0
+        self._streak = self._best = self._digs = self._feeds = 0
         self._px = SCREEN_WIDTH / 2.0
         self._pvx = self._move_x = 0.0
 
@@ -64,15 +78,27 @@ class DiveGame(Scene):
         self._sarah.facing = 'right'
         self._fx = FX()
         self._sfx = SoundBank()
+        self._reset_state()
+        self._phase = 'intro'                # learn the controls; Z starts the first feed
+
+    def _reset_state(self) -> None:
         self._px = SCREEN_WIDTH / 2.0
         self._pvx = self._move_x = 0.0
         self._streak = self._best = self._digs = self._feeds = 0
-        self._dig_anim = 0.0
-        self._sarah_toss = 0.0
+        self._dig_anim = self._sarah_toss = self._step_hint = 0.0
         self._pop = None
         self._verdict = None                 # floating PERFECT/NICE/SHANK label
+        self._tx = self._px
+        self._needle = 0.0
+        self._swing_delay = 0.0              # the "ready" beat before a bar starts sweeping
+        self._step_q = self._push_q = self._slide_q = 0.0
+        self._slide_pressed = False
         self._james.diving = None
-        self._phase = 'intro'                # learn the controls; Z starts the first feed
+
+    def _restart(self) -> None:
+        """Run the drill again from the top (the Retry option)."""
+        self._reset_state()
+        self._phase = 'intro'
 
     # ── feed / outcomes ──────────────────────────────────────────────────────
     def _feed_or_end(self) -> None:
@@ -82,39 +108,140 @@ class DiveGame(Scene):
             self._toss()
 
     def _toss(self) -> None:
+        """Start a new ball: pick a close, capped landing spot and lob it there."""
         self._feeds += 1
-        self._bt = 0.0
-        self._fall = max(DIVE_FALL_MIN, DIVE_FALL_TIME - 0.045 * self._streak)
-        dist = min(DIVE_LUNGE_REACH + 150.0,               # each pass lands further out
-                   DIVE_DIG_REACH * 0.7 + 30.0 * self._streak)
-        sides = []                                         # ...on a side that stays in range
-        if self._px + dist <= self._right:
-            sides.append(1.0)
-        if self._px - dist >= self._left:
-            sides.append(-1.0)
-        if not sides:
-            sides = [-1.0 if self._px > (self._left + self._right) / 2.0 else 1.0]
-        self._tx = _clamp(self._px + random.choice(sides) * dist, self._left, self._right)
+        spread = min(DIVE_SPREAD_MAX, DIVE_SPREAD_MIN + DIVE_SPREAD_GROW * self._digs)
+        offset = random.uniform(0.45, 1.0) * spread * random.choice((-1.0, 1.0))
+        margin = 24
+        self._tx = _clamp(self._px + offset, self._left + margin, self._right - margin)
         self._bx0 = float(self._sx)                        # the ball leaves Sarah's hands
+        self._step_t = 0.0
+        self._needle = 0.0
+        self._swing_delay = 0.0
+        self._step_q = self._push_q = self._slide_q = 0.0
+        self._slide_pressed = False
         self._sarah_toss = 0.18                            # her little pass motion
         self._pop = None
-        self._phase = 'rally'
+        self._james.diving = None
+        self._phase = 'step'
         if self._sfx is not None:
             self._sfx.play('set')
 
+    # ── geometry of the fed ball ───────────────────────────────────────────--
+    _READY_Y_OFF = 56          # ball hovers this far above the floor when you're set
+    _DIG_Y_OFF = 16            # contact height above the floor
+
     def _ball_pos(self):
-        t = self._bt
-        hand_y = self._floor_y - 24                         # Sarah's hands
-        x = self._bx0 + (self._tx - self._bx0) * t
-        y = hand_y + (self._floor_y - hand_y) * t - _LOB_PEAK * math.sin(math.pi * t)
-        return x, y
+        """Ball position for the current sub-phase (arc in, then drop through PUSH/SLIDE)."""
+        ready_y = self._floor_y - self._READY_Y_OFF
+        dig_y = self._floor_y - self._DIG_Y_OFF
+        if self._phase == 'step':
+            t = self._step_t
+            ease = 1.0 - (1.0 - t) ** 2
+            x = self._bx0 + (self._tx - self._bx0) * ease
+            hand_y = self._floor_y - 24
+            y = hand_y + (ready_y - hand_y) * t - _LOB_PEAK * math.sin(math.pi * t)
+            return x, y
+        if self._phase == 'push':
+            return self._tx, ready_y + (dig_y - ready_y) * (0.5 * self._needle)
+        if self._phase == 'slide':
+            return self._tx, ready_y + (dig_y - ready_y) * (0.5 + 0.5 * self._needle)
+        return self._tx, dig_y
 
-    _VERDICTS = {'perfect': ("PERFECT!", (250, 210, 90)),
-                 'nice':    ("NICE!", (120, 230, 140)),
-                 'shank':   ("SHANK!", (240, 170, 90))}
+    # ── scoring helpers ────────────────────────────────────────────────────--
+    @staticmethod
+    def _band_score(pos: float, centre: float) -> float:
+        """1.0 at the gold centre, 0.5 at the edge of the green band, →0 beyond."""
+        d = abs(pos - centre)
+        if d <= DIVE_BAND_PERFECT:
+            return 1.0
+        if d <= DIVE_BAND_GOOD:
+            return 1.0 - 0.5 * (d - DIVE_BAND_PERFECT) / (DIVE_BAND_GOOD - DIVE_BAND_PERFECT)
+        return max(0.0, 0.5 - 2.0 * (d - DIVE_BAND_GOOD))
 
-    def _success(self, x, quality) -> bool:
-        """Score a dig (a shank still counts); return True if that completes the drill."""
+    @staticmethod
+    def _set_score(gap: float) -> float:
+        """Footwork quality from how far your feet are off the landing spot."""
+        if gap <= DIVE_SET_PERFECT:
+            return 1.0
+        if gap <= DIVE_SET_GOOD:
+            return 1.0 - 0.4 * (gap - DIVE_SET_PERFECT) / (DIVE_SET_GOOD - DIVE_SET_PERFECT)
+        if gap <= DIVE_REACH:
+            return max(0.0, 0.6 * (1.0 - (gap - DIVE_SET_GOOD) / (DIVE_REACH - DIVE_SET_GOOD)))
+        return 0.0
+
+    _VERDICTS = {'perfect': ("PERFECT!", _GOLD),
+                 'nice':    ("NICE!", _GOOD),
+                 'shank':   ("SHANK!", _SHANK)}
+
+    # ── input ────────────────────────────────────────────────────────────────
+    def handle_action(self, action) -> bool:
+        if self._phase == 'done':                          # drill over
+            won = self._digs >= DIVE_TARGET                # won -> Z/X continue; short -> Z Retry, X give up
+            if action == Action.CONFIRM and not won:
+                self._restart()
+            elif action in (Action.CONFIRM, Action.CANCEL):
+                if self.on_finish is not None:
+                    self.on_finish()
+            return True
+        if action != Action.CONFIRM:
+            return False
+        if self._phase == 'intro':
+            self._toss()
+        elif self._phase == 'step':                        # too early — the ball's still up
+            self._step_hint = 0.6
+            self._fx.shake(2, 0.12)
+        elif self._phase == 'push':
+            if self._swing_delay <= 0:                      # ignore presses during the ready beat
+                self._push_q = self._band_score(self._needle, DIVE_PUSH_CENTRE)
+                self._enter_slide()
+        elif self._phase == 'slide':
+            if self._swing_delay <= 0:
+                self._slide_pressed = True
+                self._slide_q = self._band_score(self._needle, DIVE_SLIDE_CENTRE)
+                self._resolve()
+        elif self._phase == 'over':                        # acknowledge the drop, feed on
+            self._streak = 0
+            self._feed_or_end()
+        return True
+
+    def handle_held(self, vec) -> None:
+        self._move_x = -1.0 if vec[0] < -0.3 else (1.0 if vec[0] > 0.3 else 0.0)
+
+    def _enter_slide(self) -> None:
+        self._needle = 0.0
+        self._swing_delay = DIVE_SWING_PREROLL
+        self._phase = 'slide'
+        if self._sfx is not None:
+            self._sfx.play('serve')
+
+    # ── resolve a dig ──────────────────────────────────────────────────────--
+    def _resolve(self) -> None:
+        gap = abs(self._px - self._tx)
+        # How far you can extend is set by how well you loaded (PUSH) and reached
+        # (SLIDE): a clean swing covers the full dive reach, a sloppy one barely
+        # leaves your stance. Good footwork (small gap) reaches regardless, so the
+        # timing only bites when you're stretched — which is where it should.
+        power = 0.35 * self._push_q + 0.65 * self._slide_q
+        eff_reach = DIVE_SET_GOOD + (DIVE_REACH - DIVE_SET_GOOD) * power
+        if (not self._slide_pressed or self._slide_q < DIVE_SLIDE_CONNECT
+                or gap > eff_reach):
+            self._miss()                                   # whiffed the contact, or couldn't get there
+            return
+        diving = gap > DIVE_SET_GOOD
+        combine = 0.34 * self._step_q + 0.33 * self._push_q + 0.33 * self._slide_q
+        if diving:
+            combine = min(combine, DIVE_DIVE_CAP)          # a scrappy dive never reads "perfect"
+        quality = ('perfect' if combine >= DIVE_PERFECT_AT else
+                   'nice' if combine >= DIVE_NICE_AT else 'shank')
+        if diving:
+            self._start_dive(quality)
+        else:
+            self._dig_anim = 0.22
+            self._score(quality, self._tx)
+            self._after_contact()
+
+    def _score(self, quality: str, x: float) -> None:
         self._digs += 1
         self._streak += 1
         self._best = max(self._best, self._streak)
@@ -125,8 +252,25 @@ class DiveGame(Scene):
                      'vx': (self._sx - x) * 0.9, 'vy': -320.0}   # dug back up towards Sarah
         text, col = self._VERDICTS[quality]
         self._verdict = {'text': text, 'col': col, 't': 0.7,
-                         'x': float(x), 'y': float(self._floor_y - 40)}
-        return self._digs >= DIVE_TARGET
+                         'x': float(x), 'y': float(self._floor_y - 48)}
+
+    def _after_contact(self) -> None:
+        if self._digs >= DIVE_TARGET:
+            self._phase = 'done'
+        else:
+            self._phase = 'feed'
+            self._feed_t = DIVE_FEED_GAP
+
+    def _start_dive(self, quality: str) -> None:
+        self._phase = 'dive'
+        self._dive_dir = 1 if self._tx >= self._px else -1
+        self._dive_x0 = self._px
+        self._dive_x1 = _clamp(self._tx, self._left, self._right)
+        self._dive_t = 0.0
+        self._dive_quality = quality
+        self._dive_scored = False
+        self._pvx = 0.0
+        self._fx.emit_dust(self._px, self._floor_y, 7)
 
     def _miss(self) -> None:
         self._james.diving = None
@@ -136,76 +280,6 @@ class DiveGame(Scene):
         self._verdict = None
         self._phase = 'over'                                # wait for Z, then reset streak and feed on
 
-    def _attempt(self) -> None:
-        rem = (1.0 - self._bt) * self._fall
-        if rem > DIVE_DIG_WINDOW:                          # too early — let it drop in
-            return
-        bx = self._ball_pos()[0]
-        ad = abs(bx - self._px)
-        if ad <= DIVE_DIG_REACH:                           # under it — standing bump
-            self._dig_anim = 0.22
-            quality = 'perfect' if ad <= DIVE_DIG_REACH * 0.4 else 'nice'
-            if self._success(bx, quality):
-                self._phase = 'done'
-            else:
-                self._phase = 'feed'
-                self._feed_t = DIVE_FEED_GAP
-        else:                                              # commit to a dive
-            self._start_dive(bx, connect=ad <= DIVE_LUNGE_REACH)
-
-    def _start_dive(self, bx, connect) -> None:
-        self._phase = 'dive'
-        self._dive_dir = 1 if bx >= self._px else -1
-        self._dive_x0 = self._px
-        reach = min(DIVE_LUNGE_REACH, abs(bx - self._px) + 8)
-        self._dive_x1 = _clamp(self._px + self._dive_dir * reach, self._left, self._right)
-        self._dive_t = 0.0
-        self._dive_connect = connect
-        self._dive_dug = False
-        self._dive_won = False
-        self._dive_ball = self._ball_pos()
-        self._pvx = 0.0
-        if self._sfx is not None:
-            self._sfx.play('serve')
-        self._fx.emit_dust(self._px, self._floor_y, 7)
-
-    # ── input ────────────────────────────────────────────────────────────────
-    def handle_action(self, action) -> bool:
-        if self._phase == 'done':                          # drill over: pass -> continue;
-            won = self._digs >= DIVE_TARGET                # fall short -> Retry (Z) or Give up (X)
-            if not won and action == Action.CONFIRM:
-                self._restart()
-            elif action == Action.CONFIRM or (not won and action == Action.CANCEL):
-                if self.on_finish is not None:
-                    self.on_finish()
-            return True
-        if action != Action.CONFIRM:
-            return False
-        if self._phase == 'intro':
-            self._toss()
-            return True
-        if self._phase == 'rally':
-            self._attempt()
-            return True
-        if self._phase == 'over':                          # acknowledge the drop, feed on
-            self._streak = 0
-            self._feed_or_end()
-            return True
-        return False
-
-    def _restart(self) -> None:
-        """Run the drill again from the top (the Retry option)."""
-        self._px = SCREEN_WIDTH / 2.0
-        self._pvx = self._move_x = 0.0
-        self._streak = self._best = self._digs = self._feeds = 0
-        self._dig_anim = self._sarah_toss = 0.0
-        self._pop = self._verdict = None
-        self._james.diving = None
-        self._phase = 'intro'
-
-    def handle_held(self, vec) -> None:
-        self._move_x = -1.0 if vec[0] < -0.3 else (1.0 if vec[0] > 0.3 else 0.0)
-
     # ── update ─────────────────────────────────────────────────────────────--
     def update(self, dt: float) -> None:
         self._fx.update(dt)
@@ -213,6 +287,8 @@ class DiveGame(Scene):
             self._dig_anim = max(0.0, self._dig_anim - dt)
         if self._sarah_toss > 0:
             self._sarah_toss = max(0.0, self._sarah_toss - dt)
+        if self._step_hint > 0:
+            self._step_hint = max(0.0, self._step_hint - dt)
         if self._pop is not None:                          # the dug ball flying away
             self._pop['vy'] += 900.0 * dt
             self._pop['x'] += self._pop['vx'] * dt
@@ -225,11 +301,32 @@ class DiveGame(Scene):
             if self._verdict['t'] <= 0:
                 self._verdict = None
 
-        if self._phase == 'rally':
+        if self._phase == 'step':
             self._move_player(dt)
-            self._bt += dt / self._fall
-            if self._bt >= 1.0:
-                self._miss()
+            self._step_t += dt / DIVE_STEP_TIME
+            if self._step_t >= 1.0:
+                self._step_t = 1.0
+                self._step_q = self._set_score(abs(self._px - self._tx))
+                self._needle = 0.0
+                self._swing_delay = DIVE_SWING_PREROLL      # a ready beat before PUSH sweeps
+                self._phase = 'push'
+        elif self._phase == 'push':
+            if self._swing_delay > 0:
+                self._swing_delay = max(0.0, self._swing_delay - dt)
+            else:
+                self._needle += dt / DIVE_PUSH_SWEEP
+                if self._needle >= 1.0:                     # let it sweep past — a no-press push scores 0
+                    self._needle = 1.0
+                    self._push_q = 0.0
+                    self._enter_slide()
+        elif self._phase == 'slide':
+            if self._swing_delay > 0:
+                self._swing_delay = max(0.0, self._swing_delay - dt)
+            else:
+                self._needle += dt / DIVE_SLIDE_SWEEP
+                if self._needle >= 1.0:                     # never pressed slide -> dropped
+                    self._needle = 1.0
+                    self._resolve()
         elif self._phase == 'dive':
             self._update_dive(dt)
         elif self._phase == 'feed':
@@ -250,21 +347,15 @@ class DiveGame(Scene):
 
     def _update_dive(self, dt: float) -> None:
         self._dive_t += dt / DIVE_LUNGE_TIME
-        if self._dive_connect and not self._dive_dug and self._dive_t >= 0.42:
-            self._dive_dug = True                          # contact at full extension
-            self._dive_won = self._success(self._dive_x1, 'shank')
+        if not self._dive_scored and self._dive_t >= 0.5:   # contact at full extension
+            self._dive_scored = True
+            self._score(self._dive_quality, self._dive_x1)
             self._fx.shake(6, 0.26)
         if self._dive_t >= 1.0:
             self._james.diving = None
             self._fx.emit_dust(self._dive_x1, self._floor_y, 10)   # landing slide
             self._px = self._dive_x1
-            if not self._dive_dug:
-                self._miss()
-            elif self._dive_won:
-                self._phase = 'done'
-            else:
-                self._phase = 'feed'
-                self._feed_t = DIVE_FEED_GAP
+            self._after_contact()
 
     # ── draw ───────────────────────────────────────────────────────────────--
     def draw(self, screen: pygame.Surface) -> None:
@@ -279,6 +370,8 @@ class DiveGame(Scene):
                 pygame.draw.rect(screen, _GFLOOR_SHEEN, (0, fy + i, SCREEN_WIDTH, 5))
         pygame.draw.line(screen, _LINE, (0, fy), (SCREEN_WIDTH, fy), 3)                 # court line
 
+        if self._phase in ('step', 'push', 'slide'):
+            self._draw_target(screen, ox, oy)
         self._draw_sarah(screen, ox, oy)
         self._draw_ball(screen, ox, oy)
         self._draw_james(screen, ox, oy)
@@ -291,8 +384,25 @@ class DiveGame(Scene):
             self._draw_intro(screen)
         else:
             self._draw_hud(screen)
+            if self._phase in ('push', 'slide'):
+                self._draw_timing(screen)
             if self._phase == 'done':
                 self._draw_done(screen)
+
+    def _draw_target(self, screen, ox, oy) -> None:
+        """The landing ring on the floor — telegraphed the instant the ball is fed."""
+        tx = int(self._tx) + ox
+        fy = self._floor_y + oy
+        gap = abs(self._px - self._tx)
+        set_now = gap <= DIVE_SET_GOOD
+        col = _GOOD if set_now else (210, 196, 150)
+        # the ring swells in the last beat of STEP so PUSH doesn't ambush you
+        arriving = self._phase == 'step' and self._step_t > 0.78
+        grow = int(6 * math.sin(self._step_t * math.pi * 6)) if arriving else 0
+        pygame.draw.ellipse(screen, col, (tx - 26 - grow, fy - 7, 52 + 2 * grow, 14), 2)
+        pygame.draw.ellipse(screen, col, (tx - 13, fy - 4, 26, 8), 1)
+        if self._phase == 'step' and set_now:
+            menu.text(screen, "SET", tx, fy - 30, menu.font(UI_FONT_NAME, 14), _GOOD)
 
     def _draw_sarah(self, screen, ox, oy) -> None:
         sa = self._sarah
@@ -304,17 +414,20 @@ class DiveGame(Scene):
 
     def _draw_ball(self, screen, ox, oy) -> None:
         if self._pop is not None:
-            pygame.draw.circle(screen, _BALL, (int(self._pop['x']) + ox, int(self._pop['y']) + oy), 8)
-            pygame.draw.circle(screen, (200, 190, 170), (int(self._pop['x']) + ox, int(self._pop['y']) + oy), 8, 1)
-        live = self._phase == 'rally' or (self._phase == 'dive' and not self._dive_dug)
+            px, py = int(self._pop['x']) + ox, int(self._pop['y']) + oy
+            pygame.draw.circle(screen, _BALL, (px, py), 8)
+            pygame.draw.circle(screen, (200, 190, 170), (px, py), 8, 1)
+        live = self._phase in ('step', 'push', 'slide') or (self._phase == 'dive' and not self._dive_scored)
         if not live:
             return
-        if self._phase == 'rally':
-            bx, by = self._ball_pos()
-            drop = self._bt
+        if self._phase == 'dive':
+            bx, by = self._tx, self._floor_y - self._DIG_Y_OFF
+            drop = 1.0
         else:
-            bx, by = self._dive_ball
-            drop = 0.9
+            bx, by = self._ball_pos()
+            drop = (self._step_t if self._phase == 'step' else      # 0..1 of the full descent
+                    0.5 * self._needle if self._phase == 'push' else
+                    0.5 + 0.5 * self._needle)
         bx, by = int(bx) + ox, int(by) + oy
         sw = int(10 + 16 * drop)
         pygame.draw.ellipse(screen, (12, 16, 18), (bx - sw // 2, self._floor_y + oy + 2, sw, 6))
@@ -331,9 +444,10 @@ class DiveGame(Scene):
             j.y = self._floor_y - 4 - DIVE_LUNGE_HOP * math.sin(math.pi * t) + oy
         else:
             j.diving = None
+            crouch = 6 if (self._dig_anim > 0 or self._phase in ('push', 'slide')) else 0
             j.x = self._px + ox
-            j.y = self._floor_y - 14 + (6 if self._dig_anim > 0 else 0) + oy
-            if abs(self._pvx) > 24:
+            j.y = self._floor_y - 14 + crouch + oy
+            if self._phase == 'step' and abs(self._pvx) > 24:
                 j.walking = True
                 j.facing = 'right' if self._pvx > 0 else 'left'
             else:
@@ -341,35 +455,72 @@ class DiveGame(Scene):
                 j.facing = 'up'
         j.draw(screen)
 
+    # ── HUD / timing bar / cards ───────────────────────────────────────────--
+    _STAGE_LABEL = {'step': "STEP — get under it", 'push': "PUSH — load your legs",
+                    'slide': "SLIDE — pass it back!"}
+
     def _draw_hud(self, screen) -> None:
         menu.text(screen, "DIG RALLY", SCREEN_WIDTH // 2, 16,
                   menu.font(UI_TITLE_FONT_NAME, 28), (56, 48, 36))     # dark, on the tan wall
         col = (44, 110, 56) if self._streak >= 5 else (72, 64, 52)
-        menu.text(screen, "Streak {0}   ·   Best {1}".format(self._streak, self._best),
-                  SCREEN_WIDTH // 2, 50, menu.font(UI_FONT_NAME, 16), col)
-        if self._phase in ('rally', 'feed', 'dive'):
-            menu.text(screen, "<-  ->  run     Z  dig", SCREEN_WIDTH // 2,
-                      self._floor_y + 36, menu.font(UI_FONT_NAME, 16), (236, 240, 244))
+        menu.text(screen, "Streak {0}   ·   Best {1}   ·   {2}/{3}".format(
+            self._streak, self._best, self._digs, DIVE_TARGET),
+            SCREEN_WIDTH // 2, 50, menu.font(UI_FONT_NAME, 16), col)
+        if self._phase == 'step':
+            menu.text(screen, self._STAGE_LABEL['step'], SCREEN_WIDTH // 2,
+                      self._floor_y + 34, menu.font(UI_FONT_NAME, 16), (236, 240, 244))
+            if self._step_hint > 0:                         # pressed Z too early
+                menu.text(screen, "wait for it…", SCREEN_WIDTH // 2, self._floor_y + 58,
+                          menu.font(UI_FONT_NAME, 15), _GOLD)
+            else:
+                menu.text(screen, "<-  ->  move", SCREEN_WIDTH // 2, self._floor_y + 58,
+                          menu.font(UI_FONT_NAME, 15), (210, 216, 222))
         elif self._phase == 'over':
             menu.text(screen, "DROPPED!", SCREEN_WIDTH // 2, self._floor_y + 26,
-                      menu.font(UI_TITLE_FONT_NAME, 32), (240, 120, 120), shadow=True)
+                      menu.font(UI_TITLE_FONT_NAME, 32), _BAD, shadow=True)
             menu.text(screen, "Z to continue", SCREEN_WIDTH // 2, self._floor_y + 60,
                       menu.font(UI_FONT_NAME, 16), (236, 240, 244))
 
+    def _draw_timing(self, screen) -> None:
+        """The PUSH / SLIDE bar: green good band, gold perfect centre, sweeping needle."""
+        centre = DIVE_PUSH_CENTRE if self._phase == 'push' else DIVE_SLIDE_CENTRE
+        w, h = 340, 22
+        x0 = SCREEN_WIDTH // 2 - w // 2
+        y0 = self._floor_y + 40
+        menu.text(screen, self._STAGE_LABEL[self._phase], SCREEN_WIDTH // 2, y0 - 26,
+                  menu.font(UI_FONT_NAME, 16), (236, 240, 244))
+        pygame.draw.rect(screen, _TRACK, (x0, y0, w, h), border_radius=4)
+        good = pygame.Rect(int(x0 + (centre - DIVE_BAND_GOOD) * w), y0,
+                           int(2 * DIVE_BAND_GOOD * w), h)
+        pygame.draw.rect(screen, _GOOD, good, border_radius=4)
+        perf = pygame.Rect(int(x0 + (centre - DIVE_BAND_PERFECT) * w), y0,
+                           int(2 * DIVE_BAND_PERFECT * w), h)
+        pygame.draw.rect(screen, _GOLD, perf)
+        ready = self._swing_delay > 0                       # the pre-roll beat: needle parked, dimmed
+        nx = int(x0 + _clamp(self._needle, 0.0, 1.0) * w)
+        pygame.draw.rect(screen, (120, 124, 130) if ready else (250, 250, 252),
+                         (nx - 2, y0 - 5, 4, h + 10))
+        pygame.draw.rect(screen, (250, 250, 252), (x0, y0, w, h), 2, border_radius=4)
+        menu.text(screen, "ready…" if ready else "Z", SCREEN_WIDTH // 2, y0 + h + 6,
+                  menu.font(UI_FONT_NAME, 15), (210, 216, 222))
+
     def _draw_intro(self, screen) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 140))
+        overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
         cx = SCREEN_WIDTH // 2
-        menu.text(screen, "DIG RALLY", cx, SCREEN_HEIGHT // 2 - 96,
+        menu.text(screen, "DIG RALLY", cx, SCREEN_HEIGHT // 2 - 118,
                   menu.font(UI_TITLE_FONT_NAME, 40), (245, 238, 220), shadow=True)
-        lines = ["Sarah feeds you short balls, one after another.",
-                 "Run under each   <-  ->   and press Z to dig it back.",
-                 "Out of reach? Z anyway to dive — scrappy shanks still count.",
+        lines = ["Sarah feeds you short balls. Keep the rally alive.",
+                 "Three beats to every dig:",
+                 "STEP   <-  ->   onto the ring on the floor.",
+                 "PUSH   Z  in the band as the needle sweeps.",
+                 "SLIDE  Z  again to pass it back — stretched balls dive.",
                  "Drop one and the streak resets. Get to {0} digs.".format(DIVE_TARGET)]
         for i, ln in enumerate(lines):
-            menu.text(screen, ln, cx, SCREEN_HEIGHT // 2 - 36 + i * 28,
-                      menu.font(UI_FONT_NAME, 18), (214, 218, 224))
+            big = ln.startswith(("STEP", "PUSH", "SLIDE"))
+            menu.text(screen, ln, cx, SCREEN_HEIGHT // 2 - 64 + i * 28,
+                      menu.font(UI_FONT_NAME, 18), (228, 232, 238) if big else (200, 204, 212))
         menu.text(screen, "Z to start", cx, SCREEN_HEIGHT - 44,
                   menu.font(UI_FONT_NAME, 18), (245, 238, 220))
 

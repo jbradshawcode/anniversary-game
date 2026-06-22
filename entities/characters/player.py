@@ -51,6 +51,9 @@ class Player(Humanoid):
 
     def try_move(self, dtx: int, dty: int, scene) -> bool:
         """Attempt to step one tile in (dtx, dty). Returns True if move started."""
+        if self.sitting:                  # standing up to leave -> drink stays on the table
+            self.holding = None
+            self._drink_xy = None
         self.sitting = False              # any move stands you up
         if self.moving:
             return False

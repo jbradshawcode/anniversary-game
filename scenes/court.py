@@ -22,6 +22,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME, VB_NET_Y, VB_ACTO
                     VB_DIG_DIFF_PEN, VB_OOS_POWER_CAP, VB_OOS_RANGE,
                     VB_DIG_EARLY_EDGE, VB_DIG_IDEAL, VB_DIG_GRACE, VB_DIG_TOL,
                     VB_DIG_TIME_FLOOR, VB_DIG_GOOD_TOL, VB_DIG_SWITCH_MARGIN,
+                    VB_DIG_INSTANT_RADIUS,
                     VB_TOP_SPEED, VB_ACCEL, VB_DECEL, VB_BACKPEDAL_FACTOR,
                     VB_AIMSTEP_SLOWMO, VB_AIMSTEP_WINDOW, VB_RETICLE_SPEED,
                     VB_SPIKE_METER_SPEED, VB_SPIKE_SWEET_LO, VB_SPIKE_SWEET_HI,
@@ -1730,7 +1731,10 @@ class VolleyCourt(Scene):
                 self._ai_step(a, base[a][0], base[a][1], dt)
                 continue
             if a is stored or (a is receiver and self._react_t <= 0.0):
-                target = self.ball.end                       # commit to the ball (after the read)
+                target = self.ball.end                       # break for the ball after the read
+            elif a is receiver and a.dist_to(*self.ball.end) <= VB_DIG_INSTANT_RADIUS:
+                target = (a.x, a.y)                           # it's clearly theirs: read in place (still
+                # a reaction beat), but don't flee to the zone — then break when react_t elapses
             elif recv is not None and a.team == recv:
                 target = self._defend_zone(a, recv)          # hold a wide zone until you've reacted
             elif (stored is not None and self._await[0] == 'set'
@@ -1740,7 +1744,7 @@ class VolleyCourt(Scene):
                 target = (a.x, a.y)                            # tutorial: mates hold shape
             elif (self.ball.in_flight and a.role != Role.SETTER
                   and self._ball_to_side(a.team)
-                  and a.dist_to(*self.ball.end) < VB_CONTACT_RADIUS * 2.5):
+                  and a.dist_to(*self.ball.end) <= VB_DIG_INSTANT_RADIUS):
                 target = self.ball.end                        # a ball's dropping near you — go!
             else:
                 target = a.home

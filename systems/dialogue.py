@@ -209,20 +209,59 @@ class DialogueBox:
             lines.append(cur)
         return lines
 
+    def _text_x(self, box, portrait) -> int:
+        return box.x + 12 + _PB + 16 if portrait is not None else box.x + _PAD_X
+
+    def _choice_layout(self, font, box, portrait, start_y):
+        """Flow the choice labels (wrapping over-long ones) into rows; return the
+        placements and the y the block ends at, so the box can be sized to fit."""
+        left = self._text_x(box, portrait) + 16
+        right = box.right - 14
+        avail = max(40, right - left - 16)             # label width after the ">" gutter
+        placed, cx, cy, bottom = [], left, start_y, start_y
+        for i, key in enumerate(self._choice_keys):
+            wl = self._wrap_text(font, key, avail) or [key]
+            w = max(font.size(ln)[0] for ln in wl)
+            multi = len(wl) > 1
+            if cx > left and (multi or cx + 16 + w > right):
+                cx, cy = left, cy + _LINE_H            # this choice starts a fresh row
+            placed.append((i, wl, cx, cy))
+            bottom = max(bottom, cy + _LINE_H * len(wl))
+            if multi:
+                cx, cy = left, cy + _LINE_H * len(wl)  # next choice below the wrapped block
+            else:
+                cx += 16 + w + 40
+        return placed, bottom
+
     def draw(self, screen: pygame.Surface):
         if not self.active:
             return
 
-        box = self._box
+        font = _get_font()
+        anchored = self._box                           # the anchored rect (top or bottom)
+        portrait = portraits.bust(self._speaker) if self._speaker else None
+
+        # wrap the prompt to the available width (narrower when a portrait shows)
+        max_w = self._max_text_w()
+        display = []                                   # (is_paragraph_start, text)
+        for para in self._full.split('\n'):
+            wl = self._wrap_text(font, para, max_w) or ['']
+            display.extend((j == 0, sub) for j, sub in enumerate(wl))
+
+        # size the box to its content so long prompts/choices never overflow it
+        content_bottom = _PAD_Y + len(display) * _LINE_H
+        choosing = self._choosing and not self._typing
+        if choosing:
+            _, content_bottom = self._choice_layout(font, anchored, portrait, content_bottom)
+        height = max(_BOX_H, content_bottom + _PAD_Y)
+        top = _MARGIN if anchored is _BOX_TOP else SCREEN_HEIGHT - height - _MARGIN
+        box = pygame.Rect(anchored.x, top, anchored.width, height)
+
         pygame.draw.rect(screen, _BG, box)
         pygame.draw.rect(screen, _BORDER, box, _BORDER_W)
 
-        font = _get_font()
-
-        # portrait bust on the left (when the speaker has one); text indents past it
-        portrait = portraits.bust(self._speaker) if self._speaker else None
         text_x = box.x + _PAD_X
-        if portrait is not None:
+        if portrait is not None:                       # portrait bust on the left
             pb = pygame.Rect(box.x + 12, box.y + 10, _PB, _PB)
             pygame.draw.rect(screen, (28, 30, 40), pb)
             screen.blit(portrait, (pb.centerx - portrait.get_width() // 2,
@@ -233,18 +272,13 @@ class DialogueBox:
         if self._speaker:
             ns = font.render(self._speaker, True, _NAME)
             tag_x = box.x + (12 if portrait is not None else 18)
-            tag_y = box.bottom + 2 if box is _BOX_TOP else box.y - 24   # tag clears the screen edge
+            tag_y = box.bottom + 2 if anchored is _BOX_TOP else box.y - 24   # tag clears the edge
             tag = pygame.Rect(tag_x, tag_y, ns.get_width() + 24, 26)
             pygame.draw.rect(screen, _BG, tag)
             pygame.draw.rect(screen, _BORDER, tag, _BORDER_W)
             screen.blit(ns, (tag.x + 12, tag.y + 2))
-        # wrap to the available width (narrower when a portrait is shown), then run
-        # the typewriter over the wrapped lines so long lines can't overflow the box
-        max_w = self._max_text_w()
-        display = []                       # (is_paragraph_start, text)
-        for para in self._full.split('\n'):
-            wl = self._wrap_text(font, para, max_w) or ['']
-            display.extend((j == 0, sub) for j, sub in enumerate(wl))
+
+        # run the typewriter over the wrapped prompt lines
         revealed, count = int(self._shown), 0
         for i, (start, sub) in enumerate(display):
             if count >= revealed:
@@ -254,22 +288,11 @@ class DialogueBox:
                         (text_x, box.y + _PAD_Y + i * _LINE_H))
             count += len(sub) + 1
 
-        if self._choosing and not self._typing:
-            left = text_x + 16
-            right = box.right - 14
-            avail = max(40, right - left - 16)         # label width after the ">" gutter
-            cx, cy = left, box.y + _PAD_Y + len(display) * _LINE_H
-            for i, key in enumerate(self._choice_keys):
-                wl = self._wrap_text(font, key, avail) or [key]   # wrap over-long labels
-                w = max(font.size(ln)[0] for ln in wl)
-                multi = len(wl) > 1
-                if cx > left and (multi or cx + 16 + w > right):
-                    cx, cy = left, cy + _LINE_H        # this choice starts a fresh row
+        if choosing:
+            placed, _ = self._choice_layout(font, box, portrait,
+                                            box.y + _PAD_Y + len(display) * _LINE_H)
+            for i, wl, cx, cy in placed:
                 if i == self._choice_index:
                     screen.blit(font.render(">", True, _SEL), (cx, cy))
                 for j, ln in enumerate(wl):
                     screen.blit(font.render(ln, True, _TEXT), (cx + 16, cy + j * _LINE_H))
-                if multi:
-                    cx, cy = left, cy + _LINE_H * len(wl)   # next choice below the wrapped block
-                else:
-                    cx += 16 + w + 40

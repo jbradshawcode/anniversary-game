@@ -127,6 +127,12 @@ class StoryManager:
 
     def _enter_beat(self) -> None:
         beat = self.beat
+        # Drinks live in hand only between the bar and a seat; a beat that isn't a
+        # seated pub beat means Sarah isn't carrying one (e.g. a new chapter).
+        if self._player is not None and beat.get('name') not in _SEATED_BEATS:
+            self._player.holding = None
+            if hasattr(self._player, '_drink_xy'):
+                self._player._drink_xy = None
         goto = beat.get('goto')                       # relocate the player (e.g. a chapter jump)
         if goto and self._scenes is not None and self._player is not None:
             self._scenes.jump_to(goto['scene'], self._player)
@@ -279,8 +285,19 @@ class StoryManager:
         lines = beat.get('talk', {}).get(name.lower()) or beat.get('talk_default')
         if not lines:
             return False
+        self._face_crew(name)                 # the person you speak to turns to face Sarah
         self._dialogue.start(lines, speaker=name)
         return True
+
+    def _face_crew(self, name: str) -> None:
+        from systems.cutscene import face_toward
+        if self._party is None or self._player is None:
+            return
+        for f in self._party.followers:
+            if (getattr(f, 'name', None) or '').lower() == name.lower():
+                face_toward(f, self._player)
+                face_toward(self._player, f)
+                break
 
     def exit_ends_week(self, scene_id: Optional[int], direction: str) -> bool:
         return self.beat.get('end_week') == direction

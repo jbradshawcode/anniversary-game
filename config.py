@@ -81,6 +81,8 @@ VB_DIG_TOL         = 0.20    # quality falls to the floor this far off ideal
 VB_DIG_TIME_FLOOR  = 0.62    # worst timing still yields this fraction of the positional pass
 VB_DIG_GOOD_TOL    = 0.09    # within this of ideal = "on time" (label by pass quality)
 VB_DIG_SWITCH_MARGIN = 26    # px a new digger must be closer than the current one to take over (hysteresis, no thrash)
+VB_DIG_INSTANT_RADIUS = 108  # a digger breaks for the ball at once — skipping the read/hold — when it
+                             # lands this close: a ball clearly theirs by proximity is always played
 VB_PERFECT_WINDOW  = 0.10    # s — tighter "perfect" window (full power/accuracy)
 VB_SCORE_TO_WIN    = 7       # first to 7, win by 2
 
@@ -401,19 +403,41 @@ SCENE_CONFIGS = {
 # Diving minigame (Ch3) — a "keep it up" digging rally: short balls are fed to your
 # side, run under each and dig (or dive for the wide ones). It ramps as the rally
 # grows; a dropped ball ends it. Skill = positioning + committing to dives.
-DIVE_PLAYER_SPEED = 305      # px/s run speed
-DIVE_PLAYER_ACCEL = 2900     # px/s^2 momentum ramp (snappy starts/stops)
-DIVE_DIG_REACH    = 46       # px you can dig from a standing position
-DIVE_LUNGE_REACH  = 132      # px you can reach with a committed dive
-DIVE_FALL_TIME    = 1.30     # base seconds for a fed ball to arc down
-DIVE_FALL_MIN     = 0.60     # fastest the feed ramps to
-DIVE_DIG_WINDOW   = 0.52     # ball must be this low (s before it lands) to be diggable
-DIVE_FEED_GAP     = 0.40     # pause after a dig before the next feed
-DIVE_LUNGE_TIME   = 0.52     # how long a dive animation takes
-DIVE_LUNGE_HOP    = 18       # px the body lifts at the apex of a dive
-DIVE_RESULT_TIME  = 0.9      # verdict pause before the result card
-DIVE_TARGET       = 30       # digs that complete the drill (a drop just resets the streak)
-DIVE_MAX_FEEDS    = 70       # safety net: the drill always ends after this many fed balls
+# Diving drill (Ch3) — a three-stage dig: STEP (position under the feed), PUSH
+# (load your legs on a timing bar), SLIDE (extend/dive on a second timing bar).
+# Tuned to be rhythmic and forgiving, NOT a reaction test: feeds land close with
+# low, capped variation and the timing tempo is constant every ball, so the rally
+# is learnable. The dive is what the SLIDE looks like when you're stretched — it's
+# never a button you press.
+DIVE_PLAYER_SPEED = 320      # px/s run speed while positioning (the STEP)
+DIVE_PLAYER_ACCEL = 3000     # px/s^2 momentum ramp (snappy starts/stops)
+DIVE_STEP_TIME    = 1.05     # s of airtime to get under the feed before the swing
+DIVE_SWING_PREROLL = 0.18    # s the timing bar shows (needle held at 0) before it sweeps —
+                             # a "ready" beat so PUSH/SLIDE never ambush you
+DIVE_PUSH_SWEEP   = 0.90     # s for the PUSH needle to cross the bar
+DIVE_SLIDE_SWEEP  = 1.00     # s for the SLIDE needle — slower than PUSH, so the rhythm
+                             # decelerates into the contact rather than speeding up
+DIVE_PUSH_CENTRE  = 0.58     # where on the 0..1 bar the PUSH band sits
+DIVE_SLIDE_CENTRE = 0.60     # where the SLIDE band sits
+DIVE_BAND_GOOD    = 0.18     # half-width (fraction of bar) of the green 'good' band
+DIVE_BAND_PERFECT = 0.05     # half-width of the gold 'perfect' centre
+DIVE_SLIDE_CONNECT = 0.30    # minimum SLIDE score to make contact at all — press well
+                             # outside the band (even when set) and you drop it
+DIVE_SET_GOOD     = 46       # px from the target = a clean standing dig
+DIVE_SET_PERFECT  = 20       # px = perfect footwork
+DIVE_REACH        = 128      # px the SLIDE can extend to still reach the ball
+DIVE_SPREAD_MIN   = 36       # px the feed lands either side of you (first digs)
+DIVE_SPREAD_MAX   = 104      # px cap on that offset (nothing lands miles away)
+DIVE_SPREAD_GROW  = 6        # px added to the landing spread per dig, up to the cap
+DIVE_PERFECT_AT   = 0.86     # blended STEP+PUSH+SLIDE score for a PERFECT (needs all three)
+DIVE_NICE_AT      = 0.55     # ...for a NICE; below this still counts as a SHANK
+DIVE_DIVE_CAP     = 0.80     # a stretched dive never blends above this (scrappy by nature)
+DIVE_LUNGE_TIME   = 0.46     # s the slide/dive animation takes
+DIVE_LUNGE_HOP    = 16       # px the body lifts at the apex of a dive
+DIVE_FEED_GAP     = 0.45     # pause after a dig before the next feed
+DIVE_TARGET       = 12       # digs that complete the drill (a short warm-up before the match)
+DIVE_MAX_FEEDS    = 22       # safety net: the drill always ends after this many fed balls
+                             # (tight enough that careless play can fall just short)
 
 
 # End-of-week star rating, earned from how many volleyball attempts a win took.
@@ -985,17 +1009,19 @@ STORY_WEEKS = [
                     ('settle',),
                     ('say', ["The group heads round to the Salutation's beer "
                              "garden and piles in around the big table."]),
-                    # James & Sarah on the near bench; everyone else round the table,
-                    # Mayu & Wallace off at a loose table in their own little chat.
-                    ('moveto', {'james': (9, 9), 'sarah': (10, 9), 'dan': (7, 6),
-                                'nat': (12, 6), 'matt': (7, 8), 'bailey': (12, 8),
-                                'mayu': (3, 7), 'wallace': (3, 11)}),
-                    ('face', 'james', 'up'),
-                    ('face', 'sarah', 'up'),
+                    # All eight around the communal table: Sarah & James lead the top
+                    # bench (row 5, facing down), the rest fill out the benches.
+                    ('moveto', {'sarah': (8, 5), 'james': (9, 5), 'dan': (10, 5),
+                                'nat': (11, 5), 'matt': (8, 9), 'bailey': (9, 9),
+                                'mayu': (10, 9), 'wallace': (11, 9)}),
+                    ('face', 'sarah', 'down'),
+                    ('face', 'james', 'down'),
                     ('face', 'dan', 'down'),
                     ('face', 'nat', 'down'),
-                    ('face', 'matt', 'down'),
-                    ('face', 'bailey', 'down'),
+                    ('face', 'matt', 'up'),
+                    ('face', 'bailey', 'up'),
+                    ('face', 'mayu', 'up'),
+                    ('face', 'wallace', 'up'),
                     ('sit_all',),
                     ('say', ["(I'm sitting next to Sarah...)"], "James"),
                     ('say', ["(I should try to make an effort)"], "James"),

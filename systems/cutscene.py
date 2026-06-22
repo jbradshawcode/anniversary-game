@@ -59,6 +59,22 @@ def _tile_center(col: int, row: int) -> _Pt:
     return (col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2)
 
 
+def face_toward(a, b) -> None:
+    """Turn actor a to face actor b's tile (4-way). No-op if either lacks a tile or
+    facing, or if they share a tile. Shared so any system can apply the project rule:
+    people look at whoever they're talking to."""
+    if (a is None or b is None or a is b or not hasattr(a, 'facing')
+            or not hasattr(a, 'tile_x') or not hasattr(b, 'tile_x')):
+        return
+    dx, dy = b.tile_x - a.tile_x, b.tile_y - a.tile_y
+    if dx == 0 and dy == 0:
+        return
+    if abs(dx) >= abs(dy):
+        a.facing = 'right' if dx > 0 else 'left'
+    else:
+        a.facing = 'down' if dy > 0 else 'up'
+
+
 class Cutscene:
     def __init__(self) -> None:
         self._dialogue: Optional['DialogueBox'] = None
@@ -155,28 +171,46 @@ class Cutscene:
                 q.append((n, path + [n]))
         return [target]
 
-    def _face_actor(self, a, b) -> None:
-        """Turn actor a to face actor b's tile (4-way)."""
-        if a is None or b is None or a is b or not hasattr(a, 'facing'):
-            return
-        dx, dy = b.tile_x - a.tile_x, b.tile_y - a.tile_y
-        if dx == 0 and dy == 0:
-            return
-        if abs(dx) >= abs(dy):
-            a.facing = 'right' if dx > 0 else 'left'
-        else:
-            a.facing = 'down' if dy > 0 else 'up'
+    def _present_actors(self):
+        out = []
+        if self._player is not None:
+            out.append(self._player)
+        if self._party is not None:
+            out += list(self._party.followers)
+        if self._scenes is not None and self._scenes.current is not None:
+            out += [o for o in self._scenes.current.objects if getattr(o, 'name', None)]
+        return out
+
+    def _nearest_actor(self, a):
+        best, bd = None, None
+        for o in self._present_actors():
+            if o is a or not hasattr(o, 'tile_x'):
+                continue
+            d = (o.tile_x - a.tile_x) ** 2 + (o.tile_y - a.tile_y) ** 2
+            if bd is None or d < bd:
+                bd, best = d, o
+        return best
 
     def _converse(self, speaker: Optional[str]) -> None:
-        """Principle: people turn to face whoever they're talking to. On each spoken
-        line, turn the new speaker and the previous one to face each other (both must
-        be present actors). They keep their new facing — fine to leave them turned."""
+        """Project rule: people turn to face whoever they're addressing. A reply faces
+        the previous speaker; otherwise the line is taken to be aimed at Sarah (the
+        game is her POV); failing that, at the nearest person. Both turn, so a
+        conversation reads as two people facing each other. Narrator lines pass."""
         if speaker is None:
-            return                              # narrator line: don't break the thread
+            return
         a = self._resolve(speaker)
-        b = self._resolve(self._last_speaker) if self._last_speaker else None
-        self._face_actor(a, b)
-        self._face_actor(b, a)
+        if a is None:
+            self._last_speaker = speaker
+            return
+        b = None
+        if self._last_speaker and self._last_speaker.lower() != speaker.lower():
+            b = self._resolve(self._last_speaker)        # a reply -> face whoever just spoke
+        if b is None and self._player is not None and a is not self._player:
+            b = self._player                             # most lines are addressed to Sarah
+        if b is None:
+            b = self._nearest_actor(a)                   # otherwise face the nearest listener
+        face_toward(a, b)
+        face_toward(b, a)
         self._last_speaker = speaker
 
     # ── step dispatch ──────────────────────────────────────────────────────--
@@ -362,6 +396,10 @@ class Cutscene:
             actor = self._resolve(who)
             if actor is None:
                 continue
+            if getattr(actor, 'sitting', False):  # leaving a seat -> drink stays on the table
+                actor.holding = None
+                if hasattr(actor, '_drink_xy'):
+                    actor._drink_xy = None
             actor.sitting = False                 # standing up to move/walk
             tiles = self._bfs_path(actor, (col, row)) if pathfind else [(col, row)]
             waypts = [_tile_center(c, r) for c, r in tiles]

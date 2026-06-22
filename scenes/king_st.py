@@ -648,6 +648,7 @@ class KingSt(Scene):
 
     def enter(self, player) -> None:
         self._player = player             # is_walkable lets you finish a crossing once on the road
+        self._prime_traffic()             # arrive to a street already in flow, not an empty road
 
     def set_party(self, party) -> None:
         self._party = party               # so the lights hold green while the crew are crossing
@@ -686,12 +687,40 @@ class KingSt(Scene):
         return super().is_walkable(tile_x, tile_y)
 
     # ── cars ────────────────────────────────────────────────────────────────
-    def _spawn_car(self, lane: int) -> None:
+    def _new_car(self, lane: int, x: float) -> dict:
         y, d = _LANES[lane]
+        return {'x': float(x), 'y': y, 'dir': d, 'lane': lane,
+                'speed': random.uniform(110, 170), 'color': random.choice(_CAR_COLORS)}
+
+    def _spawn_car(self, lane: int) -> None:
+        d = _LANES[lane][1]
         x = -_CAR_LEN if d > 0 else self.world_width + _CAR_LEN
-        self._cars.append({'x': float(x), 'y': y, 'dir': d, 'lane': lane,
-                           'speed': random.uniform(110, 170),
-                           'color': random.choice(_CAR_COLORS)})
+        self._cars.append(self._new_car(lane, x))
+
+    def _prime_traffic(self) -> None:
+        """Populate the whole carriageway with spaced, already-moving cars so the
+        street reads as live the instant you arrive — then the spawn loop tops it up.
+        Cars are kept off any crossing pedestrians currently have the green on."""
+        self._cars = []
+        self._spawn = [random.uniform(1.8, 4.2), random.uniform(1.8, 4.2)]
+        for lane in range(len(_LANES)):
+            x = random.uniform(0, 200)            # per-lane phase so the two lanes differ
+            while x < self.world_width:
+                if self._x_off_crossing(x):
+                    self._cars.append(self._new_car(lane, x))
+                x += random.uniform(150, 280)     # spacing between cars in the lane
+
+    @staticmethod
+    def _x_off_crossing_spans():
+        return [(c0 * _TS - _CAR_LEN, (c1 + 1) * _TS + _CAR_LEN) for c0, c1 in _CROSSINGS]
+
+    def _x_off_crossing(self, x: float) -> bool:
+        """True if x isn't sitting on a crossing that's currently green for pedestrians
+        (so we never prime a car parked in an active zebra)."""
+        for i, (lo, hi) in enumerate(self._x_off_crossing_spans()):
+            if self._walk_now(i) and lo <= x <= hi:
+                return False
+        return True
 
     def _car_stop_x(self, car) -> float:
         """Furthest this car may advance: the stop line of the next green crossing, or
