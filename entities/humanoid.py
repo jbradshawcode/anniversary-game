@@ -7,7 +7,7 @@ A mover (e.g. the follower party) can set `walking`/`walk_phase` to bob too.
 import math
 import random
 import pygame
-from typing import NamedTuple, Tuple
+from typing import NamedTuple, Optional, Tuple
 from .base import GameObject
 
 Color = Tuple[int, int, int]
@@ -114,6 +114,37 @@ class Humanoid(GameObject):
 
     def __init__(self, tile_x: int, tile_y: int, blocking: bool = True):
         super().__init__(tile_x, tile_y, blocking=blocking)
+
+    # ── seating / drink state ────────────────────────────────────────────────
+    # These three own the project rule "a held drink belongs in hand only between
+    # the bar and a seat": the instant you sit it goes on the table; the instant
+    # you stand to leave it's left behind. Callers go through these, never poke
+    # sitting/holding/_drink_xy directly, so no path can forget the pairing.
+    def sit(self, facing: Optional[str] = None, sit_x: Optional[float] = None) -> None:
+        """Sit in place: freeze the seated draw-x (default current x), optionally
+        turn to `facing`, and rest any held drink on the table."""
+        self.sitting = True
+        if facing is not None:
+            self.facing = facing
+        self._sit_x = self.x if sit_x is None else sit_x
+        if self.holding:
+            self.place_drink()
+
+    def stand(self) -> None:
+        """Stand up to leave: a drink left the seat behind belongs on the table,
+        so clear what was being rested there (no-op for an actor in transit)."""
+        if self.sitting:
+            self.holding = None
+            self._drink_xy = None
+        self.sitting = False
+
+    def carry(self, kind: Optional[str]) -> None:
+        """Take a drink in hand (in transit), or None to clear it. If already
+        seated it rests on the table instead of being held."""
+        self.holding = kind
+        self._drink_xy = None
+        if kind and self.sitting:
+            self.place_drink()
 
     def place_drink(self) -> None:
         """Freeze where a seated character's drink rests on the table — pushed far

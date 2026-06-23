@@ -7,7 +7,7 @@ DialogueBox / SceneManager / Player / Party so it can drive dialogue, scene
 jumps and the follower crew itself.
 """
 from typing import Callable, List, Optional, Set, Tuple, TYPE_CHECKING
-from config import STORY_WEEKS
+from story_script import STORY_WEEKS
 
 if TYPE_CHECKING:
     from systems.dialogue import DialogueBox
@@ -130,9 +130,7 @@ class StoryManager:
         # Drinks live in hand only between the bar and a seat; a beat that isn't a
         # seated pub beat means Sarah isn't carrying one (e.g. a new chapter).
         if self._player is not None and beat.get('name') not in _SEATED_BEATS:
-            self._player.holding = None
-            if hasattr(self._player, '_drink_xy'):
-                self._player._drink_xy = None
+            self._player.carry(None)
         goto = beat.get('goto')                       # relocate the player (e.g. a chapter jump)
         if goto and self._scenes is not None and self._player is not None:
             self._scenes.jump_to(goto['scene'], self._player)
@@ -185,22 +183,32 @@ class StoryManager:
             for sid, tiles in directive['settle'].items():
                 self._party.settle(sid, tiles)
 
-    def exit_blocked(self, scene_id: Optional[int], direction: str) -> bool:
-        locked = self.beat.get('locked_exits', {}).get(scene_id)
-        if locked is None:
-            return False
-        return locked == 'all' or direction in locked
+    def gate_exit(self, scene_id: Optional[int], direction: str,
+                  dest_scene_id: Optional[int]) -> str:
+        """Decide what stepping toward an exit does this beat. Returns one of:
+        'pass'     — let the scene transition run;
+        'block'    — refused (any message is shown here); or
+        'end_week' — leaving ends the chapter (caller triggers the week-end).
+        Owns every movement gate the beat config expresses (a specific barred
+        door, a locked edge, the chapter-ending exit) so SceneManager just acts
+        on the verdict instead of orchestrating the order itself."""
+        beat = self.beat
+        lines = beat.get('door_block', {}).get(dest_scene_id)
+        if lines:                              # one specific door barred (e.g. wrong pub)
+            self._say(lines)
+            return 'block'
+        locked = beat.get('locked_exits', {}).get(scene_id)
+        if locked is not None and (locked == 'all' or direction in locked):
+            self._say(beat.get('locked_msg'))
+            return 'block'
+        if beat.get('end_week') == direction:
+            return 'end_week'
+        return 'pass'
 
-    def try_door_block(self, dest_scene_id: Optional[int]) -> bool:
-        """A specific door (by destination scene) is barred this beat: show its
-        message and refuse entry. Lets us block one of several same-edge doors
-        (e.g. the wrong pub) without locking the whole side."""
-        lines = self.beat.get('door_block', {}).get(dest_scene_id)
-        if not lines:
-            return False
-        if self._dialogue is not None and not self._dialogue.active:
+    def _say(self, lines) -> None:
+        """Show a one-off line set if nothing's already on screen."""
+        if lines and self._dialogue is not None and not self._dialogue.active:
             self._dialogue.start(lines)
-        return True
 
     def confine(self, scene_id: Optional[int]) -> Optional[Region]:
         confine = self.beat.get('confine')
@@ -222,11 +230,6 @@ class StoryManager:
         targets = self.beat.get('on_reach', {}).get(scene_id)
         if targets and tile in targets:
             self.set_flag(self.beat.get('advance_when'))
-
-    def show_locked(self, scene_id: Optional[int]) -> None:
-        lines = self.beat.get('locked_msg')
-        if lines and self._dialogue is not None and not self._dialogue.active:
-            self._dialogue.start(lines)
 
     def interact(self, obj: 'GameObject') -> bool:
         checklist = self.beat.get('checklist')
@@ -298,9 +301,6 @@ class StoryManager:
                 face_toward(f, self._player)
                 face_toward(self._player, f)
                 break
-
-    def exit_ends_week(self, scene_id: Optional[int], direction: str) -> bool:
-        return self.beat.get('end_week') == direction
 
     def trigger_week_end(self) -> None:
         if self.on_week_end is not None:
@@ -387,16 +387,11 @@ class StoryManager:
         # in her chair too (the 8th seat) so she isn't stranded at the door.
         if self._party.active and self.beat['name'] in _SEATED_BEATS:
             for f in self._party.followers:        # hand the crew their drinks first...
-                f.holding = PUB_DRINKS.get(f.name)
-            self._party.settle(3, PUB_SEATS)       # ...settle() rests them on the table
+                f.carry(PUB_DRINKS.get(f.name))
+            self._party.settle(3, PUB_SEATS)       # ...settle() seats them, drinks on the table
             if player is not None:
                 player.teleport(*SARAH_PUB_SEAT)
-                player.sitting = True
-                player.facing = 'up' if SARAH_PUB_SEAT[1] >= 10 else 'down'
-                if hasattr(player, '_sit_x'):
-                    player._sit_x = player.x
-                player.holding = ('cider' if 'sarah_cider' in self.flags else
-                                  'red_wine' if 'sarah_red' in self.flags else
-                                  'white_wine' if 'sarah_wine' in self.flags else None)
-                if player.holding:
-                    player.place_drink()
+                player.carry('cider' if 'sarah_cider' in self.flags else
+                             'red_wine' if 'sarah_red' in self.flags else
+                             'white_wine' if 'sarah_wine' in self.flags else None)
+                player.sit('up' if SARAH_PUB_SEAT[1] >= 10 else 'down')

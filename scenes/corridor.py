@@ -194,12 +194,10 @@ class Corridor(Scene):
     def __init__(self):
         super().__init__('corridor')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_walls(screen)
         _draw_pool_windows(screen)
         _draw_floor(screen)
         _draw_ceiling_lights(screen)
         _draw_doors(screen)
         _draw_water_fountain(screen)
-        self._draw_objects(screen)

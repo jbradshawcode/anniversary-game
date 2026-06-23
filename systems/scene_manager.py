@@ -59,14 +59,13 @@ class SceneManager:
             scene_id, entry_pos = self._resolve_exit(
                 self.current.exits.get(exit_dir), player)
             if scene_id is not None:
-                if self.story and self.story.try_door_block(scene_id):
-                    return                        # this specific door is barred (e.g. wrong pub)
-                if self.story and self.story.exit_blocked(self._current_id, exit_dir):
-                    self.story.show_locked(self._current_id)
-                    return
-                if self.story and self.story.exit_ends_week(self._current_id, exit_dir):
-                    self.story.trigger_week_end()    # head out -> results, not a scene swap
-                    return
+                if self.story:
+                    verdict = self.story.gate_exit(self._current_id, exit_dir, scene_id)
+                    if verdict == 'block':           # barred door or locked edge (message shown)
+                        return
+                    if verdict == 'end_week':        # head out -> results, not a scene swap
+                        self.story.trigger_week_end()
+                        return
                 self._transition_to(scene_id, player, exit_dir, entry_pos)
                 return
 

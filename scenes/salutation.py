@@ -727,8 +727,7 @@ class Salutation(Scene):
         super().__init__('salutation')
         self._overlay = None
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_floor(screen)
         _draw_walls(screen)
         _draw_windows_prints(screen)
@@ -742,7 +741,6 @@ class Salutation(Scene):
         _draw_decor(screen)
         _draw_bunting(screen)
         _draw_lights(screen)
-        self._draw_objects(screen)
 
     def draw_overlay(self, screen: pygame.Surface):
         if self._overlay is None:

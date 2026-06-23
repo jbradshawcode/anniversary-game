@@ -75,6 +75,76 @@ def face_toward(a, b) -> None:
         a.facing = 'down' if dy > 0 else 'up'
 
 
+# Verb -> (min, max) number of args after the verb. Single source of truth for
+# what _begin_step accepts; keep in sync when adding a verb there. Used by
+# iter_step_errors() so an authored script is checked before it can silently
+# no-op in play (an unknown verb just advances the step pointer otherwise).
+_STEP_ARITY = {
+    'say': (1, 2), 'ask': (2, 3), 'hub': (2, 3),
+    'walk': (2, 2), 'walkto': (2, 2), 'move': (1, 1), 'moveto': (1, 1),
+    'face': (2, 2), 'pose': (2, 2), 'vanish': (1, 2), 'hold': (2, 2),
+    'if_flag': (2, 2), 'wait': (1, 1), 'fade_out': (1, 1), 'fade_in': (1, 1),
+    'flag': (1, 1), 'call': (1, 1), 'sit': (1, 2), 'sit_all': (0, 0),
+    'settle': (0, 0),
+}
+
+
+# Verbs whose first arg names a single actor; move/moveto instead key a dict by
+# actor name. Used only for the optional actor-reference check below.
+_WHO_AT_1 = frozenset({'walk', 'walkto', 'face', 'pose', 'vanish', 'hold', 'sit'})
+
+
+def iter_step_errors(steps, where: str = 'cutscene', known_actors=None):
+    """Yield human-readable problems with a step list — unknown verbs, wrong
+    arity, malformed choices — recursing into ask/hub/if_flag branches. The
+    interface (the opcode vocabulary) becomes a test surface: a test runs this
+    over every authored script so typos fail loudly instead of no-op'ing.
+
+    Pass `known_actors` (a set of lowercased names) to also flag any `'who'`
+    reference that wouldn't resolve at runtime — another silent no-op otherwise."""
+    if not isinstance(steps, (list, tuple)):
+        yield "{0}: not a step list".format(where)
+        return
+    for i, step in enumerate(steps):
+        loc = "{0}[{1}]".format(where, i)
+        if not isinstance(step, tuple) or not step:
+            yield "{0}: not a (verb, ...) tuple".format(loc)
+            continue
+        verb = step[0]
+        arity = _STEP_ARITY.get(verb)
+        if arity is None:
+            yield "{0}: unknown verb {1!r}".format(loc, verb)
+            continue
+        lo, hi = arity
+        extra = len(step) - 1
+        if not (lo <= extra <= hi):
+            yield "{0}: verb {1!r} takes {2}-{3} args, got {4}".format(loc, verb, lo, hi, extra)
+            continue
+        if known_actors is not None:
+            who = ([step[1]] if verb in _WHO_AT_1 else
+                   list(step[1].keys()) if verb in ('move', 'moveto')
+                   and isinstance(step[1], dict) else [])
+            for nm in who:
+                if isinstance(nm, str) and nm.lower() not in known_actors:
+                    yield "{0}: unknown actor {1!r}".format(loc, nm)
+        if verb in ('ask', 'hub'):
+            outcomes = step[2]
+            if not isinstance(outcomes, dict):
+                yield "{0}: {1!r} choices must be a dict".format(loc, verb)
+                continue
+            for label, branch in outcomes.items():
+                tag = "{0}/{1!r}".format(loc, label)
+                if verb == 'ask' and isinstance(branch, tuple):
+                    if not branch or branch[0] not in ('flag', 'game_over'):
+                        yield "{0}: outcome tuple must start 'flag' or 'game_over'".format(tag)
+                    continue
+                for e in iter_step_errors(branch, tag, known_actors):
+                    yield e
+        elif verb == 'if_flag':
+            for e in iter_step_errors(step[2], "{0}(if_flag)".format(loc), known_actors):
+                yield e
+
+
 class Cutscene:
     def __init__(self) -> None:
         self._dialogue: Optional['DialogueBox'] = None
@@ -259,10 +329,8 @@ class Cutscene:
                     actor.diving = step[2]
             elif verb == 'hold':                  # ('hold', who, kind) — carry a drink (DRINKS)
                 actor = self._resolve(step[1])
-                if actor is not None:
-                    actor.holding = step[2]
-                    if getattr(actor, 'sitting', False) and hasattr(actor, 'place_drink'):
-                        actor.place_drink()
+                if actor is not None and hasattr(actor, 'carry'):
+                    actor.carry(step[2])
             elif verb == 'if_flag':               # ('if_flag', name, [steps]) — splice if flag set
                 self._i += 1
                 if self._story is not None and step[1] in self._story.flags:
@@ -396,11 +464,8 @@ class Cutscene:
             actor = self._resolve(who)
             if actor is None:
                 continue
-            if getattr(actor, 'sitting', False):  # leaving a seat -> drink stays on the table
-                actor.holding = None
-                if hasattr(actor, '_drink_xy'):
-                    actor._drink_xy = None
-            actor.sitting = False                 # standing up to move/walk
+            if hasattr(actor, 'stand'):
+                actor.stand()                     # standing up to move; a seated drink stays on the table
             tiles = self._bfs_path(actor, (col, row)) if pathfind else [(col, row)]
             waypts = [_tile_center(c, r) for c, r in tiles]
             actor.tile_x, actor.tile_y = col, row     # logical tile = the destination
@@ -409,13 +474,8 @@ class Cutscene:
 
     @staticmethod
     def _seat(actor, facing) -> None:
-        actor.sitting = True
-        if facing is not None and hasattr(actor, 'facing'):
-            actor.facing = facing
-        if hasattr(actor, '_sit_x'):
-            actor._sit_x = actor.x        # the player sits in place, not bench-shifted
-        if getattr(actor, 'holding', None) and hasattr(actor, 'place_drink'):
-            actor.place_drink()           # rest their drink on the table in front
+        if hasattr(actor, 'sit'):         # sits in place, resting any held drink on the table
+            actor.sit(facing)
 
     @staticmethod
     def _face_toward(actor, tx, ty) -> None:

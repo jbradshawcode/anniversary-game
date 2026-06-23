@@ -2,7 +2,7 @@
 import pygame
 from typing import Callable, List, Optional
 from config import (SCREEN_WIDTH, SCREEN_HEIGHT, UI_FONT_NAME,
-                    DIALOGUE_CPS, DIALOGUE_FAST)
+                    DIALOGUE_CPS, DIALOGUE_FAST, DEV)
 from systems import portraits
 
 _BG     = (  0,   0,   0)
@@ -72,6 +72,10 @@ class DialogueBox:
     def start(self, pages: list, on_done: Optional[Callable[[], None]] = None,
               speaker: Optional[str] = None,
               on_choice: Optional[Callable[[str], None]] = None):
+        if DEV and self.active and self._on_done is not None:
+            # A second start() would silently drop the pending callback — and a
+            # callback usually advances the beat, so this can stall the story.
+            print("[dialogue] start() while a callback is pending — it will be dropped")
         self.active = True
         self._speaker = speaker
         self._pages = self._paginate(list(pages))

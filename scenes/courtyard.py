@@ -361,8 +361,7 @@ class Courtyard(Scene):
     def __init__(self):
         super().__init__('courtyard')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_vic_building(screen)
         _draw_mod_building(screen)
         _draw_gate_walls(screen)
@@ -383,4 +382,3 @@ class Courtyard(Scene):
         _draw_bench(screen, 14, 7, 'west')
 
         _draw_cafe_tables(screen)
-        self._draw_objects(screen)

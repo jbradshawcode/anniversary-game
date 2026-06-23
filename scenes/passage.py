@@ -215,8 +215,7 @@ class Passage(Scene):
     def __init__(self):
         super().__init__('passage')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_walls(screen)
         _draw_tunnel(screen)
         _draw_tunnel_pipes(screen)
@@ -225,4 +224,3 @@ class Passage(Scene):
         _draw_stairs_down(screen)
         _draw_stairs_right(screen)
         _draw_reception_door(screen)
-        self._draw_objects(screen)

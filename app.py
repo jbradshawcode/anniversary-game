@@ -4,8 +4,9 @@ import sys
 from config import (DEV, SCREEN_WIDTH, SCREEN_HEIGHT, VB_MUSIC, KING_ST_MUSIC,
                     GYM_MUSIC, SALUTATION_MUSIC, GARDEN_MUSIC, LATIMER_MUSIC,
                     WETHERSPOONS_MUSIC, DIVE_MUSIC, GAME_OVER_MUSIC,
-                    CHARACTER_MUSIC, CHAPTER_END_MUSIC, INTERLUDE_MUSIC,
-                    PHONE_THREAD_W1, PHONE_THREAD_W2, PHONE_THREAD_W3, PHONE_THREAD_W4)
+                    CHARACTER_MUSIC, CHAPTER_END_MUSIC, INTERLUDE_MUSIC)
+from story_script import (PHONE_THREAD_W1, PHONE_THREAD_W2,
+                         PHONE_THREAD_W3, PHONE_THREAD_W4)
 from entities import Player
 from scenes import (Gym, KingSt, Salutation, Garden, Corridor, Reception,
                     Courtyard, Passage, Courts, WilliamMorris, VolleyCourt,
@@ -141,19 +142,33 @@ class Game:
     # ---- mode transitions & MenuFlow context -------------------------------
     # The menu sub-state machine lives in MenuFlow; the methods below are the
     # terminal effects it calls back into (the MenuFlow context interface).
-    def open_title(self):
-        self.active = TitleMode(self)
+    def to(self, mode):
+        """The one seam for switching the active Mode. A full-screen mode always
+        replaces the pause overlay, so clear it here — every transition goes
+        through this, so it's the single place to hook mode-change behaviour."""
+        self.active = mode
         self.pause = None
+
+    def open_title(self):
+        self.to(TitleMode(self))
 
     def open_pause(self):
         self.pause = MenuFlow('pause', self)
 
     def resume(self):
-        self.active = self.play
-        self.pause = None
+        self.to(self.play)
 
     def quit_game(self):
         self.running = False
+
+    def _resume_overworld(self):
+        """Common tail of entering the overworld (new game / load): pin the scene
+        as synced so no spurious scene-change work fires, set its music, rebuild
+        the follower crew for the current beat, and make PlayMode active."""
+        self.play.mark_scene_synced()
+        self.update_scene_music(self.scene_manager.current_id)
+        self.story.sync_party(self.player)
+        self.resume()
 
     def start_new(self):
         self.cutscene.active = False
@@ -163,10 +178,7 @@ class Game:
         self.scene_manager.jump_to(1, self.player)
         self.player.teleport(self._start_col, self._start_row)
         self.player.facing = 'down'
-        self.play.mark_scene_synced()
-        self.update_scene_music(self.scene_manager.current_id)
-        self.story.sync_party(self.player)
-        self.resume()
+        self._resume_overworld()
         self.story.begin()             # fire the opening cutscene (fade-in + intro)
 
     def load_slot(self, slot):
@@ -174,7 +186,7 @@ class Game:
         if not data:
             return
         if data.get('completed'):                # a finished file -> offer a fresh start
-            self.active = GameEndMode(self, loaded=True)
+            self.to(GameEndMode(self, loaded=True))
             return
         self.cutscene.active = False
         self._vb_retry = False
@@ -183,10 +195,7 @@ class Game:
         self.scene_manager.jump_to(data['scene_id'], self.player)
         self.player.teleport(data['tile_x'], data['tile_y'])
         self.player.facing = data['facing']
-        self.play.mark_scene_synced()
-        self.update_scene_music(self.scene_manager.current_id)
-        self.story.sync_party(self.player)
-        self.resume()
+        self._resume_overworld()       # NB: no story.begin() — a load resumes mid-beat
 
     def save_to_slot(self, slot, completed=False):
         data = {
@@ -260,14 +269,17 @@ class Game:
         self.story.set_flag('w1_tut_done')   # records the warm-up; not an advance flag
         self._launch_match()
 
+    def _return_to_gym_and_advance(self):
+        """Leave a minigame back to the gym and satisfy the beat's advance flag."""
+        self.scene_manager.jump_to(1, self.player)
+        self.play.mark_scene_synced()
+        self.update_scene_music(1)                  # back in the gym -> gym theme
+        self.story.set_flag(self.story.beat.get('advance_when'))
+
     def _end_volleyball(self):
-        won = self.court.score[0] > self.court.score[1]
         self.story.vb_attempts += 1
-        if won:
-            self.scene_manager.jump_to(1, self.player)
-            self.play.mark_scene_synced()
-            self.update_scene_music(1)              # back in the gym -> gym theme
-            self.story.set_flag(self.story.beat.get('advance_when'))   # this chapter's win flag
+        if self.court.player_won:
+            self._return_to_gym_and_advance()       # this chapter's win flag
         else:
             self.music.stop()
             self._vb_retry = True                   # relaunch -> _launch_match plays VB theme
@@ -280,15 +292,12 @@ class Game:
         self.scene_manager.jump_to(12, self.player)
 
     def _end_dive(self):
-        self.scene_manager.jump_to(1, self.player)        # back to the gym
-        self.play.mark_scene_synced()
-        self.update_scene_music(1)
-        self.story.set_flag(self.story.beat.get('advance_when'))
+        self._return_to_gym_and_advance()
 
     # ---- story interludes --------------------------------------------------
     def _game_over(self, lines):
         self.music.play(GAME_OVER_MUSIC, loop=False)    # plays once, then silence
-        self.active = GameOverMode(self, lines)
+        self.to(GameOverMode(self, lines))
 
     def retry_beat(self):
         self.resume()
@@ -306,15 +315,15 @@ class Game:
 
     def _week_end(self):
         title = "{0} Complete".format(self.story.week_title or "Week")
-        self.active = ResultsMode(self, screens.Results(
-            self.story.stars(), max(1, self.story.vb_attempts), title))
+        self.to(ResultsMode(self, screens.Results(
+            self.story.stars(), max(1, self.story.vb_attempts), title)))
         self.music.play(CHAPTER_END_MUSIC)         # end-of-chapter screen theme
 
     def enter_phone(self):
         threads = {1: PHONE_THREAD_W1, 2: PHONE_THREAD_W2, 3: PHONE_THREAD_W3,
                    4: PHONE_THREAD_W4}
         thread = threads.get(self.story.beat.get('week'), PHONE_THREAD_W1)
-        self.active = PhoneMode(self, screens.Phone(thread))
+        self.to(PhoneMode(self, screens.Phone(thread)))
 
     def finish_week(self):
         self.resume()
@@ -335,7 +344,7 @@ class Game:
             gym.remove_named(self.story.beat.get('absent', ()))   # e.g. Nat stays home in Ch4
         self.save_to_slot(save.AUTOSAVE)
         if not first:
-            self.active = ChapterCardMode(self, week - 1, week, self.resume)
+            self.to(ChapterCardMode(self, week - 1, week, self.resume))
 
     def enter_interlude(self, thread, other, flag, title='Interlude', date=''):
         """A between-chapters texts-only beat (e.g. the Scrims interlude): a title
@@ -346,9 +355,9 @@ class Game:
 
         def start_phone():
             phone = screens.Phone(thread, other=other)
-            self.active = PhoneMode(self, phone,
-                                    on_done=lambda: self._finish_interlude(flag))
-        self.active = InterludeMode(self, kicker, name or kicker, date, start_phone)
+            self.to(PhoneMode(self, phone,
+                              on_done=lambda: self._finish_interlude(flag)))
+        self.to(InterludeMode(self, kicker, name or kicker, date, start_phone))
 
     def _finish_interlude(self, flag):
         if self.story.beat.get('end_game'):         # the finale -> closing card, not the overworld
@@ -365,7 +374,7 @@ class Game:
         'continue' file afterwards offers a fresh start from the beginning."""
         self.save_to_slot(save.AUTOSAVE, completed=True)
         self.music.play(CHAPTER_END_MUSIC)
-        self.active = GameEndMode(self)
+        self.to(GameEndMode(self))
 
     def run(self):
         while self.running:

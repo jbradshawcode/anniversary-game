@@ -17,7 +17,7 @@ class Bench(GameObject):
     def on_interact(self, game) -> None:
         def chose(label):
             if label == "Yes":
-                game.player.sit(self)
+                game.player.sit_on(self)
         game.dialogue.start(
             [{"text": "Sit on the bench?",
               "choices": {"Yes": ["You take a seat."], "No": []}}],

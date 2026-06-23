@@ -232,8 +232,7 @@ class Courts(Scene):
     def __init__(self):
         super().__init__('courts')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_sky_strip(screen)
         _draw_back_wall(screen)
         _draw_side_walls(screen)
@@ -245,4 +244,3 @@ class Courts(Scene):
         _draw_hoops(screen)
         _draw_fence(screen)
         _draw_bottom_walkway(screen)
-        self._draw_objects(screen)

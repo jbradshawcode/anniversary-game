@@ -175,6 +175,12 @@ class VolleyCourt(Scene):
         self._level = level if level in VB_DIFFICULTY else 'hard'
         self._week = week if week in _ROSTERS else 1
 
+    @property
+    def player_won(self) -> bool:
+        """The match verdict — your team outscored the opponent. The score layout
+        is the court's own business; callers ask for the outcome, not the tuple."""
+        return self.score[0] > self.score[1]
+
     # ── Setup ────────────────────────────────────────────────────────────────
     def enter(self, player) -> None:
         # real characters; identity persists through role rotation (only .role changes)

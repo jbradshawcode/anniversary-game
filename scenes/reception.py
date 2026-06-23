@@ -210,8 +210,7 @@ class Reception(Scene):
     def __init__(self):
         super().__init__('reception')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_walls(screen)
         _draw_floor(screen)
         _draw_corridor_door(screen)
@@ -221,4 +220,3 @@ class Reception(Scene):
         _draw_glass_partition(screen)
         _draw_desk(screen)
         _draw_windows(screen)
-        self._draw_objects(screen)

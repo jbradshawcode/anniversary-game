@@ -68,10 +68,9 @@ class Party:
             f.tile_x, f.tile_y = tile
             f.x, f.y = _tile_center(tile[0], tile[1])
             f.walking = False
-            f.sitting = True              # settled crew are sat down (at the pub table)
-            f.facing = 'up' if tile[1] >= 10 else 'down'   # face the table (row 10 between rows)
-            if getattr(f, 'holding', None):
-                f.place_drink()           # rest their drink on the table
+            # settled crew sit at the pub table, facing it (row 10 sits between the rows);
+            # sit() rests any drink they're holding on the table
+            f.sit('up' if tile[1] >= 10 else 'down')
         self._following = False
 
     def stop_following(self) -> None:

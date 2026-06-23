@@ -30,8 +30,7 @@ class Matus(Humanoid):
 
     def __init__(self, tile_x: int, tile_y: int):
         super().__init__(tile_x, tile_y)
-        self.sitting = True               # the ref watches from the bench
-        self.facing = 'left'              # bench is on the right wall; he faces the court
+        self.sit('left')                  # the ref watches the court from the right-wall bench
         self.interaction_text = ["FWEEEEEET!!",
                                  "I listen to lonely people music.",
                                  "Which means you all have to listen to lonely people music."]

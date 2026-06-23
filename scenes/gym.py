@@ -206,8 +206,7 @@ class Gym(Scene):
     def __init__(self):
         super().__init__('gym')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_walls(screen)
         _draw_floor(screen)
         _draw_badminton(screen)
@@ -219,4 +218,3 @@ class Gym(Scene):
         _draw_curtain(screen)
         _draw_net(screen, _LEFT)
         _draw_net(screen, _RIGHT)
-        self._draw_objects(screen)

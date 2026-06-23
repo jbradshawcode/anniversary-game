@@ -44,17 +44,15 @@ class Player(Humanoid):
         self._target_y = self.y
         self.moving    = False
 
-    def sit(self, bench) -> None:
-        self.sitting = True
-        self.facing = 'left' if bench.tile_x > self.tile_x else 'right'   # face into the room
-        self._sit_x = bench.tile_x * TILE_SIZE + TILE_SIZE // 2           # seated ON the bench
+    def sit_on(self, bench) -> None:
+        """Sit onto a bench sprite: face into the room and draw seated on the bench."""
+        facing = 'left' if bench.tile_x > self.tile_x else 'right'
+        sit_x = bench.tile_x * TILE_SIZE + TILE_SIZE // 2
+        self.sit(facing=facing, sit_x=sit_x)
 
     def try_move(self, dtx: int, dty: int, scene) -> bool:
         """Attempt to step one tile in (dtx, dty). Returns True if move started."""
-        if self.sitting:                  # standing up to leave -> drink stays on the table
-            self.holding = None
-            self._drink_xy = None
-        self.sitting = False              # any move stands you up
+        self.stand()                      # any move stands you up; a seated drink stays behind
         if self.moving:
             return False
         new_tx = self.tile_x + dtx

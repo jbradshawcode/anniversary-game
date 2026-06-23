@@ -314,8 +314,7 @@ class WilliamMorris(Scene):
     def __init__(self):
         super().__init__('wetherspoons')
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_carpet(screen)
         _draw_walls(screen)
         _draw_fireplace(screen)
@@ -327,4 +326,3 @@ class WilliamMorris(Scene):
         _draw_dining(screen, _SNUG, faces=('up', 'down', 'left'))
         _draw_doors(screen)
         _draw_lights(screen)
-        self._draw_objects(screen)

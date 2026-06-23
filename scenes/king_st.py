@@ -782,9 +782,7 @@ class KingSt(Scene):
         lamp_pts = [_render_lamp(self._bg, c, by) for c, by in _LAMPS]
         _apply_evening(self._bg, lamp_pts)
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         self._ensure_bg()
         screen.blit(self._bg, (0, 0))
         self._draw_traffic(screen)
-        self._draw_objects(screen)

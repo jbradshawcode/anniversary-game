@@ -286,8 +286,7 @@ class Garden(Scene):
     def enter(self, player):
         player.facing = 'right'
 
-    def draw(self, screen: pygame.Surface):
-        screen.fill((0, 0, 0))
+    def draw_structures(self, screen: pygame.Surface):
         _draw_paving(screen)
         _draw_perimeter(screen)
         _draw_booths(screen)
@@ -295,7 +294,6 @@ class Garden(Scene):
         _near_bench(screen)
         _draw_loose(screen)
         _draw_baskets(screen)
-        self._draw_objects(screen)
 
     def draw_overlay(self, screen: pygame.Surface):
         if self._overlay is None:

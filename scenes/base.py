@@ -1,9 +1,10 @@
 """Base scene class — shared by all scenes"""
 import pygame
 from config import (
-    SCENE_CONFIGS, TILE_SIZE, MAP_COLS, MAP_ROWS,
+    TILE_SIZE, MAP_COLS, MAP_ROWS,
     SCREEN_WIDTH, SCREEN_HEIGHT,
 )
+from scene_configs import SCENE_CONFIGS
 from systems.factory import ObjectFactory
 from systems.tilemap import TileMap
 
@@ -147,7 +148,17 @@ class Scene:
     def draw_overlay(self, screen: pygame.Surface):
         pass
 
+    bg_color = (0, 0, 0)
+
     def draw(self, screen: pygame.Surface):
-        # Default fallback; every concrete scene overrides this with its own art.
-        screen.fill((0, 0, 0))
+        """Standard render: clear to bg, lay down the scene's fixed structures,
+        then the live objects on top. Concrete scenes supply only their art via
+        draw_structures(); full-control scenes (the minigames) override draw()."""
+        screen.fill(self.bg_color)
+        self.draw_structures(screen)
         self._draw_objects(screen)
+
+    def draw_structures(self, screen: pygame.Surface):
+        """The scene's fixed art (floors, walls, fixtures), drawn under the
+        objects. Default: nothing — a black room."""
+        pass
