@@ -86,6 +86,7 @@ class Game:
 
         self.party = Party()
         king_st.set_party(self.party)      # crossing lights hold green while the crew cross
+        self.scene_manager.set_party(self.party)   # crew are solid — no walking through them
         self.story = StoryManager()
         self.cutscene = Cutscene()
         self.story.bind(self.dialogue, self.scene_manager, self.player,

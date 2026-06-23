@@ -18,9 +18,19 @@ class SceneManager:
         self._current_id: Optional[int] = None
         self.current: Optional['Scene'] = None
         self.story = None
+        self.party = None
+
+    def set_party(self, party) -> None:
+        self.party = party              # so the player can't walk through the crew
 
     def register(self, scene_id: int, scene: 'Scene'):
         self._scenes[scene_id] = scene
+
+    def _crew_at(self, tx: int, ty: int) -> bool:
+        """A crew member occupies this tile — a person is solid whatever their state."""
+        if self.party is None:
+            return False
+        return any(f.tile_x == tx and f.tile_y == ty for f in self.party.followers)
 
     def scene(self, scene_id: int) -> Optional['Scene']:
         return self._scenes.get(scene_id)
@@ -65,6 +75,9 @@ class SceneManager:
             if region and not self._in_region(player.tile_x + dtx,
                                               player.tile_y + dty, region):
                 return
+
+        if self._crew_at(player.tile_x + dtx, player.tile_y + dty):
+            return                            # a crew member is there — you can't walk through them
 
         player.try_move(dtx, dty, self.current)
 

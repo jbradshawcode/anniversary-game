@@ -104,7 +104,7 @@ VB_OOS_RANGE       = 0.42    # fraction of court width the reticle may roam (cen
 
 # AI attack — when attacking the human, bias the set away from the blocker.
 VB_AI_AVOID_BLOCK  = 0.6     # chance the AI setter picks the hitter away from your x
-VB_AI_BLOCK_CHANCE = 0.46    # chance the defending setter puts up a block (recompensed after the block-realism pass)
+VB_AI_BLOCK_CHANCE = 0.80    # chance the defending setter puts up a block
 VB_AI_TIP_CHANCE   = 0.16    # chance an in-system AI attack is a tip into the open front
 VB_AI_ATTACK_ERR   = 0.04    # chance a 'hard' AI swing is an unforced error (net/out -> point)
 VB_OOS_ERROR_MULT  = 1.8     # out-of-system swings miss more often
@@ -119,11 +119,11 @@ VB_RALLY_MAX       = 36      # safety cap on touches in a rally: forces it to en
 # (they hold their base/zone read until it elapses). Lower = sharper opponent.
 VB_DIFFICULTY = {
     'easy':   {'dig_base': 0.80, 'dig_hard': 0.28, 'error_frac': 0.65,
-               'avoid_block': 0.15, 'block_chance': 0.18, 'tip_chance': 0.06,
+               'avoid_block': 0.15, 'block_chance': 0.80, 'tip_chance': 0.06,
                'attack_spread': 2.4, 'serve_aggr': 0.2,
                'attack_err': 0.14, 'read': 0.25, 'reaction': 0.42},
     'medium': {'dig_base': 0.90, 'dig_hard': 0.46, 'error_frac': 0.55,
-               'avoid_block': 0.40, 'block_chance': 0.32, 'tip_chance': 0.14,
+               'avoid_block': 0.40, 'block_chance': 0.80, 'tip_chance': 0.14,
                'attack_spread': 1.5, 'serve_aggr': 0.55,
                'attack_err': 0.08, 'read': 0.55, 'reaction': 0.30},
     'hard':   {'dig_base': VB_AI_DIG_BASE, 'dig_hard': VB_AI_DIG_HARD,
@@ -133,7 +133,7 @@ VB_DIFFICULTY = {
                'attack_err': VB_AI_ATTACK_ERR, 'read': 0.80, 'reaction': 0.20},
     # Ch4 final only — relentless: near-flawless digs, lightning reads, ruthless attack.
     'insane': {'dig_base': 0.99, 'dig_hard': 0.80, 'error_frac': 0.30,
-               'avoid_block': 0.80, 'block_chance': 0.55, 'tip_chance': 0.20,
+               'avoid_block': 0.80, 'block_chance': 0.80, 'tip_chance': 0.20,
                'attack_spread': 0.7, 'serve_aggr': 1.0,
                'attack_err': 0.02, 'read': 0.95, 'reaction': 0.12},
 }

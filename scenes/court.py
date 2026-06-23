@@ -204,6 +204,7 @@ class VolleyCourt(Scene):
         self._block_cd = 0.0
         self._ai_block_jump = 0.0
         self._block_target: Optional[Dict[str, object]] = None
+        self._planned_spike: Optional[Tuple[float, float]] = None
         self._recv_cache: Optional[Tuple[tuple, VBActor]] = None
         self._react_t = 0.0          # defenders' reaction delay before breaking for the ball
         self._was_crossing = False
@@ -335,26 +336,32 @@ class VolleyCourt(Scene):
     def _at_net(self, a: VBActor) -> bool:
         return abs(a.y - VB_NET_Y) < VB_BLOCK_NET_DIST
 
-    def _block_lane(self, hitter: VBActor) -> float:
-        # variable: take the line, the cross, or the seam — so each block reads differently
-        r = random.random()
-        if r < 0.4:
-            lane = hitter.x                       # line (straight ahead of the hitter)
-        elif r < 0.8:
-            lane = 2 * _CX - hitter.x             # cross (the angle)
-        else:
-            lane = (hitter.x + _CX) / 2.0         # seam
-        return _clamp(lane + random.uniform(-14, 14), _COURT.left + 20, _COURT.right - 20)
+    def _block_read(self, tgt_x: float, read: float) -> float:
+        # READ block: take the lane the hitter is actually attacking — pinned tighter the
+        # sharper the defender reads (no more guessing a random line/cross/seam and
+        # whiffing the lane, which left the court wide open).
+        err = (1.0 - read) * 55.0
+        return _clamp(tgt_x + random.uniform(-err, err), _COURT.left + 20, _COURT.right - 20)
 
     def _commit_block(self, hitter: VBActor) -> None:
-        # when a set goes up, the defending AI setter (almost always) commits to a lane
-        # and moves there; a human defender blocks via the free jump instead.
+        # when a set goes up the defending AI setter reads the developing attack and
+        # takes that lane — it doesn't guess. If it can't slide there during the set's
+        # flight it's LATE: rather than commit to a lane it can't reach (and open the
+        # court), it holds off the net to cover the tip and defend. A human blocks via
+        # the free jump instead. (Same for either side's AI setter — _team_diff picks
+        # the right read skill for whichever team is defending.)
         blocker = self._role(1 - hitter.team, Role.SETTER)
-        bc = self._opp['block_chance']
-        if blocker.is_player or random.random() >= bc:
+        self._planned_spike = None
+        if blocker.is_player or random.random() >= self._opp['block_chance']:
             self._block_target = None
             return
-        self._block_target = {'blocker': blocker, 'lane_x': self._block_lane(hitter)}
+        tgt = self._spike_target_ai(hitter.team, True)      # what the hitter is going to hit
+        self._planned_spike = tgt
+        read = self._team_diff(blocker.team).get('read', 0.5)
+        lane_x = self._block_read(tgt[0], read)
+        reach = VB_ACTOR_SPEED * _SET[1] * 0.9              # how far it can slide before the swing
+        late = abs(blocker.x - lane_x) > reach
+        self._block_target = {'blocker': blocker, 'lane_x': lane_x, 'late': late}
 
     def _net_point(self, team: int, x: float) -> Tuple[float, float]:
         # the attack contact point at the net, in the hitter's lane
@@ -782,7 +789,7 @@ class VolleyCourt(Scene):
         # skill) adjusts the swing. A block parked squarely ahead is easy to read; a
         # disguised seam/cross block is hard. The set's flight is the reaction window.
         bt = self._block_target
-        if bt is None:
+        if bt is None or bt.get('late'):        # a late block sits off the net covering the tip — nothing to read
             return False
         squareness = _clamp(1.0 - abs(float(bt['lane_x']) - c.x) / (VB_BLOCK_REACH * 4.0), 0.0, 1.0)
         return random.random() < self._opp.get('read', 0.0) * (0.5 + 0.5 * squareness)
@@ -811,17 +818,18 @@ class VolleyCourt(Scene):
             if self._rally_touches >= VB_RALLY_MAX or random.random() < err:
                 self._ai_attack_error(team, c)    # unforced error / cap -> point, rally ends
                 return
-            if self._read_block(c):               # read a committed block -> tip over or place around it
+            if self._read_block(c):               # read the committed net block: tip over it, or
                 if random.random() < VB_AI_TIP_BIAS:
                     self._ai_tip(team, c)
-                else:                             # place into a gap, powered down (lost the crush)
-                    tx, ty = self._spike_target_ai(team, False)
-                    self.ball.launch((c.x, c.y), (tx, ty), 72, 0.80)
+                else:                             # swing INTO it — _check_block resolves tool/wipe/stuff
+                    tgt = self._planned_spike or self._spike_target_ai(team, perfect)
+                    self.ball.launch((c.x, c.y), tgt, *_SPIKE_AI)
                     self.fx.shake(2, 0.12)
             elif self._in_system and random.random() < self._opp['tip_chance']:
                 self._ai_tip(team, c)          # mix in a tip into the open front
             elif self._in_system:
-                self.ball.launch((c.x, c.y), self._spike_target_ai(team, perfect), *_SPIKE_AI)
+                tgt = self._planned_spike or self._spike_target_ai(team, perfect)
+                self.ball.launch((c.x, c.y), tgt, *_SPIKE_AI)   # hit the lane the block read off
                 self.fx.shake(3, 0.14)
             else:                              # out of system -> a driven down-ball (still a hit)
                 tx, ty = self._spike_target_ai(team, False)
@@ -1723,8 +1731,12 @@ class VolleyCourt(Scene):
                 continue                                     # holding a block at the net
             if aim_block and a.role == Role.SETTER and a.team == 1:
                 continue                                     # opp blocker holds during your aim-step
-            if bt is not None and a is bt['blocker']:        # slide along the net to the block lane
-                ny = float(VB_NET_Y - VB_NET_CONTACT if a.team == 1 else VB_NET_Y + VB_NET_CONTACT)
+            if bt is not None and a is bt['blocker']:        # slide to the read lane...
+                if bt.get('late'):                           # ...but if late, sit OFF the net to cover the tip
+                    off = VB_BLOCK_NET_DIST + 20
+                    ny = float(VB_NET_Y - off if a.team == 1 else VB_NET_Y + off)
+                else:
+                    ny = float(VB_NET_Y - VB_NET_CONTACT if a.team == 1 else VB_NET_Y + VB_NET_CONTACT)
                 a.move_toward(float(bt['lane_x']), ny, dt, VB_ACTOR_SPEED)
                 continue
             if a in base:                                    # take your base dig position
