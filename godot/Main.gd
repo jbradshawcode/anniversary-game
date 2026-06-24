@@ -32,6 +32,7 @@ func _ready() -> void:
 
 	_sm = SceneManager.new(world)
 	_sm.register(1, Gym.new())
+	_sm.register(3, Pub.new())
 	_sm.register(5, Corridor.new())
 	_sm.register(6, Promenade.new())
 	_party = Party.new(party_layer, _sm)
@@ -323,6 +324,14 @@ func _shot() -> void:
 	assert(_player.tile_x == 28, "player did not walk 8 tiles")
 	await get_tree().create_timer(0.4).timeout  # let the tail catch up
 	await _save("res://verify_party.png")
+
+	# The Salutation pub (scrolling) — jump in and capture mid-room.
+	_sm.go_to(3, _player, Vector2i(11, 8))
+	_player.facing = "up"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	assert(_sm.current is Pub, "pub not loaded")
+	await _save("res://verify_pub.png")
 
 	get_tree().quit()
 

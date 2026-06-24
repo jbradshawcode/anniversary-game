@@ -25,8 +25,8 @@ func _init() -> void:
 	world_cols = 40
 	walkable_cols = Vector2i(0, 39)
 	walkable_rows = Vector2i(4, 10)
-	exits = {"left": {"scene": 5}}
-	entry_points = {"right": Vector2i(1, 7)}  # arriving from the corridor's right door
+	exits = {"left": {"scene": 5}, "right": {"scene": 3}}   # left to corridor, right to the pub
+	entry_points = {"right": Vector2i(1, 7), "left": Vector2i(38, 7)}
 	grid = TileGrid.new(
 		walkable_cols, walkable_rows,
 		world_cols, Config.MAP_ROWS,
