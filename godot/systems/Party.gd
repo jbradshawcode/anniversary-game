@@ -3,8 +3,14 @@
 # points along it, the flanking column stepping onto a perpendicular tile (or
 # falling into single file where that's blocked). Followers obey the same solid
 # tiles the player does but are never in any scene's tile map, so they can't jam it.
+# Each follower is a real crew Npc subclass (bespoke art), not a generic blob.
 class_name Party
 extends RefCounted
+
+# The gym cast that heads to the pub, in conga order behind the player (party.py's
+# WEEK1_CREW). Leonard leaves after the Ch1 gym, so he never joins; Milla/Matúš lead.
+static func week1_crew() -> Array:
+	return [James, Dan, Matt, Nat, Bailey, Mayu, Wallace]
 
 var followers: Array = []
 var _trail: Array = []          # Array[Vector2i] of real tiles the player walked
@@ -23,11 +29,11 @@ func active() -> bool:
 	return not followers.is_empty()
 
 
-# roster: Array of {tee: Color, name: String}
+# roster: Array of crew Npc subclasses (e.g. [James, Dan, ...]); each instance
+# carries its own bespoke head art + display_name, so the cutscene resolves it by name.
 func form(player, roster: Array) -> void:
-	for spec in roster:
-		var f := Follower.new(player.tile_x, player.tile_y, spec["tee"])
-		f.display_name = spec.get("name", "")
+	for cls in roster:
+		var f = cls.new(player.tile_x, player.tile_y)
 		_layer.add_child(f)
 		f.position = player.position
 		followers.append(f)
@@ -125,7 +131,7 @@ func _walkable_px(px: float, py: float) -> bool:
 	return sc.is_walkable(int(px) / Config.TILE_SIZE, int(py) / Config.TILE_SIZE)
 
 
-func _step(f: Follower, target: Vector2, dt: float) -> void:
+func _step(f: Npc, target: Vector2, dt: float) -> void:
 	var d := target - f.position
 	var dist := d.length()
 	if dist < 0.5:                         # arrived -> rest exactly on the tile

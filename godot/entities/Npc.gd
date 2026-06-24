@@ -12,6 +12,9 @@ var facing := "down"
 var display_name := ""
 var interaction_text: Array = []
 
+var walking := false            # set by the Party mover to enable the walk bob
+var walk_phase := 0.0           # advanced by distance moved
+
 var sitting := false
 var holding := ""               # "" or a Drinks.KINDS value
 var _drink_off := Vector2(0, 32)
@@ -120,7 +123,11 @@ func _draw() -> void:
 	if sitting:
 		draw_seated()
 		return
-	_shadow()
+	_shadow()                              # stays grounded under the bob
+	var bob := 0.0
+	if walking:
+		bob = 3.0 * abs(sin(walk_phase))
+	draw_set_transform(Vector2(0, -bob), 0, Vector2.ONE)
 	if facing == "up":
 		_head_up()
 	elif facing == "left":
@@ -130,10 +137,11 @@ func _draw() -> void:
 	else:
 		_head_down()
 	_body()
+	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 	_blit_drink()
 
 
-# Shared seated render (reused by Follower._draw too).
+# Shared seated render (reused by draw_seated for any sitting crew member).
 func draw_seated() -> void:
 	_shadow()
 	draw_set_transform(Vector2(0, 4), 0, Vector2.ONE)

@@ -231,12 +231,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _crew_roster() -> Array:
-	return [
-		{"tee": Color8(70, 90, 150), "name": "James"},
-		{"tee": Color8(70, 140, 90), "name": "Dan"},
-		{"tee": Color8(170, 70, 70), "name": "Matt"},
-		{"tee": Color8(150, 90, 165), "name": "Nat"},
-	]
+	# Four distinct crew with bespoke art; the full WEEK1_CREW is wired by the screenplay.
+	return [James, Dan, Matt, Nat]
 
 
 func _demo_cutscene() -> Array:
