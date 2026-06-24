@@ -38,6 +38,7 @@ func _ready() -> void:
 	_sm.register(4, Garden.new())
 	_sm.register(5, Corridor.new())
 	_sm.register(6, Reception.new())
+	_sm.register(8, Passage.new())
 	_party = Party.new(party_layer, _sm)
 
 	_player = Player.new(5, 6)
@@ -449,6 +450,19 @@ func _shot() -> void:
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is Garden, "garden not loaded")
 	await _save("res://verify_garden.png")
+
+	# The underground passage (scene 8), entered for real through reception's east
+	# door so the exit-transition path is exercised, not just a go_to jump.
+	_sm.go_to(6, _player, Vector2i(14, 7))
+	_player.facing = "right"
+	await get_tree().process_frame
+	_sm.try_move(1, 0, _player)
+	assert(_sm.current is Passage, "reception->passage transition failed")
+	assert(_player.tile_x == 1 and _player.tile_y == 11, "passage entry point wrong")
+	_player.facing = "up"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	await _save("res://verify_passage.png")
 
 	get_tree().quit()
 
