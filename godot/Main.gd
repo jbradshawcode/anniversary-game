@@ -362,12 +362,19 @@ func _shot() -> void:
 
 	_player.place(5, 6)
 	_player.facing = "down"
+	# Fan the standing crew across all four facings so the shot exercises every
+	# head-art path (front / mirrored profile / back); leave Matúš in his seated pose.
+	var dirs := ["down", "left", "right", "up"]
+	var di := 0
 	for o in _sm.current.npcs:
-		o.facing = "down"
+		if not o.sitting:
+			o.facing = dirs[di % dirs.size()]
+			di += 1
 		o.queue_redraw()
+	assert(_sm.current.npcs.size() == 9, "gym crew not fully spawned")
 	await get_tree().process_frame
 
-	# Gym (start scene) — verify the lit hall.
+	# Gym (start scene) — verify the lit hall + the full Ch1 crew.
 	await get_tree().create_timer(0.3).timeout
 	await _save("res://verify_gym.png")
 
@@ -413,6 +420,7 @@ func _shot() -> void:
 	_player.queue_redraw()
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is Pub, "pub not loaded")
+	assert(_sm.current.npcs.any(func(n): return n is Milla), "Milla not spawned in pub")
 	await _save("res://verify_pub.png")
 
 	# Seating beat: walk the crew to the table and sit them with their drinks.

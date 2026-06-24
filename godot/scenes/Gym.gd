@@ -64,10 +64,20 @@ func _init() -> void:
 
 
 func _on_ready() -> void:
-	var matus := Matus.new(8, 6)
-	add_child(matus)
-	npcs.append(matus)
-	grid.set_blockers([Vector2i(matus.tile_x, matus.tile_y)])
+	# The Ch1 crew at their scene_configs tiles; Matúš the ref sits on the right bench.
+	var crew: Array = [
+		James.new(5, 7), Dan.new(14, 7), Matt.new(3, 4), Leonard.new(16, 7),
+		Nat.new(8, 1), Bailey.new(6, 4), Mayu.new(15, 10), Wallace.new(8, 10),
+	]
+	var matus := Matus.new(18, 3)
+	matus.sit("left")
+	crew.append(matus)
+	var blockers: Array = []
+	for c in crew:
+		add_child(c)
+		npcs.append(c)
+		blockers.append(Vector2i(c.tile_x, c.tile_y))
+	grid.set_blockers(blockers)
 
 
 func _build_walls() -> Array:

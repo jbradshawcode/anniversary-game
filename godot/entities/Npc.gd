@@ -83,6 +83,33 @@ func _oval(cx, cy, rx, ry, c) -> void:
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 
+# pygame.draw.ellipse form: top-left (x,y) + size (w,h), to match the source art.
+func _el(x, y, w, h, c) -> void:
+	_oval(x + w / 2.0, y + h / 2.0, w / 2.0, h / 2.0, c)
+
+
+# Outline rect (pygame rect with a width arg) — used for the wire-frame glasses.
+func _ro(x, y, w, h, c, width := 1.0) -> void:
+	draw_rect(Rect2(x, y, w, h), c, false, width)
+
+
+# Mirrored draw for the side heads: the source flips x by -(x+w) when `flip`,
+# so left/right share one profile (left = flip true, matching humanoid.py).
+func _rf(x, y, w, h, c, flip) -> void:
+	var x0 = (-(x + w)) if flip else x
+	draw_rect(Rect2(x0, y, w, h), c)
+
+
+func _elf(x, y, w, h, c, flip) -> void:
+	var x0 = (-(x + w)) if flip else x
+	_oval(x0 + w / 2.0, y + h / 2.0, w / 2.0, h / 2.0, c)
+
+
+func _rof(x, y, w, h, c, flip, width := 1.0) -> void:
+	var x0 = (-(x + w)) if flip else x
+	draw_rect(Rect2(x0, y, w, h), c, false, width)
+
+
 func _shadow() -> void:
 	draw_set_transform(Vector2(0, 14), 0, Vector2(1, 0.4))
 	draw_circle(Vector2.ZERO, 9, Color(0, 0, 0, 0.27))
@@ -96,6 +123,10 @@ func _draw() -> void:
 	_shadow()
 	if facing == "up":
 		_head_up()
+	elif facing == "left":
+		_head_side(true)
+	elif facing == "right":
+		_head_side(false)
 	else:
 		_head_down()
 	_body()
@@ -107,7 +138,7 @@ func draw_seated() -> void:
 	_shadow()
 	draw_set_transform(Vector2(0, 4), 0, Vector2.ONE)
 	if facing == "left" or facing == "right":
-		_head_down()
+		_head_side(facing == "left")
 		_seat_side(facing == "right")
 	else:
 		if facing == "up":
@@ -161,6 +192,12 @@ func _blit_drink() -> void:
 
 func _head_down() -> void:
 	draw_circle(Vector2(0, -6), 5, p_skin)
+
+
+# left/right share one profile head (auto-mirrored via flip); characters without
+# turned art fall back to the front head, as in humanoid.py.
+func _head_side(_flip: bool) -> void:
+	_head_down()
 
 
 func _head_up() -> void:

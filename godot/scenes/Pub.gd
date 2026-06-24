@@ -109,6 +109,14 @@ func _blocked() -> Array:
 	return b
 
 
+func _on_ready() -> void:
+	# Milla works the bar; her tile is the (already-solid) counter, so she's not a
+	# blocker — the player stands in front and talks to her through the bar.
+	var milla := Milla.new(18, 3)
+	add_child(milla)
+	npcs.append(milla)
+
+
 func _r(x, y, w, h, c) -> void:
 	draw_rect(Rect2(x, y, w, h), c)
 
