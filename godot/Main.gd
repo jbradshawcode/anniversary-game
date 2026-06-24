@@ -33,6 +33,7 @@ func _ready() -> void:
 
 	_sm = SceneManager.new(world)
 	_sm.register(1, Gym.new())
+	_sm.register(2, KingSt.new())
 	_sm.register(3, Pub.new())
 	_sm.register(5, Corridor.new())
 	_sm.register(6, Promenade.new())
@@ -432,6 +433,14 @@ func _shot() -> void:
 	_cutscene.start([["if_flag", "intro_done", [["flag", "if_ran"]]]])
 	await get_tree().process_frame
 	assert(_story.has("if_ran"), "if_flag did not splice its steps")
+
+	# King Street (scrolling 180-tile street) — jump in by the Salutation and capture.
+	_sm.go_to(2, _player, Vector2i(97, 5))
+	_player.facing = "down"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	assert(_sm.current is KingSt, "King St not loaded")
+	await _save("res://verify_kingst.png")
 
 	get_tree().quit()
 
