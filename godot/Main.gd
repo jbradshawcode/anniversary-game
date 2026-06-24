@@ -19,6 +19,7 @@ var _party: Party
 var _cutscene: Cutscene
 var _story: StoryManager
 var _save_mgr: SaveManager
+var _menu: Menu
 
 
 func _ready() -> void:
@@ -66,10 +67,60 @@ func _ready() -> void:
 	_save_mgr = SaveManager.new()
 	_save_mgr.bind(_story, _sm, _player)
 
+	var menu_layer := CanvasLayer.new()
+	menu_layer.layer = 2          # above dialogue/fade (layer 1)
+	add_child(menu_layer)
+	_menu = Menu.new()
+	menu_layer.add_child(_menu)
+
 	if "--shot" in OS.get_cmdline_user_args():
 		await _shot()
 	else:
-		_story.begin()
+		_open_title()
+
+
+func _open_title() -> void:
+	var opts := ["New Game"]
+	if _save_mgr.has(1):
+		opts.append("Continue")
+	opts.append("Quit")
+	_menu.open("ANNIVERSARY", opts, _on_title_select, "press Z to select")
+
+
+func _on_title_select(i: int) -> void:
+	var label: String = _menu.options[i]
+	match label:
+		"New Game":
+			_menu.close()
+			_sm.go_to(1, _player, Vector2i(5, 6))
+			_story.restore(0, [])
+			_story.begin()
+		"Continue":
+			_menu.close()
+			_save_mgr.apply(_save_mgr.load_slot(1))
+		"Quit":
+			get_tree().quit()
+
+
+func _open_pause() -> void:
+	var opts := ["Resume", "Save", "Load"] if _save_mgr.has(1) else ["Resume", "Save"]
+	opts.append("Quit to Title")
+	_menu.open("Paused", opts, _on_pause_select)
+
+
+func _on_pause_select(i: int) -> void:
+	match _menu.options[i]:
+		"Resume":
+			_menu.close()
+		"Save":
+			_save_mgr.save(1)
+			_menu.close()
+		"Load":
+			_save_mgr.apply(_save_mgr.load_slot(1))
+			_menu.close()
+		"Quit to Title":
+			_menu.close()
+			_open_title()
 
 
 func _process(delta: float) -> void:
@@ -77,7 +128,7 @@ func _process(delta: float) -> void:
 	if not _cutscene.active:           # the cutscene drives the crew during scripted moves
 		_party.update(delta, _player)
 	_cutscene.update(delta)
-	if _dialogue.active or _player.moving or _cutscene.active:
+	if _menu.is_open() or _dialogue.active or _player.moving or _cutscene.active:
 		return
 	var dtx := 0
 	var dty := 0
@@ -126,6 +177,24 @@ func _facing_for(dtx: int, dty: int) -> String:
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
+
+	if _menu.is_open():                # the menu owns input while it's up
+		match event.keycode:
+			KEY_UP:
+				_menu.move(-1)
+			KEY_DOWN:
+				_menu.move(1)
+			KEY_Z, KEY_ENTER:
+				_menu.select()
+			KEY_ESCAPE:
+				if _menu.title == "Paused":
+					_menu.close()
+		return
+
+	if event.keycode == KEY_ESCAPE and not _dialogue.active and not _cutscene.active:
+		_open_pause()
+		return
+
 	match event.keycode:
 		KEY_Z, KEY_ENTER:
 			if _dialogue.active:
@@ -224,6 +293,13 @@ func _interact_ahead() -> void:
 
 
 func _shot() -> void:
+	# Title screen.
+	_open_title()
+	await get_tree().create_timer(0.2).timeout
+	assert(_menu.is_open(), "title menu not open")
+	await _save("res://verify_title.png")
+	_menu.close()
+
 	# Story: begin -> the intro cutscene (Matúš addresses Sarah; both turn to face).
 	_story.begin()
 	await get_tree().create_timer(0.4).timeout
