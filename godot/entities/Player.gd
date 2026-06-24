@@ -29,6 +29,9 @@ var tile_y: int
 var _target := Vector2.ZERO
 var moving := false
 var facing := "down"
+var sitting := false
+var holding := ""               # "" or a Drinks.KINDS value
+var _drink_off := Vector2(0, 32)
 var scene  # the active scene (provides is_walkable / has_wall)
 
 
@@ -106,11 +109,17 @@ func _r(x: float, y: float, w: float, h: float, c: Color) -> void:
 	draw_rect(Rect2(x, y, w, h), c)
 
 
-func _draw() -> void:
-	# Grounded shadow (flattened circle ≈ the pygame 18×7 ellipse).
+func _shadow() -> void:
 	draw_set_transform(Vector2(0, 14), 0, Vector2(1, 0.4))
 	draw_circle(Vector2.ZERO, 9, Color(0, 0, 0, 0.27))
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+
+
+func _draw() -> void:
+	if sitting:
+		_draw_seated()
+		return
+	_shadow()
 
 	var bob := 0.0
 	if moving:
@@ -132,6 +141,99 @@ func _draw() -> void:
 	if facing == "up":
 		_back_hair()
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+	_blit_drink()
+
+
+# ── seating / drink ───────────────────────────────────────────────────────────
+func sit(face := "") -> void:
+	sitting = true
+	if face != "":
+		facing = face
+	if holding != "":
+		place_drink()
+	queue_redraw()
+
+
+func stand() -> void:
+	if sitting:
+		holding = ""
+	sitting = false
+	queue_redraw()
+
+
+func carry(kind: String) -> void:
+	holding = kind
+	if kind != "" and sitting:
+		place_drink()
+	queue_redraw()
+
+
+func place_drink() -> void:
+	var off := {"up": Vector2(0, -22), "down": Vector2(0, 32),
+		"left": Vector2(-28, 4), "right": Vector2(28, 4)}
+	var o: Vector2 = off.get(facing, Vector2(0, 32))
+	_drink_off = o + Vector2(randf_range(-3.5, 3.5), randf_range(-2.0, 2.0))
+
+
+func _blit_drink() -> void:
+	if holding == "":
+		return
+	if sitting:
+		Drinks.draw(self, _drink_off.x, _drink_off.y, holding)
+	else:
+		Drinks.draw(self, 8, 6, holding)
+
+
+func _draw_seated() -> void:
+	_shadow()
+	draw_set_transform(Vector2(0, 4), 0, Vector2.ONE)
+	if facing == "left" or facing == "right":
+		if facing == "left":
+			_head_left()
+		else:
+			_head_right()
+		_seat_side(facing == "right")
+	else:
+		if facing == "up":
+			_head_up()
+		else:
+			_head_down()
+		_seat_front()
+		if facing == "up":
+			_back_hair()
+	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+	_blit_drink()
+
+
+func _seat_front() -> void:
+	_r(-5, 1, 10, 5, _TEE)
+	_r(-5, 1, 1, 5, _TEE_SH)
+	_r(-2, 1, 4, 1, _TEE_SH)
+	_r(-5, 6, 10, 3, _SHORT)
+	_r(-5, 6, 10, 1, _SHORT_SH)
+	_r(-4, 9, 3, 2, _SKIN)
+	_r(1, 9, 3, 2, _SKIN)
+	_r(-4, 11, 3, 2, _SHOE)
+	_r(1, 11, 3, 2, _SHOE)
+	_r(-4, 12, 3, 1, _SOLE)
+	_r(1, 12, 3, 1, _SOLE)
+
+
+func _seat_side(right: bool) -> void:
+	var sr := func(x, y, w, h, c):
+		var x0 = x if right else -x - w
+		draw_rect(Rect2(x0, y, w, h), c)
+	sr.call(-5, 1, 10, 5, _TEE)
+	sr.call(-5, 1, 1, 5, _TEE_SH)
+	sr.call(-2, 1, 4, 1, _TEE_SH)
+	sr.call(-4, 6, 5, 3, _SHORT)
+	sr.call(-4, 6, 5, 1, _SHORT_SH)
+	sr.call(0, 6, 7, 3, _SHORT)
+	sr.call(0, 6, 7, 1, _SHORT_SH)
+	sr.call(6, 9, 3, 3, _SKIN)
+	sr.call(6, 9, 1, 3, _SKIN_SH)
+	sr.call(6, 12, 5, 2, _SHOE)
+	sr.call(6, 13, 5, 1, _SOLE)
 
 
 func _body() -> void:

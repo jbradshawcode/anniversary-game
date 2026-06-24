@@ -52,6 +52,14 @@ func _seed(player) -> void:
 	_last_tile = Vector2i(player.tile_x, player.tile_y)
 
 
+func stop_following() -> void:
+	_following = false
+	for f in followers:
+		if "walking" in f:
+			f.walking = false
+		f.queue_redraw()
+
+
 func update(dt: float, player) -> void:
 	if not _following or followers.is_empty():
 		return

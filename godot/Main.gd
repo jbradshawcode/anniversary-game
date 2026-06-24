@@ -74,7 +74,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_camera_limits()
-	_party.update(delta, _player)
+	if not _cutscene.active:           # the cutscene drives the crew during scripted moves
+		_party.update(delta, _player)
 	_cutscene.update(delta)
 	if _dialogue.active or _player.moving or _cutscene.active:
 		return
@@ -326,14 +327,40 @@ func _shot() -> void:
 	await _save("res://verify_party.png")
 
 	# The Salutation pub (scrolling) — jump in and capture mid-room.
-	_sm.go_to(3, _player, Vector2i(11, 8))
+	_sm.go_to(3, _player, Vector2i(12, 8))
 	_player.facing = "up"
 	_player.queue_redraw()
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is Pub, "pub not loaded")
 	await _save("res://verify_pub.png")
 
+	# Seating beat: walk the crew to the table and sit them with their drinks.
+	_cutscene.start(_demo_seating())
+	var guard := 0
+	while _cutscene.active and guard < 600:
+		guard += 1
+		await get_tree().process_frame
+	assert(not _cutscene.active, "seating cutscene did not finish")
+	assert(_player.sitting and _player.holding == "red_wine", "Sarah not seated with a drink")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_seated.png")
+
 	get_tree().quit()
+
+
+func _demo_seating() -> Array:
+	return [
+		["move", {
+			"James": Vector2i(10, 9), "Dan": Vector2i(11, 9), "sarah": Vector2i(12, 9),
+			"Nat": Vector2i(13, 9), "Matt": Vector2i(16, 9),
+		}],
+		["sit", "James", "down"], ["hold", "James", "beer"],
+		["sit", "Dan", "down"], ["hold", "Dan", "beer"],
+		["sit", "sarah", "down"], ["hold", "sarah", "red_wine"],
+		["sit", "Nat", "down"], ["hold", "Nat", "cider"],
+		["sit", "Matt", "down"], ["hold", "Matt", "white_wine"],
+		["settle"],
+	]
 
 
 func _walk_steps(n: int, dtx: int, dty: int) -> void:

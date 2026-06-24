@@ -192,6 +192,26 @@ func _begin_step() -> void:
 					a.facing = step[2]
 					a.queue_redraw()
 				_i += 1
+			"sit":
+				var a = _resolve(step[1])
+				if a != null and a.has_method("sit"):
+					a.sit(step[2] if step.size() > 2 else "")
+				_i += 1
+			"hold":
+				var a = _resolve(step[1])
+				if a != null and a.has_method("carry"):
+					a.carry(step[2])
+				_i += 1
+			"sit_all":
+				for f in _party.followers:
+					f.sit("")
+				if _player != null and _player.has_method("sit"):
+					_player.sit("")
+				_i += 1
+			"settle":
+				if _party != null:
+					_party.stop_following()
+				_i += 1
 			"wait":
 				_wait = float(step[1])
 				_i += 1

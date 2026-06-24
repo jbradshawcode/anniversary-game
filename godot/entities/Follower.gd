@@ -17,9 +17,10 @@ func _init(tx := 0, ty := 0, tee := Color8(70, 90, 150)) -> void:
 
 
 func _draw() -> void:
-	draw_set_transform(Vector2(0, 14), 0, Vector2(1, 0.4))
-	draw_circle(Vector2.ZERO, 9, Color(0, 0, 0, 0.27))
-	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+	if sitting:
+		draw_seated()
+		return
+	_shadow()
 
 	var bob := 0.0
 	if walking:
