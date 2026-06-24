@@ -1,0 +1,290 @@
+# Scripted cutscenes — interleave dialogue, scripted actor movement and fades.
+# Scoped port of systems/cutscene.py: a flat list of steps run in order, blocking
+# on the current step until it completes. Verbs supported here:
+#   ["say", [lines]]              dialogue (no speaker tag)
+#   ["say", [lines], "Name"]      dialogue with a speaker tag (turns to face listener)
+#   ["walk", who, Vector2i]       tween one actor to a tile; wait until arrived
+#   ["move", {who: Vector2i,...}] tween several actors in parallel; wait for all
+#   ["face", who, "down"|...]     set facing
+#   ["wait", seconds]             hold
+#   ["fade_out"/"fade_in", secs]  ramp the black overlay (non-blocking)
+#   ["flag", name]                set a story flag
+#   ["call", Callable]            run a callable once
+# (Deferred from the pygame original: ask/hub choices, walkto/moveto pathfind,
+#  pose, vanish, hold, sit/settle, if_flag.)
+# `who` is case-insensitive: sarah/player/you -> the player, else a party follower
+# or current-scene NPC matched on display name.
+class_name Cutscene
+extends RefCounted
+
+const _PLAYER_NAMES := ["sarah", "player", "you"]
+
+var active := false
+var flags := {}
+
+var _dialogue: DialogueBox
+var _sm: SceneManager
+var _player
+var _party: Party
+var _fade: ColorRect
+
+var _steps: Array = []
+var _i := 0
+var _wait := 0.0
+var _movers: Array = []        # [[actor, [Vector2 waypoints]], ...]
+var _await_dialogue := false
+var _last_speaker := ""
+var _fade_to := 0.0
+var _fade_rate := 0.0
+
+
+func bind(dialogue: DialogueBox, scenes: SceneManager, player, party: Party, fade: ColorRect) -> void:
+	_dialogue = dialogue
+	_sm = scenes
+	_player = player
+	_party = party
+	_fade = fade
+
+
+func start(steps: Array) -> void:
+	active = true
+	_steps = steps.duplicate()
+	_i = 0
+	_wait = 0.0
+	_movers = []
+	_await_dialogue = false
+	_last_speaker = ""
+	_begin_step()
+
+
+func stop() -> void:
+	active = false
+	_steps = []
+	_movers = []
+	_await_dialogue = false
+
+
+func _finish() -> void:
+	active = false
+	_steps = []
+	_movers = []
+
+
+# ── actor lookup ──────────────────────────────────────────────────────────────
+func _resolve(who: String):
+	var key := who.to_lower()
+	if key in _PLAYER_NAMES:
+		return _player
+	for f in _party.followers:
+		if str(f.display_name).to_lower() == key:
+			return f
+	if _sm.current != null:
+		for o in _sm.current.npcs:
+			if str(o.display_name).to_lower() == key:
+				return o
+	return null
+
+
+func _present_actors() -> Array:
+	var out: Array = []
+	if _player != null:
+		out.append(_player)
+	for f in _party.followers:
+		out.append(f)
+	if _sm.current != null:
+		for o in _sm.current.npcs:
+			out.append(o)
+	return out
+
+
+func _nearest_actor(a):
+	var best = null
+	var bd := -1
+	for o in _present_actors():
+		if o == a:
+			continue
+		var d: int = (o.tile_x - a.tile_x) ** 2 + (o.tile_y - a.tile_y) ** 2
+		if bd < 0 or d < bd:
+			bd = d
+			best = o
+	return best
+
+
+# Project rule: people turn to face whoever they're addressing.
+func _converse(speaker: String) -> void:
+	if speaker == "":
+		return
+	var a = _resolve(speaker)
+	if a == null:
+		_last_speaker = speaker
+		return
+	var b = null
+	if _last_speaker != "" and _last_speaker.to_lower() != speaker.to_lower():
+		b = _resolve(_last_speaker)
+	if b == null and _player != null and a != _player:
+		b = _player
+	if b == null:
+		b = _nearest_actor(a)
+	_face_actor(a, b)
+	_face_actor(b, a)
+	if a != null:
+		a.queue_redraw()
+	if b != null:
+		b.queue_redraw()
+	_last_speaker = speaker
+
+
+func _face_actor(a, b) -> void:
+	if a == null or b == null or a == b:
+		return
+	var dx: int = b.tile_x - a.tile_x
+	var dy: int = b.tile_y - a.tile_y
+	if dx == 0 and dy == 0:
+		return
+	if absi(dx) >= absi(dy):
+		a.facing = "right" if dx > 0 else "left"
+	else:
+		a.facing = "down" if dy > 0 else "up"
+
+
+# ── step dispatch ─────────────────────────────────────────────────────────────
+func _begin_step() -> void:
+	while true:
+		if _i >= _steps.size():
+			_finish()
+			return
+		var step: Array = _steps[_i]
+		var verb: String = step[0]
+		match verb:
+			"say":
+				var lines: Array = step[1]
+				var speaker: String = step[2] if step.size() > 2 else ""
+				_converse(speaker)
+				_i += 1
+				_await_dialogue = true
+				_dialogue.start(lines, speaker, _on_dialogue_done)
+				return
+			"walk", "move":
+				_setup_move(step)
+				if not _movers.is_empty():
+					return
+			"face":
+				var a = _resolve(step[1])
+				if a != null:
+					a.facing = step[2]
+					a.queue_redraw()
+				_i += 1
+			"wait":
+				_wait = float(step[1])
+				_i += 1
+				if _wait > 0:
+					return
+			"fade_out":
+				_set_fade(1.0, float(step[1]))
+				_i += 1
+			"fade_in":
+				_fade.color.a = 1.0
+				_set_fade(0.0, float(step[1]))
+				_i += 1
+			"flag":
+				flags[step[1]] = true
+				_i += 1
+			"call":
+				_i += 1
+				step[1].call()
+			_:
+				push_warning("unknown cutscene verb: " + str(verb))
+				_i += 1
+
+
+func _setup_move(step: Array) -> void:
+	var verb: String = step[0]
+	var targets: Dictionary = {step[1]: step[2]} if verb == "walk" else step[1]
+	_movers = []
+	for who in targets:
+		var actor = _resolve(who)
+		if actor == null:
+			continue
+		var dest: Vector2i = targets[who]
+		actor.tile_x = dest.x
+		actor.tile_y = dest.y
+		_movers.append([actor, [_tile_center(dest)]])
+	_i += 1
+
+
+func _on_dialogue_done() -> void:
+	_await_dialogue = false
+	_begin_step()
+
+
+func _set_fade(target: float, seconds: float) -> void:
+	_fade_to = target
+	if seconds <= 0:
+		_fade.color.a = target
+		_fade_rate = 0.0
+	else:
+		_fade_rate = (target - _fade.color.a) / seconds
+
+
+func _tile_center(t: Vector2i) -> Vector2:
+	var ts := Config.TILE_SIZE
+	return Vector2(t.x * ts + ts / 2, t.y * ts + ts / 2)
+
+
+# ── per-frame update ──────────────────────────────────────────────────────────
+func update(dt: float) -> void:
+	if not active:
+		return
+	if _fade_rate != 0.0:
+		_fade.color.a = clampf(_fade.color.a + _fade_rate * dt, 0.0, 1.0)
+		if (_fade_rate > 0 and _fade.color.a >= _fade_to) or (_fade_rate < 0 and _fade.color.a <= _fade_to):
+			_fade.color.a = _fade_to
+			_fade_rate = 0.0
+	if _await_dialogue:
+		return
+	if _wait > 0.0:
+		_wait -= dt
+		if _wait <= 0.0:
+			_begin_step()
+		return
+	if not _movers.is_empty():
+		_advance_movers(dt)
+
+
+func _advance_movers(dt: float) -> void:
+	var step := Config.TILE_MOVE_SPEED * dt
+	var still: Array = []
+	for m in _movers:
+		var actor = m[0]
+		var waypts: Array = m[1]
+		var target: Vector2 = waypts[0]
+		var d: Vector2 = target - actor.position
+		var dist: float = d.length()
+		if dist <= maxf(0.5, step):
+			actor.position = target
+			waypts.pop_front()
+		else:
+			_face_px(actor, target)
+			actor.position += d / dist * step
+			if "walking" in actor:
+				actor.walking = true
+			if "walk_phase" in actor:
+				actor.walk_phase += step * 0.2
+			actor.queue_redraw()
+		if not waypts.is_empty():
+			still.append([actor, waypts])
+		else:
+			if "walking" in actor:
+				actor.walking = false
+			actor.queue_redraw()
+	_movers = still
+	if _movers.is_empty():
+		_begin_step()
+
+
+func _face_px(actor, target: Vector2) -> void:
+	var d: Vector2 = target - actor.position
+	if absf(d.x) >= absf(d.y):
+		actor.facing = "right" if d.x > 0 else "left"
+	elif d.y != 0.0:
+		actor.facing = "down" if d.y > 0 else "up"
