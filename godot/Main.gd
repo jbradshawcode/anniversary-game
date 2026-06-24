@@ -37,7 +37,7 @@ func _ready() -> void:
 	_sm.register(3, Pub.new())
 	_sm.register(4, Garden.new())
 	_sm.register(5, Corridor.new())
-	_sm.register(6, Promenade.new())
+	_sm.register(6, Reception.new())
 	_party = Party.new(party_layer, _sm)
 
 	_player = Player.new(5, 6)
@@ -273,10 +273,10 @@ func _screenplay() -> Array:
 			"advance_when": "reached_corridor",
 		},
 		{
-			"name": "to_street",
-			"on_enter_scene": {6: ["Out into the dusk. The others are already ahead."]},
+			"name": "to_reception",
+			"on_enter_scene": {6: ["The reception lobby — quiet but for the hum behind the desk."]},
 			"advance_on_enter": 6,
-			"advance_when": "reached_street",
+			"advance_when": "reached_reception",
 		},
 	]
 
@@ -317,7 +317,7 @@ func _shot() -> void:
 	assert(_story.beat()["name"] == "to_corridor", "intro flag did not advance the beat")
 	# Entering the corridor fires its on-enter line and advances again.
 	_story.notify_enter(5)
-	assert(_story.beat()["name"] == "to_street", "scene-enter did not advance the beat")
+	assert(_story.beat()["name"] == "to_reception", "scene-enter did not advance the beat")
 	assert(_dialogue.active, "corridor on-enter line did not show")
 
 	# Disable the story for the remaining (lighting/party/choice) shots.
@@ -383,24 +383,23 @@ func _shot() -> void:
 	await get_tree().create_timer(0.3).timeout
 	await _save("res://verify_corridor.png")
 
-	# Corridor -> wide promenade; stand deep in it so the camera has scrolled.
+	# Corridor -> reception, entering through the west glass door.
 	_player.place(18, 5)
 	_player.facing = "right"
 	await get_tree().process_frame
 	_sm.try_move(1, 0, _player)
-	assert(_sm.current is Promenade, "corridor->promenade transition failed")
-	_player.place(20, 7)
+	assert(_sm.current is Reception, "corridor->reception transition failed")
+	assert(_player.tile_x == 2 and _player.tile_y == 7, "reception entry point wrong")
 	_player.facing = "right"
 	_player.queue_redraw()
-	await get_tree().create_timer(0.4).timeout
-	assert(_camera.limit_right == _sm.current.world_width(), "camera limit not updated")
-	await _save("res://verify_promenade.png")
+	await get_tree().create_timer(0.3).timeout
+	await _save("res://verify_reception.png")
 
-	# Party demo — summon the crew and walk so they trail in a staggered line.
+	# Party demo — summon the crew and walk across the lobby so they trail behind.
 	_party.form(_player, _crew_roster())
 	assert(_party.followers.size() == 4, "party did not form")
-	await _walk_steps(8, 1, 0)
-	assert(_player.tile_x == 28, "player did not walk 8 tiles")
+	await _walk_steps(6, 1, 0)
+	assert(_player.tile_x == 8, "player did not walk 6 tiles")
 	await get_tree().create_timer(0.4).timeout  # let the tail catch up
 	await _save("res://verify_party.png")
 
