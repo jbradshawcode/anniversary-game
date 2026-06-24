@@ -17,6 +17,7 @@ var _camera: Camera2D
 var _last_scene: GameScene
 var _party: Party
 var _cutscene: Cutscene
+var _story: StoryManager
 
 
 func _ready() -> void:
@@ -55,10 +56,15 @@ func _ready() -> void:
 	ui.add_child(_dialogue)
 
 	_cutscene = Cutscene.new()
-	_cutscene.bind(_dialogue, _sm, _player, _party, fade)
+	_story = StoryManager.new(_screenplay())
+	_cutscene.bind(_dialogue, _sm, _player, _party, fade, _story)
+	_story.bind(_dialogue, _sm, _player, _party, _cutscene)
+	_sm.story = _story
 
 	if "--shot" in OS.get_cmdline_user_args():
 		await _shot()
+	else:
+		_story.begin()
 
 
 func _process(delta: float) -> void:
@@ -97,6 +103,8 @@ func _update_camera_limits() -> void:
 	_camera.limit_right = _sm.current.world_width()
 	_camera.limit_bottom = Config.SCREEN_HEIGHT
 	_party.on_scene_change(_player)  # snap the crew to the player's new entry point
+	if _sm.story != null:
+		_sm.story.notify_enter(_sm.current_id())  # beat on-enter lines + advancement
 
 
 func _facing_for(dtx: int, dty: int) -> String:
@@ -162,6 +170,34 @@ func _demo_choice() -> Array:
 	]
 
 
+# A tiny three-beat screenplay over the existing scenes, to exercise the story
+# machine: an intro cutscene, then progress gated by reaching the next scene.
+func _screenplay() -> Array:
+	return [
+		{
+			"name": "intro",
+			"cutscene": [
+				["say", ["Right, listen up — nets are up.", "Win this and the pub's on me."], "Matúš"],
+				["say", ["Then let's not keep them waiting."], "Sarah"],
+				["flag", "intro_done"],
+			],
+			"advance_when": "intro_done",
+		},
+		{
+			"name": "to_corridor",
+			"on_enter_scene": {5: ["You step into the corridor — the pool hums behind the glass."]},
+			"advance_on_enter": 5,
+			"advance_when": "reached_corridor",
+		},
+		{
+			"name": "to_street",
+			"on_enter_scene": {6: ["Out into the dusk. The others are already ahead."]},
+			"advance_on_enter": 6,
+			"advance_when": "reached_street",
+		},
+	]
+
+
 # Talk to whatever NPC the player is facing; both turn to face each other.
 func _interact_ahead() -> void:
 	var d: Vector2i = _FACING_DELTA[_player.facing]
@@ -176,12 +212,26 @@ func _interact_ahead() -> void:
 
 
 func _shot() -> void:
-	# Cutscene demo: Matúš addresses Sarah across the court; both turn to face.
-	_cutscene.start(_demo_cutscene())
+	# Story: begin -> the intro cutscene (Matúš addresses Sarah; both turn to face).
+	_story.begin()
 	await get_tree().create_timer(0.4).timeout
-	assert(_cutscene.active, "cutscene not running")
+	assert(_cutscene.active, "intro cutscene not running")
+	assert(_story.beat()["name"] == "intro", "wrong starting beat")
 	assert(_player.facing == "right", "Sarah did not turn to face Matúš")
 	await _save("res://verify_cutscene.png")
+
+	# A cutscene ['flag'] delegates to story.set_flag, which advances the beat.
+	_cutscene.stop()
+	_cutscene.start([["flag", "intro_done"]])
+	await get_tree().process_frame
+	assert(_story.beat()["name"] == "to_corridor", "intro flag did not advance the beat")
+	# Entering the corridor fires its on-enter line and advances again.
+	_story.notify_enter(5)
+	assert(_story.beat()["name"] == "to_street", "scene-enter did not advance the beat")
+	assert(_dialogue.active, "corridor on-enter line did not show")
+
+	# Disable the story for the remaining (lighting/party/choice) shots.
+	_sm.story = null
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
@@ -194,7 +244,7 @@ func _shot() -> void:
 	_dialogue.advance()   # pick the first option -> runs ["flag", "warmed_up"]
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert(_cutscene.flags.has("warmed_up"), "ask branch did not run")
+	assert(_story.has("warmed_up"), "ask branch did not run")  # cutscene flag -> story
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
@@ -260,6 +310,9 @@ func _walk_steps(n: int, dtx: int, dty: int) -> void:
 
 
 func _save(path: String) -> void:
+	# Force a fresh draw before read-back — the OS may stop rendering an
+	# unfocused window, leaving get_image() with a stale frame otherwise.
 	await get_tree().process_frame
+	RenderingServer.force_draw()
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)

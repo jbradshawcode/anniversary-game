@@ -20,6 +20,9 @@ graphics upgrade that motivated the move.
   only renders one branch — drive the others too (e.g. a normal move AND a scene transition)
   and `assert(...)` their post-conditions in `Main._shot()`. A try_move signature regression
   once passed the shot because the shot only took the exit branch; interactive play caught it.
+- **Call `RenderingServer.force_draw()` before `get_viewport().get_texture().get_image()`.**
+  The OS stops rendering an unfocused window, so a bare read-back returns a stale frame —
+  three different scenes once saved byte-identical screenshots until force_draw was added.
 
 ## Architecture mapping (pygame → Godot)
 - `config.py`            → `globals/Config.gd` (autoload singleton, consts).

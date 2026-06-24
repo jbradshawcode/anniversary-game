@@ -6,6 +6,7 @@ class_name SceneManager
 extends RefCounted
 
 var current: GameScene
+var story = null                 # optional StoryManager: gates exits + scene-enter
 var _current_id: int = -1
 var _scenes: Dictionary = {}
 var _world: Node2D
@@ -13,6 +14,10 @@ var _world: Node2D
 
 func _init(world: Node2D) -> void:
 	_world = world
+
+
+func current_id() -> int:
+	return _current_id
 
 
 func register(scene_id: int, scene: GameScene) -> void:
@@ -44,6 +49,8 @@ func try_move(dtx: int, dty: int, player) -> void:
 	if exit_dir != "" and current.exits.has(exit_dir):
 		var res := _resolve_exit(current.exits[exit_dir], player)
 		if res[0] != null:
+			if story != null and story.gate_exit(_current_id, exit_dir, res[0]) == "block":
+				return
 			_transition_to(res[0], player, exit_dir, res[1])
 			return
 

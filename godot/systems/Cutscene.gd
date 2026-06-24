@@ -28,6 +28,8 @@ var _sm: SceneManager
 var _player
 var _party: Party
 var _fade: ColorRect
+var _story = null
+var _gen := 0          # bumped on (re)start; guards against a flag restarting us mid-loop
 
 var _steps: Array = []
 var _i := 0
@@ -45,16 +47,18 @@ var _hub_explored := {}
 var _hub_ref = null
 
 
-func bind(dialogue: DialogueBox, scenes: SceneManager, player, party: Party, fade: ColorRect) -> void:
+func bind(dialogue: DialogueBox, scenes: SceneManager, player, party: Party, fade: ColorRect, story = null) -> void:
 	_dialogue = dialogue
 	_sm = scenes
 	_player = player
 	_party = party
 	_fade = fade
+	_story = story
 
 
 func start(steps: Array) -> void:
 	active = true
+	_gen += 1
 	_steps = steps.duplicate()
 	_i = 0
 	_wait = 0.0
@@ -156,6 +160,7 @@ func _face_actor(a, b) -> void:
 
 # ── step dispatch ─────────────────────────────────────────────────────────────
 func _begin_step() -> void:
+	var gen := _gen
 	while true:
 		if _i >= _steps.size():
 			_finish()
@@ -200,11 +205,18 @@ func _begin_step() -> void:
 				_set_fade(0.0, float(step[1]))
 				_i += 1
 			"flag":
-				flags[step[1]] = true
 				_i += 1
+				if _story != null:
+					_story.set_flag(step[1])   # may advance a beat -> start a new cutscene
+				else:
+					flags[step[1]] = true
+				if _gen != gen:                # we were restarted; abandon this stale loop
+					return
 			"call":
 				_i += 1
 				step[1].call()
+				if _gen != gen:
+					return
 			_:
 				push_warning("unknown cutscene verb: " + str(verb))
 				_i += 1
@@ -238,7 +250,13 @@ func _on_ask_done() -> void:
 		return
 	if outcome[0] is String and outcome[0] in ["flag", "game_over"]:
 		if outcome[0] == "flag":
-			flags[outcome[1]] = true
+			var gen := _gen
+			if _story != null:
+				_story.set_flag(outcome[1])
+			else:
+				flags[outcome[1]] = true
+			if _gen != gen:
+				return
 			_begin_step()
 		else:
 			_finish()
