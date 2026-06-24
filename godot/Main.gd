@@ -121,6 +121,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_X:
 			if _dialogue.active:
 				_dialogue.skip()
+		KEY_UP:
+			if _dialogue.is_choosing():
+				_dialogue.move_choice(-1)
+		KEY_DOWN:
+			if _dialogue.is_choosing():
+				_dialogue.move_choice(1)
 		KEY_P:
 			if not _party.active() and not _cutscene.active:
 				_party.form(_player, _crew_roster())
@@ -147,6 +153,15 @@ func _demo_cutscene() -> Array:
 	]
 
 
+func _demo_choice() -> Array:
+	return [
+		["ask", "Warm up first?", {
+			"Yes, let's stretch.": [["flag", "warmed_up"]],
+			"No — I'm ready now.": [["say", ["Cocky. I like it."], "Matúš"]],
+		}, "Matúš"],
+	]
+
+
 # Talk to whatever NPC the player is facing; both turn to face each other.
 func _interact_ahead() -> void:
 	var d: Vector2i = _FACING_DELTA[_player.facing]
@@ -170,6 +185,20 @@ func _shot() -> void:
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
+
+	# Choice demo: an `ask` with two branches; drive a selection and check the flag.
+	_cutscene.start(_demo_choice())
+	await get_tree().create_timer(0.5).timeout
+	assert(_dialogue.is_choosing(), "choices did not appear")
+	await _save("res://verify_choice.png")
+	_dialogue.advance()   # pick the first option -> runs ["flag", "warmed_up"]
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert(_cutscene.flags.has("warmed_up"), "ask branch did not run")
+	_cutscene.stop()
+	_dialogue.active = false
+	_dialogue.visible = false
+
 	_player.place(5, 6)
 	_player.facing = "down"
 	for o in _sm.current.npcs:

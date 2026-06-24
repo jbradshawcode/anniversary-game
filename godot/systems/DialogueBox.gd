@@ -9,6 +9,7 @@ var _BG := Color8(0, 0, 0)
 var _BORDER := Color8(255, 255, 255)
 var _TEXT := Color8(255, 255, 255)
 var _NAME := Color8(255, 210, 80)
+var _SEL := Color8(255, 50, 50)
 
 const _MARGIN := 16
 const _BOX_H := 96
@@ -24,7 +25,11 @@ var _full := ""
 var _shown := 0.0
 var _typing := false
 var _font: Font
-var _on_done := Callable()  # invoked when the last page closes (cutscene advance)
+var _on_done := Callable()    # invoked when the last page closes (cutscene advance)
+var _on_choice := Callable()  # invoked with the selected label on a choice page
+var _choosing := false
+var _choice_keys: Array = []
+var _choice_index := 0
 
 
 func _ready() -> void:
@@ -34,11 +39,12 @@ func _ready() -> void:
 	visible = false
 
 
-func start(pages: Array, speaker := "", on_done := Callable()) -> void:
+func start(pages: Array, speaker := "", on_done := Callable(), on_choice := Callable()) -> void:
 	_pages = pages.duplicate()
 	_index = 0
 	_speaker = speaker
 	_on_done = on_done
+	_on_choice = on_choice
 	active = true
 	visible = true
 	_begin_page()
@@ -48,20 +54,48 @@ func _begin_page() -> void:
 	if _index >= _pages.size():
 		active = false
 		visible = false
+		_choosing = false
 		queue_redraw()
 		var cb := _on_done
 		_on_done = Callable()
 		if cb.is_valid():
 			cb.call()
 		return
-	_full = str(_pages[_index])
+	var page = _pages[_index]
+	if page is Dictionary:                # a choice page: {text, choices: [labels]}
+		_full = str(page["text"])
+		_choosing = true
+		_choice_keys = page["choices"]
+		_choice_index = 0
+	else:
+		_full = str(page)
+		_choosing = false
 	_shown = 0.0
 	_typing = _full.length() > 0
 	queue_redraw()
 
 
+func is_choosing() -> bool:
+	return _choosing and not _typing
+
+
+func move_choice(delta: int) -> void:
+	if not is_choosing() or delta == 0:
+		return
+	_choice_index = wrapi(_choice_index + delta, 0, _choice_keys.size())
+	queue_redraw()
+
+
 func advance() -> void:
 	if _typing:  # confirm waits for the line; only cancel (X) rushes it
+		return
+	if _choosing:
+		var sel: String = _choice_keys[_choice_index]
+		_choosing = false
+		if _on_choice.is_valid():
+			_on_choice.call(sel)
+		_index = _pages.size()    # a choice page is terminal -> finish (fires on_done)
+		_begin_page()
 		return
 	_index += 1
 	_begin_page()
@@ -91,7 +125,11 @@ func _draw() -> void:
 		return
 	var sw := Config.SCREEN_WIDTH
 	var sh := Config.SCREEN_HEIGHT
-	var box := Rect2(_MARGIN, sh - _BOX_H - _MARGIN, sw - _MARGIN * 2, _BOX_H)
+	var show_choices := _choosing and not _typing
+	var h := _BOX_H
+	if show_choices:
+		h += _choice_keys.size() * 24
+	var box := Rect2(_MARGIN, sh - h - _MARGIN, sw - _MARGIN * 2, h)
 	draw_rect(box, _BG)
 	draw_rect(box, _BORDER, false, _BORDER_W)
 
@@ -109,3 +147,12 @@ func _draw() -> void:
 	var tw := box.size.x - _PAD * 2
 	draw_multiline_string(_font, Vector2(tx, ty), "* " + shown_text,
 		HORIZONTAL_ALIGNMENT_LEFT, tw, _FONT_SIZE, -1, _TEXT)
+
+	if show_choices:
+		var cy := box.position.y + _PAD + 24 + _font.get_ascent(_FONT_SIZE)
+		for i in range(_choice_keys.size()):
+			if i == _choice_index:
+				draw_string(_font, Vector2(tx, cy), ">", HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _SEL)
+			draw_string(_font, Vector2(tx + 18, cy), str(_choice_keys[i]),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _TEXT)
+			cy += 24

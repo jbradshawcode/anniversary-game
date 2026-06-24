@@ -21,6 +21,7 @@ const _PLAYER_NAMES := ["sarah", "player", "you"]
 
 var active := false
 var flags := {}
+var on_game_over := Callable()  # set by Main: fn(lines)
 
 var _dialogue: DialogueBox
 var _sm: SceneManager
@@ -36,6 +37,12 @@ var _await_dialogue := false
 var _last_speaker := ""
 var _fade_to := 0.0
 var _fade_rate := 0.0
+var _ask_outcomes := {}
+var _ask_choice := ""
+var _hub_outcomes := {}
+var _hub_choice := ""
+var _hub_explored := {}
+var _hub_ref = null
 
 
 func bind(dialogue: DialogueBox, scenes: SceneManager, player, party: Party, fade: ColorRect) -> void:
@@ -164,6 +171,12 @@ func _begin_step() -> void:
 				_await_dialogue = true
 				_dialogue.start(lines, speaker, _on_dialogue_done)
 				return
+			"ask":
+				_begin_ask(step)
+				return
+			"hub":
+				_begin_hub(step)
+				return
 			"walk", "move":
 				_setup_move(step)
 				if not _movers.is_empty():
@@ -195,6 +208,85 @@ func _begin_step() -> void:
 			_:
 				push_warning("unknown cutscene verb: " + str(verb))
 				_i += 1
+
+
+# ── choices (ask) ─────────────────────────────────────────────────────────────
+# An outcome is ["flag", name] / ["game_over", lines] (a String-led tuple), or a
+# list of steps to splice in (Array of step-Arrays), or [] to just continue.
+func _begin_ask(step: Array) -> void:
+	var text: String = step[1]
+	var outcomes: Dictionary = step[2]
+	var speaker: String = step[3] if step.size() > 3 else ""
+	_converse(speaker)
+	_ask_outcomes = outcomes
+	_ask_choice = ""
+	_i += 1
+	_await_dialogue = true
+	_dialogue.start([{"text": text, "choices": outcomes.keys()}], speaker,
+		_on_ask_done, _on_ask_choice)
+
+
+func _on_ask_choice(label: String) -> void:
+	_ask_choice = label
+
+
+func _on_ask_done() -> void:
+	_await_dialogue = false
+	var outcome = _ask_outcomes.get(_ask_choice, null)
+	if outcome == null or (outcome is Array and outcome.is_empty()):
+		_begin_step()
+		return
+	if outcome[0] is String and outcome[0] in ["flag", "game_over"]:
+		if outcome[0] == "flag":
+			flags[outcome[1]] = true
+			_begin_step()
+		else:
+			_finish()
+			if on_game_over.is_valid():
+				on_game_over.call(outcome[1])
+	else:                               # a list of steps spliced in here
+		_splice(outcome)
+		_begin_step()
+
+
+# ── hub (explore-all menu) ────────────────────────────────────────────────────
+func _begin_hub(step: Array) -> void:
+	var text: String = step[1]
+	var outcomes: Dictionary = step[2]
+	var speaker: String = step[3] if step.size() > 3 else ""
+	if not is_same(outcomes, _hub_ref):     # a fresh hub -> reset exploration
+		_hub_ref = outcomes
+		_hub_explored = {}
+	var remaining: Array = []
+	for label in outcomes.keys():
+		if not _hub_explored.has(label):
+			remaining.append(label)
+	if remaining.is_empty():                # every topic seen -> move on
+		_i += 1
+		_begin_step()
+		return
+	_hub_outcomes = outcomes
+	_hub_choice = ""
+	_await_dialogue = true
+	_dialogue.start([{"text": text, "choices": remaining}], speaker,
+		_on_hub_done, _on_hub_choice)
+
+
+func _on_hub_choice(label: String) -> void:
+	_hub_choice = label
+
+
+func _on_hub_done() -> void:
+	_await_dialogue = false
+	_hub_explored[_hub_choice] = true
+	# Run the chosen topic, then fall back into the hub (still ahead at _i).
+	_splice(_hub_outcomes.get(_hub_choice, []))
+	_begin_step()
+
+
+func _splice(steps: Array) -> void:
+	for j in range(steps.size()):
+		_steps.insert(_i + j, steps[j])
 
 
 func _setup_move(step: Array) -> void:
