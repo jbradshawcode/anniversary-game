@@ -43,7 +43,7 @@ func _init() -> void:
 	walkable_rows = Vector2i(5, 12)
 	exits = {
 		"left": {"scene": 6, "rows": Vector2i(11, 11)},                              # -> reception
-		"right": {"scene": 9, "target": Vector2i(3, 3), "rows": Vector2i(5, 7)},      # -> courts (not ported yet)
+		"right": {"scene": 9, "target": Vector2i(3, 3), "rows": Vector2i(5, 7)},      # -> courts
 	}
 	entry_points = {"right": Vector2i(1, 11), "left": Vector2i(17, 6)}
 

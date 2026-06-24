@@ -40,6 +40,7 @@ func _ready() -> void:
 	_sm.register(6, Reception.new())
 	_sm.register(7, Courtyard.new())
 	_sm.register(8, Passage.new())
+	_sm.register(9, Courts.new())
 	_party = Party.new(party_layer, _sm)
 
 	_player = Player.new(5, 6)
@@ -488,6 +489,33 @@ func _shot() -> void:
 	_sm.try_move(0, -1, _player)
 	assert(_sm.current is KingSt, "courtyard->King St transition failed")
 	assert(_player.tile_x == 4 and _player.tile_y == 10, "King St entry point wrong")
+
+	# The netball courts (scene 9), entered for real through the passage's east
+	# exit so the exit-transition path is exercised, not just a go_to jump.
+	_sm.go_to(8, _player, Vector2i(18, 6))
+	_player.facing = "right"
+	await get_tree().process_frame
+	_sm.try_move(1, 0, _player)
+	assert(_sm.current is Courts, "passage->courts transition failed")
+	assert(_player.tile_x == 3 and _player.tile_y == 3, "courts entry point wrong")
+	_player.facing = "down"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	await _save("res://verify_courts.png")
+
+	# Normal in-scene step across the court (player.try_move path).
+	_player.place(8, 8)
+	_sm.try_move(1, 0, _player)
+	await get_tree().create_timer(0.2).timeout
+	assert(not _player.moving and _player.tile_x == 9, "courts normal move failed")
+
+	# Down-exit transition: out the bottom-left gate gap (cols 3,4) to the courtyard.
+	_player.place(3, 14)
+	_player.facing = "down"
+	await get_tree().process_frame
+	_sm.try_move(0, 1, _player)
+	assert(_sm.current is Courtyard, "courts->courtyard transition failed")
+	assert(_player.tile_x == 9 and _player.tile_y == 12, "courtyard entry point wrong")
 
 	get_tree().quit()
 
