@@ -41,6 +41,7 @@ func _ready() -> void:
 	_sm.register(7, Courtyard.new())
 	_sm.register(8, Passage.new())
 	_sm.register(9, Courts.new())
+	_sm.register(10, Wetherspoons.new())
 	_party = Party.new(party_layer, _sm)
 
 	_player = Player.new(5, 6)
@@ -516,6 +517,30 @@ func _shot() -> void:
 	_sm.try_move(0, 1, _player)
 	assert(_sm.current is Courtyard, "courts->courtyard transition failed")
 	assert(_player.tile_x == 9 and _player.tile_y == 12, "courtyard entry point wrong")
+
+	# The William Morris / Wetherspoons (scene 10). No ported scene transitions
+	# into it yet, so jump in, then drive both code paths: a normal in-scene step
+	# AND the down-exit transition to King Street, asserting each post-condition.
+	_sm.go_to(10, _player, Vector2i(9, 13))
+	_player.facing = "up"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	assert(_sm.current is Wetherspoons, "wetherspoons not loaded")
+	await _save("res://verify_wetherspoons.png")
+
+	# Normal in-scene step across the front room (player.try_move path).
+	_player.place(6, 13)
+	_sm.try_move(1, 0, _player)
+	await get_tree().create_timer(0.2).timeout
+	assert(not _player.moving and _player.tile_x == 7, "wetherspoons normal move failed")
+
+	# Down-exit transition: out the street doors (cols 8-11) onto King Street.
+	_player.place(9, 13)
+	_player.facing = "down"
+	await get_tree().process_frame
+	_sm.try_move(0, 1, _player)
+	assert(_sm.current is KingSt, "wetherspoons->King St transition failed")
+	assert(_player.tile_x == 177 and _player.tile_y == 4, "King St entry point wrong")
 
 	get_tree().quit()
 
