@@ -35,6 +35,7 @@ func _ready() -> void:
 	_sm.register(1, Gym.new())
 	_sm.register(2, KingSt.new())
 	_sm.register(3, Pub.new())
+	_sm.register(4, Garden.new())
 	_sm.register(5, Corridor.new())
 	_sm.register(6, Promenade.new())
 	_party = Party.new(party_layer, _sm)
@@ -441,6 +442,14 @@ func _shot() -> void:
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is KingSt, "King St not loaded")
 	await _save("res://verify_kingst.png")
+
+	# The beer garden (scene 4).
+	_sm.go_to(4, _player, Vector2i(6, 7))
+	_player.facing = "right"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	assert(_sm.current is Garden, "garden not loaded")
+	await _save("res://verify_garden.png")
 
 	get_tree().quit()
 
