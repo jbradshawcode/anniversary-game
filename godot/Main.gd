@@ -21,6 +21,12 @@ var _story: StoryManager
 var _save_mgr: SaveManager
 var _menu: Menu
 
+# Shot/telemetry: which stub last fired + the chapter card text (the minigame,
+# phone and results/chapter-card systems aren't built yet — these placeholders
+# keep the screenplay walkable end-to-end until they land).
+var _last_stub := ""
+var _chapter_card := ""
+
 
 func _ready() -> void:
 	Engine.max_fps = 60  # cap so dt stays sane (the 2D scenes otherwise run 1000s of fps)
@@ -65,9 +71,11 @@ func _ready() -> void:
 	ui.add_child(_dialogue)
 
 	_cutscene = Cutscene.new()
-	_story = StoryManager.new(_screenplay())
+	_story = StoryManager.new(Screenplay.weeks())
 	_cutscene.bind(_dialogue, _sm, _player, _party, fade, _story)
 	_story.bind(_dialogue, _sm, _player, _party, _cutscene)
+	_cutscene.on_game_over = _on_game_over
+	_wire_story_stubs()
 	_sm.story = _story
 
 	_save_mgr = SaveManager.new()
@@ -85,6 +93,44 @@ func _ready() -> void:
 		_open_title()
 
 
+# Placeholder handlers for the three systems not yet ported (minigames, phone UI,
+# results/chapter cards). Each shows a one-card dialogue and then sets the beat's
+# advance flag, so the story flows on; the real systems slot into these same seams.
+func _wire_story_stubs() -> void:
+	_story.on_launch_vb = func():
+		_stub_card("vb", "(Volleyball minigame — not built yet. Auto-win.)")
+	_story.on_launch_dive = func():
+		_stub_card("dive", "(Dive practice — not built yet. Auto-pass.)")
+	_story.on_phone = func(_thread, with_who, adv, title, date):
+		_last_stub = "phone"
+		var lines := ["%s — texts with %s (%s)." % [title, with_who, date],
+			"(Phone screen not built yet.)"]
+		if _story.beat().get("end_game", false):
+			lines.append("(THE END — closing card not built yet.)")
+		_dialogue.start(lines, "", func(): _story.set_flag(adv))
+	_story.on_week_end = func():
+		_last_stub = "week_end"
+		var b := _story.beat()
+		var msg := "(THE END — closing card not built yet.)" if b.get("end_game", false) \
+			else "%s complete. (Results card not built yet.)" % str(_story.week_title())
+		_dialogue.start([msg], "", func(): _story.set_flag(b.get("advance_when", "")))
+	_story.on_chapter_start = func(week, title, _first):
+		# A chapter-title card needs the (deferred) results-screen mode to sit cleanly
+		# before the beat's cutscene; for now record it without blocking the cutscene.
+		_chapter_card = "Week %d — %s" % [week, title]
+
+
+func _stub_card(kind: String, line: String) -> void:
+	_last_stub = kind
+	var adv: String = _story.beat().get("advance_when", "")
+	_dialogue.start([line], "", func(): _story.set_flag(adv))
+
+
+func _on_game_over(lines: Array) -> void:
+	# Show the message, then replay the current beat's cutscene from the top.
+	_dialogue.start(lines, "", func(): _cutscene.start(_story.beat().get("cutscene", [])))
+
+
 func _open_title() -> void:
 	var opts := ["New Game"]
 	if _save_mgr.has(1):
@@ -99,8 +145,7 @@ func _on_title_select(i: int) -> void:
 		"New Game":
 			_menu.close()
 			_sm.go_to(1, _player, Vector2i(5, 6))
-			_story.restore(0, [])
-			_story.begin()
+			_story.start_new()
 		"Continue":
 			_menu.close()
 			_save_mgr.apply(_save_mgr.load_slot(1))
@@ -253,45 +298,37 @@ func _demo_choice() -> Array:
 	]
 
 
-# A tiny three-beat screenplay over the existing scenes, to exercise the story
-# machine: an intro cutscene, then progress gated by reaching the next scene.
-func _screenplay() -> Array:
-	return [
-		{
-			"name": "intro",
-			"cutscene": [
-				["say", ["Right, listen up — nets are up.", "Win this and the pub's on me."], "Matúš"],
-				["say", ["Then let's not keep them waiting."], "Sarah"],
-				["flag", "intro_done"],
-			],
-			"advance_when": "intro_done",
-		},
-		{
-			"name": "to_corridor",
-			"on_enter_scene": {5: ["You step into the corridor — the pool hums behind the glass."]},
-			"advance_on_enter": 5,
-			"advance_when": "reached_corridor",
-		},
-		{
-			"name": "to_reception",
-			"on_enter_scene": {6: ["The reception lobby — quiet but for the hum behind the desk."]},
-			"advance_on_enter": 6,
-			"advance_when": "reached_reception",
-		},
-	]
-
-
-# Talk to whatever NPC the player is facing; both turn to face each other.
+# Interact with the tile the player faces. The story gets first refusal (a
+# checklist tick, an interact_ask choice cutscene, or a line to a seated follower);
+# only if it declines do we fall back to the NPC's own idle lines. Both turn to
+# face each other when there's someone there.
 func _interact_ahead() -> void:
 	var d: Vector2i = _FACING_DELTA[_player.facing]
 	var tx := _player.tile_x + d.x
 	var ty := _player.tile_y + d.y
+	var who = null
 	for npc in _sm.current.npcs:
 		if npc.tile_x == tx and npc.tile_y == ty:
-			npc.facing = _OPPOSITE[_player.facing]
-			npc.queue_redraw()
-			_dialogue.start(npc.interaction_lines(), npc.display_name)
-			return
+			who = npc
+			break
+	if who == null:
+		for f in _party.followers:
+			if f.tile_x == tx and f.tile_y == ty:
+				who = f
+				break
+	var name: String = str(who.display_name) if who != null else ""
+
+	if _sm.story != null and _sm.story.interact(tx, ty, name):
+		if who != null:
+			who.facing = _OPPOSITE[_player.facing]
+			who.queue_redraw()
+		return
+	if _sm.story != null and _sm.story.talk(name):
+		return
+	if who != null:
+		who.facing = _OPPOSITE[_player.facing]
+		who.queue_redraw()
+		_dialogue.start(who.interaction_lines(), who.display_name)
 
 
 func _shot() -> void:
@@ -302,32 +339,131 @@ func _shot() -> void:
 	await _save("res://verify_title.png")
 	_menu.close()
 
-	# Story: begin -> the intro cutscene (Matúš addresses Sarah; both turn to face).
-	_story.begin()
+	# Gym (start scene) — verify the lit hall + the full Ch1 crew, before the story
+	# tests below mutate it (despawn joiners, strip absent crew).
+	_player.place(5, 6)
+	_player.facing = "down"
+	# Fan the standing crew across all four facings so the shot exercises every
+	# head-art path (front / mirrored profile / back); leave Matúš in his seated pose.
+	var dirs := ["down", "left", "right", "up"]
+	var di := 0
+	for o in _sm.current.npcs:
+		if not o.sitting:
+			o.facing = dirs[di % dirs.size()]
+			di += 1
+		o.queue_redraw()
+	assert(_sm.current.npcs.size() == 9, "gym crew not fully spawned")
+	await get_tree().create_timer(0.3).timeout
+	await _save("res://verify_gym.png")
+
+	# ── The real screenplay ─────────────────────────────────────────────────────
+	# New game: begin -> Week 1's opening (chapter card fires, then the check_baskets
+	# cutscene runs; Nat walks to the bench and sits).
+	_sm.go_to(1, _player, Vector2i(5, 6))
+	_story.start_new()
 	await get_tree().create_timer(0.4).timeout
-	assert(_cutscene.active, "intro cutscene not running")
-	assert(_story.beat()["name"] == "intro", "wrong starting beat")
-	assert(_player.facing == "right", "Sarah did not turn to face Matúš")
+	assert(_cutscene.active, "opening cutscene not running")
+	assert(_story.beat()["name"] == "check_baskets", "wrong starting beat")
+	assert(_chapter_card == "Week 1 — Week 1", "chapter-start callback did not fire")
 	await _save("res://verify_cutscene.png")
+	await _drive(900)                              # let the opening cutscene finish
 
-	# A cutscene ['flag'] delegates to story.set_flag, which advances the beat.
+	# Checklist beat: check both baskets in either order; the beat advances once
+	# both are ticked (order-aware "more"/"done" lines).
+	assert(_story.interact(2, 7), "near basket not interactable")
+	await _drive(300)                              # near basket closes; beat does not advance yet
+	assert(_story.has("w1_basket_near"), "first basket flag not set")
+	assert(_story.beat()["name"] == "check_baskets", "advanced before both baskets checked")
+	assert(_story.interact(17, 7), "far basket not interactable")
+	assert(await _play_until("leonard_offer", 300), "checklist did not advance the beat")
+
+	# Drive the choice/flag beats through to the volleyball launch: the leonard_offer
+	# cutscene's flag advances, vb_setup's `ask` (choice 0) flags w1_vb_set, and
+	# gym_match hands off to the launch_volleyball stub.
+	assert(await _play_until("gym_match", 2000), "did not reach gym_match")
+	assert(_last_stub == "vb", "launch_volleyball stub did not fire")
+	assert(_dialogue.active, "volleyball placeholder card did not show")
+	assert(await _play_until("pub_invite", 800), "vb stub did not advance to pub_invite")
 	_cutscene.stop()
-	_cutscene.start([["flag", "intro_done"]])
-	await get_tree().process_frame
-	assert(_story.beat()["name"] == "to_corridor", "intro flag did not advance the beat")
-	# Entering the corridor fires its on-enter line and advances again.
-	_story.notify_enter(5)
-	assert(_story.beat()["name"] == "to_reception", "scene-enter did not advance the beat")
-	assert(_dialogue.active, "corridor on-enter line did not show")
+	_dialogue.active = false
+	_dialogue.visible = false
 
-	# Disable the story for the remaining (lighting/party/choice) shots.
+	# Absent crew: entering a Week-2 beat strips Leonard from the gym.
+	_story.restore(_story.index_of("w2_greet"), [])
+	_story.begin()
+	assert(not _sm.current.npcs.any(func(n): return n is Leonard), "absent crew not removed")
+
+	# Party `form`: summon the Week-1 crew; the seven joiners despawn from the gym.
+	_party.clear()
+	var gym_before: int = _sm.current.npcs.size()
+	_story.restore(_story.index_of("walk_to_pub"), [])
+	_story.begin()
+	assert(_party.followers.size() == 7, "party did not form the full crew")
+	assert(_sm.current.npcs.size() == gym_before - 7, "joining crew not despawned from the gym")
+
+	# `goto` relocates the player to the beat's scene + tile.
+	_cutscene.stop()
+	_party.clear()
+	_story.restore(_story.index_of("w2_arrive"), [])
+	_story.begin()
+	assert(_sm.current_id() == 1 and _player.tile_x == 9 and _player.tile_y == 1, "goto did not relocate")
+	_cutscene.stop()
+
+	# Party form-with-exclude (w3_garden leaves Bailey behind).
+	_party.clear()
+	_story.restore(_story.index_of("w3_garden"), [])
+	_story.begin()
+	assert(not _party.followers.any(func(f): return f is Bailey), "excluded crew joined the party")
+	assert(_party.followers.size() == 6, "form-with-exclude wrong crew size")
+	_cutscene.stop()
+
+	# Minigame (dive) + phone + chapter-end + finale stubs each fire and dialogue-gate.
+	_party.clear()
+	_dialogue.active = false
+	_story.restore(_story.index_of("w3_dive"), [])
+	_story.begin()
+	assert(_last_stub == "dive" and _dialogue.active, "launch_dive stub did not fire")
+	_dialogue.active = false
+	_story.restore(_story.index_of("scrims_texts"), [])
+	_story.begin()
+	assert(_last_stub == "phone" and _dialogue.active, "phone interlude stub did not fire")
+	_dialogue.active = false
+	_story.restore(_story.index_of("w3_end"), [])
+	_story.begin()
+	assert(_last_stub == "week_end" and _dialogue.active, "end_chapter stub did not fire")
+	_dialogue.active = false
+	_story.restore(_story.index_of("the_date"), [])
+	_story.begin()
+	assert(_last_stub == "phone" and _dialogue.active, "finale stub did not fire")
+	_dialogue.active = false
+
+	# gate_exit verdicts: a barred door blocks, the chapter-end edge ends the week.
+	_story.restore(_story.index_of("wind_down"), [])
+	assert(_story.gate_exit(3, "down", 4) == "block", "door_block not enforced")
+	assert(_story.gate_exit(3, "left", 2) == "end_week", "end_week edge not detected")
+
+	# interact_ask: talking to the named NPC fires its choice cutscene.
+	_cutscene.stop()
+	_dialogue.active = false
+	_story.restore(_story.index_of("w2_ready"), [])
+	assert(_story.interact(0, 0, "James"), "interact_ask did not fire")
+	assert(_cutscene.active, "interact_ask cutscene not running")
+	_cutscene.stop()
+
+	# talk: a seated-crew goodbye line.
+	_dialogue.active = false
+	_story.restore(_story.index_of("wind_down"), [])
+	assert(_story.talk("James"), "talk line not shown")
+	assert(_dialogue.active, "talk did not open dialogue")
+
+	# Disable the story for the remaining (save/load, lighting, party, choice) shots.
 	_sm.story = null
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
 
 	# Save/load round-trip: write a known state, scramble it, load it back.
-	_story.restore(1, ["intro_done"])
+	_story.restore(_story.index_of("w2_ready"), ["w2_arrived", "w2_greeted"])
 	_sm.go_to(5, _player, Vector2i(3, 5))
 	_player.facing = "left"
 	_save_mgr.save(2)
@@ -336,8 +472,8 @@ func _shot() -> void:
 	_sm.go_to(1, _player, Vector2i(9, 9))
 	_player.facing = "down"
 	_save_mgr.apply(_save_mgr.load_slot(2))     # load it back
-	assert(_story.beat()["name"] == "to_corridor", "beat not restored")
-	assert(_story.has("intro_done"), "flag not restored")
+	assert(_story.beat()["name"] == "w2_ready", "beat not restored")
+	assert(_story.has("w2_greeted"), "flag not restored")
 	assert(_sm.current_id() == 5, "scene not restored")
 	assert(_player.tile_x == 3 and _player.tile_y == 5, "tile not restored")
 	assert(_player.facing == "left", "facing not restored")
@@ -355,24 +491,6 @@ func _shot() -> void:
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
-
-	_player.place(5, 6)
-	_player.facing = "down"
-	# Fan the standing crew across all four facings so the shot exercises every
-	# head-art path (front / mirrored profile / back); leave Matúš in his seated pose.
-	var dirs := ["down", "left", "right", "up"]
-	var di := 0
-	for o in _sm.current.npcs:
-		if not o.sitting:
-			o.facing = dirs[di % dirs.size()]
-			di += 1
-		o.queue_redraw()
-	assert(_sm.current.npcs.size() == 9, "gym crew not fully spawned")
-	await get_tree().process_frame
-
-	# Gym (start scene) — verify the lit hall + the full Ch1 crew.
-	await get_tree().create_timer(0.3).timeout
-	await _save("res://verify_gym.png")
 
 	# Exercise a normal in-scene step (player.try_move path) before any exit, so a
 	# regression there can't hide behind the transition-only path.
@@ -438,7 +556,8 @@ func _shot() -> void:
 	_cutscene.start([["vanish", crew0.display_name, 0.1]])
 	await _drain_cutscene(200)
 	assert(not (crew0 in _party.followers), "vanish did not remove the follower")
-	_cutscene.start([["if_flag", "intro_done", [["flag", "if_ran"]]]])
+	# "warmed_up" was set by the choice demo above, so if_flag should splice its steps.
+	_cutscene.start([["if_flag", "warmed_up", [["flag", "if_ran"]]]])
 	await get_tree().process_frame
 	assert(_story.has("if_ran"), "if_flag did not splice its steps")
 
@@ -554,6 +673,36 @@ func _drain_cutscene(max_frames: int) -> void:
 	while _cutscene.active and g < max_frames:
 		g += 1
 		await get_tree().process_frame
+
+
+# Shot driver: advance any active dialogue (picking choice 0 — verified safe, no
+# game_over sits at index 0) and let movers/waits/fades run, until both the cutscene
+# and dialogue go idle.
+func _drive(cap: int) -> void:
+	var g := 0
+	while (_cutscene.active or _dialogue.active) and g < cap:
+		g += 1
+		if _dialogue.active:
+			if _dialogue._typing:
+				_dialogue.skip()
+			else:
+				_dialogue.advance()
+		await get_tree().process_frame
+
+
+# Like _drive, but stops as soon as the named beat becomes current (returns whether
+# it was reached). Used to play forward through several beats to a checkpoint.
+func _play_until(beat_name: String, cap: int) -> bool:
+	var g := 0
+	while _story.beat()["name"] != beat_name and g < cap:
+		g += 1
+		if _dialogue.active:
+			if _dialogue._typing:
+				_dialogue.skip()
+			else:
+				_dialogue.advance()
+		await get_tree().process_frame
+	return _story.beat()["name"] == beat_name
 
 
 func _demo_seating() -> Array:

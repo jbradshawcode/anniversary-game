@@ -31,14 +31,47 @@ func active() -> bool:
 
 # roster: Array of crew Npc subclasses (e.g. [James, Dan, ...]); each instance
 # carries its own bespoke head art + display_name, so the cutscene resolves it by name.
-func form(player, roster: Array) -> void:
+# `exclude` (display names) stay behind as scenery and don't join the party.
+func form(player, roster: Array, exclude := []) -> void:
+	var joined: Array = []
 	for cls in roster:
 		var f = cls.new(player.tile_x, player.tile_y)
+		if str(f.display_name) in exclude:
+			f.free()                    # excluded crew stay as scene NPCs
+			continue
 		_layer.add_child(f)
 		f.position = player.position
 		followers.append(f)
+		joined.append(str(f.display_name))
+	# Drop the joining crew from the current scene so they don't appear twice (the
+	# scene rebuilds its blocker layer, freeing the tiles they vacated).
+	if _sm != null and _sm.current != null and _sm.current.has_method("remove_named"):
+		_sm.current.remove_named(joined)
 	_seed(player)
 	_following = true
+
+
+func clear() -> void:
+	for f in followers:
+		f.queue_free()
+	followers = []
+	_trail = []
+	_following = false
+
+
+# Park the followers on the given tiles and stop following (e.g. a load into the
+# seated pub). sit() rests any held drink on the table; row >= 10 faces up.
+func settle(_scene_id: int, tiles: Array) -> void:
+	for i in range(mini(followers.size(), tiles.size())):
+		var f = followers[i]
+		var t: Vector2i = tiles[i]
+		f.tile_x = t.x
+		f.tile_y = t.y
+		f.position = _tile_center(t)
+		f.walking = false
+		f.sit("up" if t.y >= 10 else "down")
+		f.queue_redraw()
+	_following = false
 
 
 func on_scene_change(player) -> void:

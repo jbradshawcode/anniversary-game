@@ -24,6 +24,10 @@ func register(scene_id: int, scene: GameScene) -> void:
 	_scenes[scene_id] = scene
 
 
+func get_scene(scene_id: int):
+	return _scenes.get(scene_id, null)
+
+
 func start(scene_id: int, player) -> void:
 	_current_id = scene_id
 	current = _scenes[scene_id]
@@ -49,8 +53,13 @@ func try_move(dtx: int, dty: int, player) -> void:
 	if exit_dir != "" and current.exits.has(exit_dir):
 		var res := _resolve_exit(current.exits[exit_dir], player)
 		if res[0] != null:
-			if story != null and story.gate_exit(_current_id, exit_dir, res[0]) == "block":
-				return
+			if story != null:
+				var verdict: String = story.gate_exit(_current_id, exit_dir, res[0])
+				if verdict == "block":
+					return
+				if verdict == "end_week":
+					story.trigger_week_end()   # leaving ends the chapter; no transition
+					return
 			_transition_to(res[0], player, exit_dir, res[1])
 			return
 

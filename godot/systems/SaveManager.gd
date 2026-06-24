@@ -67,8 +67,10 @@ func slot_info(slot: int):
 
 
 func apply(data: Dictionary) -> void:
-	_story.restore(int(data["beat"]), data["flags"])
+	_story.restore(int(data["beat"]), data["flags"], int(data["scene_id"]))
 	var tile: Array = data["tile"]
 	_sm.go_to(int(data["scene_id"]), _player, Vector2i(int(tile[0]), int(tile[1])))
 	_player.facing = data["facing"]
 	_player.queue_redraw()
+	if _story.has_method("sync_party"):   # rebuild the follower crew for this beat
+		_story.sync_party(_player)

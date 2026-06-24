@@ -46,6 +46,25 @@ func _on_ready() -> void:
 	pass
 
 
+# Remove NPCs by display name (crew who join the party, or are absent this chapter)
+# and rebuild the dynamic blocker layer so the tiles they vacated turn walkable.
+func remove_named(names: Array) -> void:
+	if names.is_empty():
+		return
+	var keep: Array = []
+	for o in npcs:
+		if str(o.display_name) in names:
+			o.queue_free()
+		else:
+			keep.append(o)
+	npcs = keep
+	if grid != null:
+		var blockers: Array = []
+		for o in npcs:
+			blockers.append(Vector2i(o.tile_x, o.tile_y))
+		grid.set_blockers(blockers)
+
+
 func is_walkable(tx: int, ty: int) -> bool:
 	return grid.is_walkable(tx, ty)
 
