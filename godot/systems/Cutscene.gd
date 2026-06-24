@@ -39,6 +39,7 @@ var _await_dialogue := false
 var _last_speaker := ""
 var _fade_to := 0.0
 var _fade_rate := 0.0
+var _fader = null               # [actor, alpha_rate] for a blocking 'vanish'
 var _ask_outcomes := {}
 var _ask_choice := ""
 var _hub_outcomes := {}
@@ -65,6 +66,7 @@ func start(steps: Array) -> void:
 	_movers = []
 	_await_dialogue = false
 	_last_speaker = ""
+	_fader = null
 	_begin_step()
 
 
@@ -73,6 +75,7 @@ func stop() -> void:
 	_steps = []
 	_movers = []
 	_await_dialogue = false
+	_fader = null
 
 
 func _finish() -> void:
@@ -186,6 +189,21 @@ func _begin_step() -> void:
 				_setup_move(step)
 				if not _movers.is_empty():
 					return
+			"walkto", "moveto":
+				_setup_move(step, true)        # pathfind round solids
+				if not _movers.is_empty():
+					return
+			"if_flag":
+				_i += 1
+				if _has_flag(step[1]):
+					_splice(step[2])
+			"vanish":
+				var va = _resolve(step[1])
+				_i += 1
+				if va != null:
+					var secs := float(step[2]) if step.size() > 2 else 0.8
+					_fader = [va, (1.0 / secs) if secs > 0.0 else 1e9]
+					return                     # block until faded out
 			"face":
 				var a = _resolve(step[1])
 				if a != null:
@@ -327,19 +345,76 @@ func _splice(steps: Array) -> void:
 		_steps.insert(_i + j, steps[j])
 
 
-func _setup_move(step: Array) -> void:
+func _setup_move(step: Array, pathfind := false) -> void:
 	var verb: String = step[0]
-	var targets: Dictionary = {step[1]: step[2]} if verb == "walk" else step[1]
+	var targets: Dictionary = {step[1]: step[2]} if (verb == "walk" or verb == "walkto") else step[1]
 	_movers = []
 	for who in targets:
 		var actor = _resolve(who)
 		if actor == null:
 			continue
+		if actor.has_method("stand"):
+			actor.stand()                  # standing up to move; a seated drink stays put
 		var dest: Vector2i = targets[who]
+		var waypts: Array = []
+		if pathfind:
+			for t in _bfs_path(actor, dest):
+				waypts.append(_tile_center(t))
+		else:
+			waypts.append(_tile_center(dest))
 		actor.tile_x = dest.x
 		actor.tile_y = dest.y
-		_movers.append([actor, [_tile_center(dest)]])
+		_movers.append([actor, waypts])
 	_i += 1
+
+
+func _has_flag(name: String) -> bool:
+	return _story.has(name) if _story != null else flags.has(name)
+
+
+func _bfs_path(actor, target: Vector2i) -> Array:
+	var sc = _sm.current
+	if sc == null:
+		return [target]
+	var ts := Config.TILE_SIZE
+	var start := Vector2i(int(actor.position.x) / ts, int(actor.position.y) / ts)
+	if start == target:
+		return [target]
+	var seen := {start: true}
+	var q: Array = [[start, []]]
+	while not q.is_empty():
+		var cur = q.pop_front()
+		var pos: Vector2i = cur[0]
+		var path: Array = cur[1]
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = pos + d
+			if seen.has(n):
+				continue
+			if n == target:
+				return path + [n]
+			if not sc.is_walkable(n.x, n.y):
+				continue
+			seen[n] = true
+			q.append([n, path + [n]])
+	return [target]
+
+
+func _advance_fader(dt: float) -> void:
+	var actor = _fader[0]
+	var rate: float = _fader[1]
+	actor.modulate.a = maxf(0.0, actor.modulate.a - rate * dt)
+	if actor.modulate.a <= 0.0:
+		_remove_actor(actor)
+		_fader = null
+		_begin_step()
+
+
+func _remove_actor(actor) -> void:
+	if _sm.current != null and actor in _sm.current.npcs:
+		_sm.current.npcs.erase(actor)
+	if actor in _party.followers:
+		_party.followers.erase(actor)
+	actor.queue_free()
 
 
 func _on_dialogue_done() -> void:
@@ -376,6 +451,9 @@ func update(dt: float) -> void:
 		_wait -= dt
 		if _wait <= 0.0:
 			_begin_step()
+		return
+	if _fader != null:
+		_advance_fader(dt)
 		return
 	if not _movers.is_empty():
 		_advance_movers(dt)

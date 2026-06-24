@@ -345,7 +345,26 @@ func _shot() -> void:
 	await get_tree().create_timer(0.2).timeout
 	await _save("res://verify_seated.png")
 
+	# Remaining cutscene verbs: walkto (pathfind), vanish (fade+remove), if_flag.
+	var crew0 = _party.followers[0]
+	_cutscene.start([["walkto", crew0.display_name, Vector2i(8, 8)]])
+	await _drain_cutscene(800)
+	assert(crew0.tile_x == 8 and crew0.tile_y == 8, "walkto did not arrive")
+	_cutscene.start([["vanish", crew0.display_name, 0.1]])
+	await _drain_cutscene(200)
+	assert(not (crew0 in _party.followers), "vanish did not remove the follower")
+	_cutscene.start([["if_flag", "intro_done", [["flag", "if_ran"]]]])
+	await get_tree().process_frame
+	assert(_story.has("if_ran"), "if_flag did not splice its steps")
+
 	get_tree().quit()
+
+
+func _drain_cutscene(max_frames: int) -> void:
+	var g := 0
+	while _cutscene.active and g < max_frames:
+		g += 1
+		await get_tree().process_frame
 
 
 func _demo_seating() -> Array:
