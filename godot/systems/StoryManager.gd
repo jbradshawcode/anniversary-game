@@ -106,3 +106,16 @@ func gate_exit(scene_id: int, direction: String, dest_scene_id) -> String:
 func _say(lines) -> void:
 	if lines and _dialogue != null and not _dialogue.active:
 		_dialogue.start(lines)
+
+
+# ── save / load ───────────────────────────────────────────────────────────────
+func snapshot() -> Dictionary:
+	return {"beat": _beat, "flags": flags.keys()}
+
+
+func restore(beat: int, flag_list) -> void:
+	_beat = clampi(beat, 0, _beats.size() - 1)
+	flags = {}
+	for fl in flag_list:
+		flags[fl] = true
+	_fired = {}

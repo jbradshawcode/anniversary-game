@@ -18,6 +18,7 @@ var _last_scene: GameScene
 var _party: Party
 var _cutscene: Cutscene
 var _story: StoryManager
+var _save_mgr: SaveManager
 
 
 func _ready() -> void:
@@ -60,6 +61,9 @@ func _ready() -> void:
 	_cutscene.bind(_dialogue, _sm, _player, _party, fade, _story)
 	_story.bind(_dialogue, _sm, _player, _party, _cutscene)
 	_sm.story = _story
+
+	_save_mgr = SaveManager.new()
+	_save_mgr.bind(_story, _sm, _player)
 
 	if "--shot" in OS.get_cmdline_user_args():
 		await _shot()
@@ -141,6 +145,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_C:
 			if not _cutscene.active and not _dialogue.active:
 				_cutscene.start(_demo_cutscene())
+		KEY_S:
+			if not _dialogue.active and not _cutscene.active:
+				_save_mgr.save(1)
+		KEY_L:
+			if _save_mgr.has(1) and not _dialogue.active and not _cutscene.active:
+				_save_mgr.apply(_save_mgr.load_slot(1))
 
 
 func _crew_roster() -> Array:
@@ -235,6 +245,23 @@ func _shot() -> void:
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
+
+	# Save/load round-trip: write a known state, scramble it, load it back.
+	_story.restore(1, ["intro_done"])
+	_sm.go_to(5, _player, Vector2i(3, 5))
+	_player.facing = "left"
+	_save_mgr.save(2)
+	assert(_save_mgr.has(2), "save file not written")
+	_story.restore(0, [])                       # scramble
+	_sm.go_to(1, _player, Vector2i(9, 9))
+	_player.facing = "down"
+	_save_mgr.apply(_save_mgr.load_slot(2))     # load it back
+	assert(_story.beat()["name"] == "to_corridor", "beat not restored")
+	assert(_story.has("intro_done"), "flag not restored")
+	assert(_sm.current_id() == 5, "scene not restored")
+	assert(_player.tile_x == 3 and _player.tile_y == 5, "tile not restored")
+	assert(_player.facing == "left", "facing not restored")
+	_sm.go_to(1, _player, Vector2i(5, 6))       # back to the gym for the visual shots
 
 	# Choice demo: an `ask` with two branches; drive a selection and check the flag.
 	_cutscene.start(_demo_choice())

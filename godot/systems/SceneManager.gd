@@ -57,6 +57,19 @@ func try_move(dtx: int, dty: int, player) -> void:
 	player.try_move(dtx, dty, current)
 
 
+# Hard jump to a scene + tile (load, chapter jump) — bypasses exit gating.
+func go_to(scene_id: int, player, tile: Vector2i) -> void:
+	if not _scenes.has(scene_id):
+		return
+	if current != null:
+		_world.remove_child(current)
+	_current_id = scene_id
+	current = _scenes[scene_id]
+	_world.add_child(current)
+	player.scene = current
+	player.place(tile.x, tile.y)
+
+
 func _resolve_exit(exit_val, player) -> Array:
 	if exit_val == null:
 		return [null, null]
