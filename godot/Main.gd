@@ -38,6 +38,7 @@ func _ready() -> void:
 	_sm.register(4, Garden.new())
 	_sm.register(5, Corridor.new())
 	_sm.register(6, Reception.new())
+	_sm.register(7, Courtyard.new())
 	_sm.register(8, Passage.new())
 	_party = Party.new(party_layer, _sm)
 
@@ -463,6 +464,30 @@ func _shot() -> void:
 	_player.queue_redraw()
 	await get_tree().create_timer(0.3).timeout
 	await _save("res://verify_passage.png")
+
+	# The school courtyard (scene 7). No ported scene transitions into it yet, so
+	# jump in, then drive both code paths: a normal in-scene step AND the up-exit
+	# transition to King Street, asserting each post-condition.
+	_sm.go_to(7, _player, Vector2i(10, 8))
+	_player.facing = "down"
+	_player.queue_redraw()
+	await get_tree().create_timer(0.3).timeout
+	assert(_sm.current is Courtyard, "courtyard not loaded")
+	await _save("res://verify_courtyard.png")
+
+	# Normal step along the central path (player.try_move path).
+	_player.place(9, 5)
+	_sm.try_move(1, 0, _player)
+	await get_tree().create_timer(0.2).timeout
+	assert(not _player.moving and _player.tile_x == 10, "courtyard normal move failed")
+
+	# Up-exit transition: out the gate gap (cols 9-10) onto King Street.
+	_player.place(9, 2)
+	_player.facing = "up"
+	await get_tree().process_frame
+	_sm.try_move(0, -1, _player)
+	assert(_sm.current is KingSt, "courtyard->King St transition failed")
+	assert(_player.tile_x == 4 and _player.tile_y == 10, "King St entry point wrong")
 
 	get_tree().quit()
 
