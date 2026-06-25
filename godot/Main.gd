@@ -23,6 +23,9 @@ var _menu: Menu
 var _minigame_layer: CanvasLayer
 var _minigame: VolleyCourt
 var _dive: DiveGame
+var _phone: Phone
+var _phone_layer: CanvasLayer
+var _phone_done := Callable()
 
 # Shot/telemetry: which stub last fired + the chapter card text (the phone and
 # results/chapter-card systems aren't built yet — these placeholders keep the
@@ -108,13 +111,18 @@ func _wire_story_stubs() -> void:
 		_launch_vb()
 	_story.on_launch_dive = func():
 		_launch_dive()
-	_story.on_phone = func(_thread, with_who, adv, title, date):
+	_story.on_phone = func(thread, with_who, adv, _title, _date):
 		_last_stub = "phone"
-		var lines := ["%s — texts with %s (%s)." % [title, with_who, date],
-			"(Phone screen not built yet.)"]
-		if _story.beat().get("end_game", false):
-			lines.append("(THE END — closing card not built yet.)")
-		_dialogue.start(lines, "", func(): _story.set_flag(adv))
+		# end_game flows through here too (the finale): after the thread, the closing
+		# "The End" card is the cards chunk (not built yet) — for now just advance.
+		var end_game: bool = _story.beat().get("end_game", false)
+		_open_phone(thread, with_who, func():
+			_close_phone()
+			if end_game:
+				_dialogue.start(["THE END", "(closing card not built yet.)"], "",
+					func(): _story.set_flag(adv))
+			else:
+				_story.set_flag(adv))
 	_story.on_week_end = func():
 		_last_stub = "week_end"
 		var b := _story.beat()
@@ -149,6 +157,25 @@ func _close_minigame() -> void:
 	if _minigame != null:
 		_minigame.queue_free()
 		_minigame = null
+
+
+# ── Phone / text-thread interlude (mirror of app.py enter_phone / PhoneMode) ─────
+func _open_phone(thread: Array, other: String, on_done: Callable) -> void:
+	_phone_layer = CanvasLayer.new()
+	_phone_layer.layer = 4            # above the overworld, dialogue, menu and minigames
+	add_child(_phone_layer)
+	_phone = Phone.new()
+	_phone.setup(thread, other)
+	_phone_layer.add_child(_phone)
+	_phone_done = on_done
+
+
+func _close_phone() -> void:
+	if _phone_layer != null:
+		_phone_layer.queue_free()
+		_phone_layer = null
+		_phone = null
+	_phone_done = Callable()
 
 
 func _end_tutorial() -> void:
@@ -238,6 +265,8 @@ func _on_pause_select(i: int) -> void:
 func _process(delta: float) -> void:
 	if _minigame != null:       # the minigame drives its own update + input
 		return
+	if _phone != null:          # the phone interlude freezes the overworld
+		return
 	_update_camera_limits()
 	if not _cutscene.active:           # the cutscene drives the crew during scripted moves
 		_party.update(delta, _player)
@@ -292,6 +321,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _minigame != null:              # the minigame owns input while it's up
 		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+
+	if _phone != null:                 # the phone interlude owns input while it's up
+		if event.keycode == KEY_Z or event.keycode == KEY_ENTER:
+			if not _phone.advance():
+				var done := _phone_done
+				done.call()            # the thread is exhausted -> finish (closes the phone)
 		return
 
 	if _menu.is_open():                # the menu owns input while it's up
@@ -578,18 +614,55 @@ func _shot() -> void:
 	_dialogue.active = false
 	_dialogue.visible = false
 
-	# Phone + chapter-end + finale stubs each fire and dialogue-gate.
+	# Phone interlude (scrims): the on_phone hook opens the real Phone widget; Z
+	# reveals one bubble at a time, and exhausting the thread sets the advance flag.
 	_story.restore(_story.index_of("scrims_texts"), [])
 	_story.begin()
-	assert(_last_stub == "phone" and _dialogue.active, "phone interlude stub did not fire")
-	_dialogue.active = false
+	assert(_last_stub == "phone" and _phone != null, "phone interlude did not open")
+	_phone.advance()                        # reveal the date pill + the preformatted signup
+	_phone.advance()                        # bubbles (centred multi-line text with inline emoji)
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_phone_interlude.png")
+	while _phone.advance():                  # exhaust the thread, then the next Z finishes
+		pass
+	assert(_phone.done(), "phone thread not exhausted")
+	_phone_done.call()                       # mirrors the final Z (nothing left to reveal)
+	assert(_phone == null, "phone not closed after the thread ended")
+	assert(_story.has("scrims_done"), "phone interlude did not advance the beat")
+
+	# A standalone James<->Dan thread (the post-week wrap-up data) drives the bubble
+	# kinds the interludes don't: a screenshot-of-a-chat bubble and a bank notification,
+	# alongside reactions and inline colour emoji. (Its results-card trigger is the
+	# cards chunk; here we drive the widget directly to cover every render path.)
+	var dl := CanvasLayer.new()
+	dl.layer = 4
+	add_child(dl)
+	var dphone := Phone.new()
+	dphone.setup(Screenplay.phone_thread(1), "Dan")
+	dl.add_child(dphone)
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_phone_shot.png")   # bubble #0 is the screenshot-of-a-chat
+	while dphone.advance():
+		pass
+	assert(dphone.done(), "standalone thread not fully revealed")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_phone_thread.png")  # notif card + reactions + inline emoji
+	dl.queue_free()
+	await get_tree().process_frame
+
+	# end_chapter -> the (still-stubbed) results card; finale -> the phone, then the
+	# (still-stubbed) closing card. Both land in dialogue for now (the cards chunk).
 	_story.restore(_story.index_of("w3_end"), [])
 	_story.begin()
 	assert(_last_stub == "week_end" and _dialogue.active, "end_chapter stub did not fire")
 	_dialogue.active = false
 	_story.restore(_story.index_of("the_date"), [])
 	_story.begin()
-	assert(_last_stub == "phone" and _dialogue.active, "finale stub did not fire")
+	assert(_last_stub == "phone" and _phone != null, "finale phone did not open")
+	while _phone.advance():
+		pass
+	_phone_done.call()
+	assert(_phone == null and _dialogue.active, "finale closing placeholder did not show")
 	_dialogue.active = false
 
 	# gate_exit verdicts: a barred door blocks, the chapter-end edge ends the week.
