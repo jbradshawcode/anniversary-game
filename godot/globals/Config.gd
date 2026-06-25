@@ -8,6 +8,26 @@ const SCREEN_WIDTH := 640
 const SCREEN_HEIGHT := 480
 const TILE_MOVE_SPEED := 280.0  # px/sec during the smooth slide between tiles
 
+# Closing card shown after the finale (and when loading a completed save).
+const END_DEDICATION := [
+	"Thanks for playing.",
+	"Here's to us. Happy anniversary.",
+]
+
+
+# Star rating for the end-of-week results card: fewer volleyball attempts = more
+# stars (mirror of config.stars_for_attempts).
+func stars_for_attempts(attempts: int) -> int:
+	if attempts < 3:
+		return 5
+	if attempts < 5:
+		return 4
+	if attempts < 10:
+		return 3
+	if attempts < 15:
+		return 2
+	return 1
+
 const DIALOGUE_CPS := 45.0   # characters revealed per second (typewriter)
 const DIALOGUE_FAST := 4.0   # multiplier while X (cancel) is held
 

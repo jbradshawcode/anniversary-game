@@ -26,10 +26,10 @@ var _dive: DiveGame
 var _phone: Phone
 var _phone_layer: CanvasLayer
 var _phone_done := Callable()
+var _card: Card
+var _card_layer: CanvasLayer
 
-# Shot/telemetry: which stub last fired + the chapter card text (the phone and
-# results/chapter-card systems aren't built yet — these placeholders keep the
-# screenplay walkable end-to-end until they land).
+# Shot/telemetry: which interlude path last fired + the chapter-start label.
 var _last_stub := ""
 var _chapter_card := ""
 
@@ -103,36 +103,81 @@ func _ready() -> void:
 		_open_title()
 
 
-# Story hooks. The minigames launch for real (volleyball + dive); the phone UI and
-# results/chapter cards are still placeholders that show a one-card dialogue and set
-# the beat's advance flag, so the story flows on until those systems land.
+# Story hooks. The minigames launch for real (volleyball + dive); the interludes are
+# full-screen Cards (results / chapter / interlude title / "The End"), each gating the
+# overworld behind it and, where the screenplay chains, handing off to the Phone widget.
 func _wire_story_stubs() -> void:
 	_story.on_launch_vb = func():
 		_launch_vb()
 	_story.on_launch_dive = func():
 		_launch_dive()
-	_story.on_phone = func(thread, with_who, adv, _title, _date):
+
+	# A texts-only beat (interlude or the finale): a title card, then the thread.
+	_story.on_phone = func(thread, with_who, adv, title, _date):
 		_last_stub = "phone"
-		# end_game flows through here too (the finale): after the thread, the closing
-		# "The End" card is the cards chunk (not built yet) — for now just advance.
+		# Split "Interlude — First Contact" / "Finale — The Date" into kicker + name.
+		var parts := str(title).split("—")
+		var kicker: String = parts[0].strip_edges()
+		var nm := parts[1].strip_edges() if parts.size() > 1 else ""
+		if kicker == "":
+			kicker = "Interlude"
+		if nm == "":
+			nm = kicker
 		var end_game: bool = _story.beat().get("end_game", false)
-		_open_phone(thread, with_who, func():
-			_close_phone()
-			if end_game:
-				_dialogue.start(["THE END", "(closing card not built yet.)"], "",
-					func(): _story.set_flag(adv))
-			else:
-				_story.set_flag(adv))
+		var card := Card.new()
+		card.setup_interlude(kicker, nm, _date)
+		_open_card(card, func():
+			_close_card()
+			_open_phone(thread, with_who, func():
+				_close_phone()
+				if end_game:
+					_finish_finale(adv)
+				else:
+					_story.set_flag(adv)))
+
+	# An end-of-chapter beat: the star results card, then the post-week phone wrap-up.
 	_story.on_week_end = func():
 		_last_stub = "week_end"
 		var b := _story.beat()
-		var msg := "(THE END — closing card not built yet.)" if b.get("end_game", false) \
-			else "%s complete. (Results card not built yet.)" % str(_story.week_title())
-		_dialogue.start([msg], "", func(): _story.set_flag(b.get("advance_when", "")))
-	_story.on_chapter_start = func(week, title, _first):
-		# A chapter-title card needs the (deferred) results-screen mode to sit cleanly
-		# before the beat's cutscene; for now record it without blocking the cutscene.
+		var week := int(b.get("week", 1))
+		var adv: String = b.get("advance_when", "")
+		var card := Card.new()
+		card.setup_results(_story.stars(), maxi(1, _story.vb_attempts),
+			"%s Complete" % str(_story.week_title()))
+		_open_card(card, func():
+			_close_card()
+			_open_phone(Screenplay.phone_thread(week), "Dan", func():
+				_close_phone()
+				_finish_week(adv)))
+
+	# A new chapter began (after its goto). The crew resets each chapter; Chapter 2+
+	# shows a transition card first — the beat's opening cutscene is already queued
+	# and resumes when the card closes (it stays frozen behind the card meanwhile).
+	_story.on_chapter_start = func(week, title, first):
 		_chapter_card = "Week %d — %s" % [week, title]
+		_party.clear()
+		if not first:
+			var card := Card.new()
+			card.setup_chapter(week - 1, week)
+			_open_card(card, func(): _close_card())
+
+
+# After the post-week phone thread: reset the per-chapter star tally and set the
+# chapter's "left" flag, which advances into the next chapter (firing its card).
+func _finish_week(adv: String) -> void:
+	_story.vb_attempts = 0
+	_story.set_flag(adv)
+
+
+# After the finale's phone thread: set its flag, then the closing "The End" card.
+# Confirming it starts a fresh playthrough.
+func _finish_finale(adv: String) -> void:
+	_story.set_flag(adv)
+	var card := Card.new()
+	card.setup_the_end(false)
+	_open_card(card, func():
+		_close_card()
+		_story.start_new())
 
 
 # ── Volleyball orchestration (mirror of app.py _launch_match / _end_volleyball) ──
@@ -178,6 +223,23 @@ func _close_phone() -> void:
 	_phone_done = Callable()
 
 
+# ── Full-screen story cards (results / chapter / interlude / the-end) ────────────
+func _open_card(card: Card, on_confirm: Callable) -> void:
+	_card_layer = CanvasLayer.new()
+	_card_layer.layer = 5             # above the overworld, dialogue, menu, minigames and phone
+	add_child(_card_layer)
+	_card = card
+	_card.on_confirm = on_confirm
+	_card_layer.add_child(_card)
+
+
+func _close_card() -> void:
+	if _card_layer != null:
+		_card_layer.queue_free()
+		_card_layer = null
+		_card = null
+
+
 func _end_tutorial() -> void:
 	_close_minigame()
 	_story.set_flag("w1_tut_done")   # records the warm-up; not an advance flag
@@ -185,6 +247,7 @@ func _end_tutorial() -> void:
 
 
 func _end_volleyball() -> void:
+	_story.vb_attempts += 1            # counts toward this chapter's results-card stars
 	var won := _minigame.player_won()
 	_close_minigame()
 	if won:
@@ -267,6 +330,8 @@ func _process(delta: float) -> void:
 		return
 	if _phone != null:          # the phone interlude freezes the overworld
 		return
+	if _card != null:           # a story card freezes the overworld (and any queued cutscene)
+		return
 	_update_camera_limits()
 	if not _cutscene.active:           # the cutscene drives the crew during scripted moves
 		_party.update(delta, _player)
@@ -321,6 +386,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _minigame != null:              # the minigame owns input while it's up
 		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+
+	if _card != null:                  # a story card owns input while it's up
+		if event.keycode == KEY_Z or event.keycode == KEY_ENTER:
+			_card.confirm()
+		elif (event.keycode == KEY_X or event.keycode == KEY_ESCAPE) \
+				and _card.kind == Card.Kind.THE_END and _card.loaded:
+			_close_card()              # backing out of a completed-save prompt
+			_open_title()
 		return
 
 	if _phone != null:                 # the phone interlude owns input while it's up
@@ -614,11 +688,17 @@ func _shot() -> void:
 	_dialogue.active = false
 	_dialogue.visible = false
 
-	# Phone interlude (scrims): the on_phone hook opens the real Phone widget; Z
-	# reveals one bubble at a time, and exhausting the thread sets the advance flag.
+	# Interlude title card + phone (scrims): the on_phone hook shows the title card
+	# first; Z hands off to the real Phone widget. Exhausting the thread sets the
+	# advance flag, which crosses into Week 3 and fires a chapter card.
 	_story.restore(_story.index_of("scrims_texts"), [])
 	_story.begin()
-	assert(_last_stub == "phone" and _phone != null, "phone interlude did not open")
+	assert(_card != null and _card.kind == Card.Kind.INTERLUDE, "interlude title card did not open")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_interlude_card.png")
+	_card.confirm()                          # title card -> the texts
+	assert(_card == null and _last_stub == "phone" and _phone != null,
+		"interlude card did not hand off to the phone")
 	_phone.advance()                        # reveal the date pill + the preformatted signup
 	_phone.advance()                        # bubbles (centred multi-line text with inline emoji)
 	await get_tree().create_timer(0.2).timeout
@@ -628,12 +708,20 @@ func _shot() -> void:
 	assert(_phone.done(), "phone thread not exhausted")
 	_phone_done.call()                       # mirrors the final Z (nothing left to reveal)
 	assert(_phone == null, "phone not closed after the thread ended")
-	assert(_story.has("scrims_done"), "phone interlude did not advance the beat")
+	assert(_story.has("scrims_done"), "interlude did not advance the beat")
+	# Crossing scrims -> Week 3 fired a chapter card; dismiss it (the chapter card is
+	# screenshotted from the results path below, which crosses into Week 4).
+	assert(_card != null and _card.kind == Card.Kind.CHAPTER, "chapter card did not open on the new week")
+	_card.confirm()
+	assert(_card == null, "chapter card did not close")
+	_cutscene.stop()
+	_dialogue.active = false
+	_dialogue.visible = false
 
 	# A standalone James<->Dan thread (the post-week wrap-up data) drives the bubble
 	# kinds the interludes don't: a screenshot-of-a-chat bubble and a bank notification,
-	# alongside reactions and inline colour emoji. (Its results-card trigger is the
-	# cards chunk; here we drive the widget directly to cover every render path.)
+	# alongside reactions and inline colour emoji. (The results card chains into this
+	# same thread; here we drive the widget directly to cover every render path.)
 	var dl := CanvasLayer.new()
 	dl.layer = 4
 	add_child(dl)
@@ -650,20 +738,55 @@ func _shot() -> void:
 	dl.queue_free()
 	await get_tree().process_frame
 
-	# end_chapter -> the (still-stubbed) results card; finale -> the phone, then the
-	# (still-stubbed) closing card. Both land in dialogue for now (the cards chunk).
+	# End-of-week results card -> phone wrap-up. The end_chapter beat shows the star
+	# card (stars from vb_attempts); Z chains into the post-week thread; the final Z
+	# resets the tally and sets the chapter's "left" flag — crossing into Week 4, whose
+	# chapter card we screenshot here.
 	_story.restore(_story.index_of("w3_end"), [])
+	_story.vb_attempts = 4                    # 4 tries -> 4 of 5 stars (stars_for_attempts)
 	_story.begin()
-	assert(_last_stub == "week_end" and _dialogue.active, "end_chapter stub did not fire")
-	_dialogue.active = false
-	_story.restore(_story.index_of("the_date"), [])
-	_story.begin()
-	assert(_last_stub == "phone" and _phone != null, "finale phone did not open")
+	assert(_last_stub == "week_end" and _card != null and _card.kind == Card.Kind.RESULTS,
+		"results card did not open")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_results.png")
+	_card.confirm()                           # results -> the phone wrap-up
+	assert(_card == null and _phone != null, "results card did not hand off to the phone")
 	while _phone.advance():
 		pass
 	_phone_done.call()
-	assert(_phone == null and _dialogue.active, "finale closing placeholder did not show")
+	assert(_phone == null, "phone not closed after the wrap-up")
+	assert(_story.vb_attempts == 0, "week end did not reset the attempt tally")
+	assert(_story.has("w3_left"), "week end did not set the chapter flag")
+	assert(_card != null and _card.kind == Card.Kind.CHAPTER, "next chapter card did not open")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_chapter_card.png")
+	_card.confirm()
+	assert(_card == null, "chapter card did not close")
+	_cutscene.stop()
 	_dialogue.active = false
+	_dialogue.visible = false
+
+	# Finale: an interlude card (kicker "Finale"), the phone thread, then the closing
+	# "The End" card. Confirming it starts a fresh playthrough from the first beat.
+	_story.restore(_story.index_of("the_date"), [])
+	_story.begin()
+	assert(_card != null and _card.kind == Card.Kind.INTERLUDE, "finale title card did not open")
+	_card.confirm()                           # title card -> the texts
+	assert(_phone != null, "finale phone did not open")
+	while _phone.advance():
+		pass
+	_phone_done.call()
+	assert(_phone == null and _card != null and _card.kind == Card.Kind.THE_END,
+		"finale closing card did not show")
+	assert(_story.has("the_date_done"), "finale did not set its flag")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_the_end.png")
+	_card.confirm()                           # "The End" -> a fresh playthrough
+	assert(_card == null, "closing card did not close")
+	assert(_story.beat()["name"] == "check_baskets", "play again did not restart the story")
+	_cutscene.stop()
+	_dialogue.active = false
+	_dialogue.visible = false
 
 	# gate_exit verdicts: a barred door blocks, the chapter-end edge ends the week.
 	_story.restore(_story.index_of("wind_down"), [])

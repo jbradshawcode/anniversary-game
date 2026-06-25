@@ -39,6 +39,7 @@ const PUB_DRINKS := {"James": "beer", "Dan": "beer", "Matt": "beer", "Wallace": 
 	"Nat": "white_wine", "Bailey": "cider", "Mayu": "white_wine"}
 
 var flags := {}
+var vb_attempts := 0           # volleyball matches played this chapter -> results-card stars
 
 # Host callbacks (set by Main); stubbed until the real systems land. Each is a
 # Callable; the host reads beat() for the details it needs and sets the beat's
@@ -99,6 +100,10 @@ func week_title():
 	return beat().get("week_title", null)
 
 
+func stars() -> int:
+	return Config.stars_for_attempts(maxi(1, vb_attempts))
+
+
 func objective():
 	var text = beat().get("objective", null)
 	var checklist = beat().get("checklist", null)
@@ -149,6 +154,7 @@ func begin() -> void:
 # opening chapter card (restore() deliberately syncs _cur_week, suppressing it).
 func start_new() -> void:
 	restore(0, [])
+	vb_attempts = 0
 	_cur_week = null
 	_enter_beat()
 
@@ -386,7 +392,7 @@ func sync_party(player) -> void:
 
 # ── save / load ───────────────────────────────────────────────────────────────
 func snapshot() -> Dictionary:
-	return {"beat": _beat, "flags": flags.keys()}
+	return {"beat": _beat, "flags": flags.keys(), "vb_attempts": vb_attempts}
 
 
 func restore(beat_i: int, flag_list, scene_id = null) -> void:

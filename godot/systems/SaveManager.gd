@@ -35,6 +35,7 @@ func save(slot: int) -> void:
 		"facing": _player.facing,
 		"beat": snap["beat"],
 		"flags": snap["flags"],
+		"vb_attempts": snap.get("vb_attempts", 0),
 		"scene_name": _scene_names.get(_sm.current_id(), "?"),
 		"beat_name": _story.beat().get("name", "?"),
 		"saved_at": Time.get_datetime_string_from_system(false, true),
@@ -68,6 +69,7 @@ func slot_info(slot: int):
 
 func apply(data: Dictionary) -> void:
 	_story.restore(int(data["beat"]), data["flags"], int(data["scene_id"]))
+	_story.vb_attempts = int(data.get("vb_attempts", 0))
 	var tile: Array = data["tile"]
 	_sm.go_to(int(data["scene_id"]), _player, Vector2i(int(tile[0]), int(tile[1])))
 	_player.facing = data["facing"]
