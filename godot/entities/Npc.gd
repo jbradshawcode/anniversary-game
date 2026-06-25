@@ -14,6 +14,7 @@ var interaction_text: Array = []
 
 var walking := false            # set by the Party mover to enable the walk bob
 var walk_phase := 0.0           # advanced by distance moved
+var diving := ""                # "" | "left" | "right" — a sprawled, near-horizontal dive
 
 var sitting := false
 var holding := ""               # "" or a Drinks.KINDS value
@@ -121,6 +122,9 @@ func _shadow() -> void:
 
 
 func _draw() -> void:
+	if diving != "":                       # diving drill: a rotated prone sprawl
+		_draw_diving()
+		return
 	if bare:                               # volleyball: VBActor owns position/lean/jump
 		if facing == "up":
 			_head_up()
@@ -151,6 +155,18 @@ func _draw() -> void:
 	_body()
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 	_blit_drink()
+
+
+# A dive/prone pose, reusing the upright art: the side head + body rotated nearly
+# flat in the dive direction (humanoid.py _draw_diving). pygame rotates CCW; Godot
+# rotation is CW (y-down), so the signs are flipped.
+func _draw_diving() -> void:
+	_oval(0, 15, 14, 4, Color(0, 0, 0, 70.0 / 255))   # wide grounded shadow
+	var ang := deg_to_rad(-80.0) if diving == "left" else deg_to_rad(80.0)
+	draw_set_transform(Vector2(0, 5), ang, Vector2.ONE)
+	_head_side(diving == "left")
+	_body()
+	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 
 # Shared seated render (reused by draw_seated for any sitting crew member).

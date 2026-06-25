@@ -22,10 +22,11 @@ var _save_mgr: SaveManager
 var _menu: Menu
 var _minigame_layer: CanvasLayer
 var _minigame: VolleyCourt
+var _dive: DiveGame
 
-# Shot/telemetry: which stub last fired + the chapter card text (the minigame,
-# phone and results/chapter-card systems aren't built yet — these placeholders
-# keep the screenplay walkable end-to-end until they land).
+# Shot/telemetry: which stub last fired + the chapter card text (the phone and
+# results/chapter-card systems aren't built yet — these placeholders keep the
+# screenplay walkable end-to-end until they land).
 var _last_stub := ""
 var _chapter_card := ""
 
@@ -99,14 +100,14 @@ func _ready() -> void:
 		_open_title()
 
 
-# Placeholder handlers for the three systems not yet ported (minigames, phone UI,
-# results/chapter cards). Each shows a one-card dialogue and then sets the beat's
-# advance flag, so the story flows on; the real systems slot into these same seams.
+# Story hooks. The minigames launch for real (volleyball + dive); the phone UI and
+# results/chapter cards are still placeholders that show a one-card dialogue and set
+# the beat's advance flag, so the story flows on until those systems land.
 func _wire_story_stubs() -> void:
 	_story.on_launch_vb = func():
 		_launch_vb()
 	_story.on_launch_dive = func():
-		_stub_card("dive", "(Dive practice — not built yet. Auto-pass.)")
+		_launch_dive()
 	_story.on_phone = func(_thread, with_who, adv, title, date):
 		_last_stub = "phone"
 		var lines := ["%s — texts with %s (%s)." % [title, with_who, date],
@@ -165,16 +166,25 @@ func _end_volleyball() -> void:
 		_launch_vb()                  # lost -> retry the match
 
 
+# ── Diving drill orchestration (mirror of app.py _launch_dive / _end_dive) ──────
+func _launch_dive() -> void:
+	var dg := DiveGame.new()
+	dg.on_finish = _end_dive
+	_dive = dg
+	_minigame_layer.add_child(dg)
+
+
+func _end_dive() -> void:
+	if _dive != null:
+		_dive.queue_free()
+		_dive = null
+	_return_to_gym_and_advance()
+
+
 func _return_to_gym_and_advance() -> void:
 	if _sm.current_id() != 1:
 		_sm.go_to(1, _player, Vector2i(_player.tile_x, _player.tile_y))
 	_story.set_flag(_story.beat().get("advance_when", ""))
-
-
-func _stub_card(kind: String, line: String) -> void:
-	_last_stub = kind
-	var adv: String = _story.beat().get("advance_when", "")
-	_dialogue.start([line], "", func(): _story.set_flag(adv))
 
 
 func _on_game_over(lines: Array) -> void:
@@ -517,13 +527,58 @@ func _shot() -> void:
 	assert(_party.followers.size() == 6, "form-with-exclude wrong crew size")
 	_cutscene.stop()
 
-	# Minigame (dive) + phone + chapter-end + finale stubs each fire and dialogue-gate.
+	# Diving drill (scene 12): the w3_dive beat launches the real minigame. Drive
+	# each path — intro, a live STEP feed, the PUSH/SLIDE timing bars, the dive pose,
+	# a scored verdict, the done card — then finish and confirm it advances the beat.
 	_party.clear()
 	_dialogue.active = false
 	_story.restore(_story.index_of("w3_dive"), [])
 	_story.begin()
-	assert(_last_stub == "dive" and _dialogue.active, "launch_dive stub did not fire")
+	assert(_dive != null and _dive is DiveGame, "diving drill did not launch")
+	assert(_dive._phase == "intro", "dive did not open on the intro card")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_dive_intro.png")
+
+	# Dismiss the intro and feed a ball: STEP positions James under the landing ring.
+	_dive._toss()
+	assert(_dive._phase == "step", "toss did not start a STEP")
+	await get_tree().create_timer(0.3).timeout
+	await _save("res://verify_dive.png")
+
+	# PUSH timing bar: park the needle in the band and screenshot the sweep UI.
+	_dive._phase = "push"
+	_dive._swing_delay = 0.0
+	_dive._needle = Config.DIVE_PUSH_CENTRE
+	await get_tree().process_frame
+	await _save("res://verify_dive_push.png")
+
+	# Dive pose: a stretched SLIDE sprawls James flat (Npc.diving). Drive the lunge.
+	_dive._px = _dive._left + 40
+	_dive._tx = _dive._px + Config.DIVE_SET_GOOD + 30   # gap > SET_GOOD -> a dive
+	_dive._start_dive("perfect")
+	assert(_dive._phase == "dive", "wide ball did not trigger a dive")
+	await get_tree().create_timer(0.3).timeout   # past contact (t>=0.5), before the landing (t>=1.0)
+	assert(_dive._james.diving != "", "James not in the diving pose mid-lunge")
+	assert(_dive._digs >= 1, "dive did not score at full extension")
+	await _save("res://verify_dive_pose.png")
+
+	# Done card (a short rally): set the win state and screenshot the closing card.
+	_dive._digs = Config.DIVE_TARGET
+	_dive._best = 8
+	_dive._phase = "done"
+	await get_tree().process_frame
+	await _save("res://verify_dive_done.png")
+
+	# Finish (Z on a won drill) -> on_finish closes the minigame and advances the beat.
+	_dive._handle_action(true)
+	await get_tree().process_frame
+	assert(_dive == null, "diving drill not closed after finish")
+	assert(_story.beat()["name"] != "w3_dive", "dive finish did not advance the beat")
+	_cutscene.stop()
 	_dialogue.active = false
+	_dialogue.visible = false
+
+	# Phone + chapter-end + finale stubs each fire and dialogue-gate.
 	_story.restore(_story.index_of("scrims_texts"), [])
 	_story.begin()
 	assert(_last_stub == "phone" and _dialogue.active, "phone interlude stub did not fire")
