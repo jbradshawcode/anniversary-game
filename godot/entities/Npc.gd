@@ -18,6 +18,7 @@ var walk_phase := 0.0           # advanced by distance moved
 var sitting := false
 var holding := ""               # "" or a Drinks.KINDS value
 var _drink_off := Vector2(0, 32)
+var bare := false               # volleyball: head+body only (no shadow/drink/bob)
 
 # Body palette (humanoid.py Palette defaults; subclass overrides skin/tee).
 var p_skin := Color8(210, 158, 120)
@@ -120,6 +121,17 @@ func _shadow() -> void:
 
 
 func _draw() -> void:
+	if bare:                               # volleyball: VBActor owns position/lean/jump
+		if facing == "up":
+			_head_up()
+		elif facing == "left":
+			_head_side(true)
+		elif facing == "right":
+			_head_side(false)
+		else:
+			_head_down()
+		_body()
+		return
 	if sitting:
 		draw_seated()
 		return

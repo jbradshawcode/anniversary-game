@@ -33,6 +33,7 @@ var sitting := false
 var holding := ""               # "" or a Drinks.KINDS value
 var _drink_off := Vector2(0, 32)
 var scene  # the active scene (provides is_walkable / has_wall)
+var bare := false               # volleyball: head+body only (no shadow/drink/bob/glow)
 
 
 func _init(start_tx := 0, start_ty := 0) -> void:
@@ -43,6 +44,8 @@ func _init(start_tx := 0, start_ty := 0) -> void:
 func _ready() -> void:
 	position = _tile_center(tile_x, tile_y)
 	_target = position
+	if bare:
+		return                  # volleyball actors get a team ring instead of the glow
 
 	# A warm personal glow that travels with Sarah — dynamic lighting the pygame
 	# version can't do (it would mean re-compositing an alpha overlay every frame).
@@ -116,6 +119,20 @@ func _shadow() -> void:
 
 
 func _draw() -> void:
+	if bare:                        # volleyball: VBActor owns the position/lean/jump
+		match facing:
+			"up":
+				_head_up()
+			"right":
+				_head_right()
+			"left":
+				_head_left()
+			_:
+				_head_down()
+		_body()
+		if facing == "up":
+			_back_hair()
+		return
 	if sitting:
 		_draw_seated()
 		return

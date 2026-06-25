@@ -20,6 +20,8 @@ var _cutscene: Cutscene
 var _story: StoryManager
 var _save_mgr: SaveManager
 var _menu: Menu
+var _minigame_layer: CanvasLayer
+var _minigame: VolleyCourt
 
 # Shot/telemetry: which stub last fired + the chapter card text (the minigame,
 # phone and results/chapter-card systems aren't built yet — these placeholders
@@ -81,6 +83,10 @@ func _ready() -> void:
 	_save_mgr = SaveManager.new()
 	_save_mgr.bind(_story, _sm, _player)
 
+	_minigame_layer = CanvasLayer.new()
+	_minigame_layer.layer = 3     # above everything (world / dialogue / menu) — covers the overworld
+	add_child(_minigame_layer)
+
 	var menu_layer := CanvasLayer.new()
 	menu_layer.layer = 2          # above dialogue/fade (layer 1)
 	add_child(menu_layer)
@@ -98,7 +104,7 @@ func _ready() -> void:
 # advance flag, so the story flows on; the real systems slot into these same seams.
 func _wire_story_stubs() -> void:
 	_story.on_launch_vb = func():
-		_stub_card("vb", "(Volleyball minigame — not built yet. Auto-win.)")
+		_launch_vb()
 	_story.on_launch_dive = func():
 		_stub_card("dive", "(Dive practice — not built yet. Auto-pass.)")
 	_story.on_phone = func(_thread, with_who, adv, title, date):
@@ -118,6 +124,51 @@ func _wire_story_stubs() -> void:
 		# A chapter-title card needs the (deferred) results-screen mode to sit cleanly
 		# before the beat's cutscene; for now record it without blocking the cutscene.
 		_chapter_card = "Week %d — %s" % [week, title]
+
+
+# ── Volleyball orchestration (mirror of app.py _launch_match / _end_volleyball) ──
+func _launch_vb() -> void:
+	var week := int(_story.beat().get("week", 1))
+	var level: String = {1: "easy", 2: "medium", 3: "hard", 4: "insane"}.get(week, "hard")
+	if week == 1 and _story.has("w1_want_tut") and not _story.has("w1_tut_done"):
+		_launch_court("tutorial", level, 1, _end_tutorial)
+		return
+	_launch_court("match", level, week, _end_volleyball)
+
+
+func _launch_court(mode: String, level: String, week: int, finish: Callable) -> void:
+	var vc := VolleyCourt.new()
+	vc.configure(mode, level, week)
+	vc.on_finish = finish
+	_minigame = vc
+	_minigame_layer.add_child(vc)
+
+
+func _close_minigame() -> void:
+	if _minigame != null:
+		_minigame.queue_free()
+		_minigame = null
+
+
+func _end_tutorial() -> void:
+	_close_minigame()
+	_story.set_flag("w1_tut_done")   # records the warm-up; not an advance flag
+	_launch_vb()                      # straight into the real match
+
+
+func _end_volleyball() -> void:
+	var won := _minigame.player_won()
+	_close_minigame()
+	if won:
+		_return_to_gym_and_advance()  # this chapter's win flag
+	else:
+		_launch_vb()                  # lost -> retry the match
+
+
+func _return_to_gym_and_advance() -> void:
+	if _sm.current_id() != 1:
+		_sm.go_to(1, _player, Vector2i(_player.tile_x, _player.tile_y))
+	_story.set_flag(_story.beat().get("advance_when", ""))
 
 
 func _stub_card(kind: String, line: String) -> void:
@@ -175,6 +226,8 @@ func _on_pause_select(i: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if _minigame != null:       # the minigame drives its own update + input
+		return
 	_update_camera_limits()
 	if not _cutscene.active:           # the cutscene drives the crew during scripted moves
 		_party.update(delta, _player)
@@ -226,6 +279,8 @@ func _facing_for(dtx: int, dty: int) -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _minigame != null:              # the minigame owns input while it's up
+		return
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 
@@ -381,9 +436,54 @@ func _shot() -> void:
 	# cutscene's flag advances, vb_setup's `ask` (choice 0) flags w1_vb_set, and
 	# gym_match hands off to the launch_volleyball stub.
 	assert(await _play_until("gym_match", 2000), "did not reach gym_match")
-	assert(_last_stub == "vb", "launch_volleyball stub did not fire")
-	assert(_dialogue.active, "volleyball placeholder card did not show")
-	assert(await _play_until("pub_invite", 800), "vb stub did not advance to pub_invite")
+	assert(_minigame != null and _minigame is VolleyCourt, "volleyball minigame did not launch")
+	# Ch1 opens with the controls tutorial (w1_want_tut); finishing it launches the match.
+	if _minigame._mode == "tutorial":
+		_minigame.phase = VolleyCourt.PHASE_OVER
+		_minigame.on_finish.call()
+		await get_tree().process_frame
+	assert(_minigame != null and _minigame._mode == "match", "match did not start after tutorial")
+	# Dismiss the how-to card and drive a live AI-served rally for the shot.
+	_minigame._intro = false
+	_minigame.serving = 1
+	_minigame._start_serve()
+	await get_tree().create_timer(1.3).timeout
+	assert(_minigame.near.size() == 3 and _minigame.far.size() == 3, "court not fielded 3v3")
+	await _save("res://verify_volleyball.png")
+	# Let the AI rally run on (dig -> set -> spike -> block, scoring, rotation) — a
+	# faithful sim must survive several points without dying. The human stands still,
+	# so balls hit at them score for the far side; that still drives _point/_after_point.
+	await get_tree().create_timer(3.0).timeout
+	assert(_minigame != null and is_instance_valid(_minigame), "sim crashed during rally")
+	assert(_minigame.phase >= VolleyCourt.PHASE_SERVE and _minigame.phase <= VolleyCourt.PHASE_OVER,
+		"sim phase invalid")
+
+	# Player serve: the meter + aim-target HUD. Drive the power->lateral stage too.
+	_minigame.serving = 0
+	_minigame._start_serve()
+	await get_tree().process_frame
+	assert(_minigame._server().is_player and _minigame._serve_stage == "power", "player serve not armed")
+	await _save("res://verify_volleyball_serve.png")
+	_minigame._action = true
+	await get_tree().process_frame
+	assert(_minigame._serve_stage == "lateral", "serve power -> lateral stage failed")
+
+	# Aim-step: leap into slow-mo, reticle + guides + spike meter + dim, contactor bumped.
+	var pl: VBActor = _minigame._player()
+	_minigame.phase = VolleyCourt.PHASE_RALLY
+	_minigame.ball.hold_at(pl.x, pl.y)
+	_minigame._enter_aimstep(pl)
+	await get_tree().process_frame
+	assert(_minigame._aimstep != null, "aim-step did not arm")
+	await _save("res://verify_volleyball_aim.png")
+
+	# Win path: a finished match advances the beat (pub_invite) via on_finish.
+	_minigame.score = [7, 0]
+	_minigame.phase = VolleyCourt.PHASE_OVER
+	_minigame.on_finish.call()
+	await get_tree().process_frame
+	assert(_minigame == null, "minigame not closed after win")
+	assert(_story.beat()["name"] == "pub_invite", "win did not advance to pub_invite")
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
