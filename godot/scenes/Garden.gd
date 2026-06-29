@@ -4,6 +4,11 @@
 # along each of the top/bottom walls, a central communal table with loose folding
 # chairs, hanging baskets, and warm festoon lighting. Booth benches are walkable
 # (step on to sit); planters/tables/pillars are solid.
+#
+# Bake captures the room only (paving, perimeter brick, pub doors). Every feature in
+# the garden is its own Fixture node: planting, the pillared booths, loose furniture and
+# baskets all sit at Z_BACK (nothing walks behind them — booths/pillars hug the walls).
+# The central communal table is the lone Y->z node: the player rounds it from the north.
 class_name Garden
 extends GameScene
 
@@ -32,6 +37,10 @@ var _FOLD := Color8(200, 193, 172)
 var _FOLD_DK := Color8(166, 158, 138)
 var _BASKET := Color8(125, 95, 65)
 var _FLOWER := [Color8(210, 65, 75), Color8(195, 85, 165), Color8(245, 242, 235)]
+
+# Draw target: the scene's own canvas while baking the room, or a Fixture node while it
+# paints its feature. _r/_brick and the direct draw calls all route through this.
+var _cv: CanvasItem
 
 
 func _init() -> void:
@@ -72,21 +81,32 @@ func _blocked() -> Array:
 	return b
 
 
+func _on_ready() -> void:
+	# Every garden feature is a node; only the central communal table needs Y->z (the
+	# player rounds it from the north). Planting, pillared booths, loose furniture and
+	# baskets all hug walls or sit decoratively -> Z_BACK, behind the crew as the bake had them.
+	add_fixture(Fixture.Z_BACK, _paint_planting)
+	add_fixture(Fixture.Z_BACK, _paint_booths)
+	add_fixture(Fixture.Z_BACK, _paint_loose)
+	add_fixture(9 * _TS + 10, _paint_central_table)
+
+
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _brick(x, y, w, h) -> void:
 	_r(x, y, w, h, _BRICK)
 	var by := int(y)
 	while by < y + h:
-		draw_line(Vector2(x, by), Vector2(x + w, by), _MORTAR, 1.0)
+		_cv.draw_line(Vector2(x, by), Vector2(x + w, by), _MORTAR, 1.0)
 		by += 8
 
 
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
+	_cv = self
 	# Paving.
 	_r(_TS, _TS, 16 * _TS, 13 * _TS, _YORK)
 	var tsz := 28
@@ -94,7 +114,7 @@ func _draw() -> void:
 		for ty in range(_TS, 14 * _TS, tsz):
 			if ((tx - _TS) / tsz + (ty - _TS) / tsz) % 2:
 				_r(tx, ty, tsz, tsz, _YORK_ALT)
-	# Perimeter brick + pub doors + deep planting.
+	# Perimeter brick + pub doors.
 	_brick(0, 0, 20 * _TS, _TS)
 	_brick(0, 14 * _TS, 20 * _TS, _TS)
 	_brick(0, _TS, _TS, 13 * _TS)
@@ -104,22 +124,41 @@ func _draw() -> void:
 		_r(4, 6 * _TS + 3 + i * _TS, _TS - 8, _TS - 8, _GLASS)
 		_r(4, 6 * _TS + 3 + i * _TS, (_TS - 8) / 2, (_TS - 8) / 2, _GLASS_HI)
 	_r(_TS - 7, 7 * _TS + 13, 4, 6, _BRASS)
-	for c in [17, 18]:                              # dense deep-end planting
-		_r(c * _TS, _TS, _TS, 13 * _TS, _IVY_DK)
+
+
+# Dense deep-end planting along the east wall -> Z_BACK (a solid boundary, nothing behind it).
+func _paint_planting(c: CanvasItem) -> void:
+	_cv = c
+	for col in [17, 18]:
+		_r(col * _TS, _TS, _TS, 13 * _TS, _IVY_DK)
 		for r in range(1, 14):
-			draw_circle(Vector2(c * _TS + 16, r * _TS + 16), 5, _IVY_LT)
-	# Booths (top + bottom) with dividing pillars.
+			_cv.draw_circle(Vector2(col * _TS + 16, r * _TS + 16), 5, _IVY_LT)
+
+
+# The six pillared U-bench booths along the top/bottom walls + their dividing pillars.
+# Booths hug the walls and benches are walkable -> nothing walks behind them -> Z_BACK.
+func _paint_booths(c: CanvasItem) -> void:
+	_cv = c
 	for pc in _PILLARS:
 		_r(pc * _TS + 4, _TS, _TS - 8, 4 * _TS, _BRICK_ALT)
 		_r(pc * _TS + 4, 10 * _TS, _TS - 8, 4 * _TS, _BRICK_ALT)
 	for i in _BOOTHS:
 		_booth(i, true)
 		_booth(i, false)
-	# Communal table + loose seating + baskets.
+
+
+# The central communal table + its teal bench tops -> Y->z (the player rounds it north/south).
+func _paint_central_table(c: CanvasItem) -> void:
+	_cv = c
 	_r(8 * _TS + 4, 6 * _TS + 3, 4 * _TS - 8, 3 * _TS - 6, _OAK_LT)
-	draw_rect(Rect2(8 * _TS + 4, 6 * _TS + 3, 4 * _TS - 8, 3 * _TS - 6), _OAK_DK, false, 1.0)
+	_cv.draw_rect(Rect2(8 * _TS + 4, 6 * _TS + 3, 4 * _TS - 8, 3 * _TS - 6), _OAK_DK, false, 1.0)
 	_r(8 * _TS + 6, 5 * _TS + 23, 4 * _TS - 12, 8, _TEAL)
 	_r(8 * _TS + 6, 9 * _TS + 2, 4 * _TS - 12, 8, _TEAL)
+
+
+# Loose folding chairs, the two side wood tables, and the hanging baskets -> Z_BACK.
+func _paint_loose(c: CanvasItem) -> void:
+	_cv = c
 	for spot in [[2, 4], [2, 11]]:
 		_wood_table(spot[0], spot[1])
 	for ch in [[7, 6], [7, 8], [12, 6], [12, 8], [3, 7]]:
@@ -149,18 +188,18 @@ func _wood_table(col: int, row: int) -> void:
 	var cx := col * _TS + 16
 	var cy := row * _TS + 16
 	_r(cx - 11, cy - 9, 22, 18, _OAK_LT)
-	draw_rect(Rect2(cx - 11, cy - 9, 22, 18), _OAK_DK, false, 1.0)
+	_cv.draw_rect(Rect2(cx - 11, cy - 9, 22, 18), _OAK_DK, false, 1.0)
 
 
 func _fold_chair(cx: int, cy: int) -> void:
 	_r(cx - 5, cy - 5, 10, 10, _FOLD)
-	draw_rect(Rect2(cx - 5, cy - 5, 10, 10), _FOLD_DK, false, 1.0)
+	_cv.draw_rect(Rect2(cx - 5, cy - 5, 10, 10), _FOLD_DK, false, 1.0)
 
 
 func _basket(x: int, hy: int) -> void:
-	draw_line(Vector2(x, hy), Vector2(x, hy + 8), Color8(38, 36, 32), 2.0)
-	draw_colored_polygon(PackedVector2Array([
+	_cv.draw_line(Vector2(x, hy), Vector2(x, hy + 8), Color8(38, 36, 32), 2.0)
+	_cv.draw_colored_polygon(PackedVector2Array([
 		Vector2(x - 7, hy + 6), Vector2(x + 7, hy + 6),
 		Vector2(x + 5, hy + 14), Vector2(x - 5, hy + 14)]), _BASKET)
 	for fi in range(3):
-		draw_circle(Vector2(x - 4 + fi * 4, hy + 12), 2, _FLOWER[fi])
+		_cv.draw_circle(Vector2(x - 4 + fi * 4, hy + 12), 2, _FLOWER[fi])
