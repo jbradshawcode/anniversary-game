@@ -33,6 +33,7 @@ var _BUILDING := [[0, 20, 0, 12], [7, 13, 12, 15]]
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/corridor_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(1, 18)
 	walkable_rows = Vector2i(4, 13)
 	exits = {
@@ -80,6 +81,8 @@ func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, _SW, _SH), Color(0, 0, 0))  # black under off-plan areas
 	_draw_walls()
 	_draw_pool_windows()

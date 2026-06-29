@@ -58,6 +58,7 @@ var _FLOOR_ZONES := [
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/courtyard_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(3, 16)
 	walkable_rows = Vector2i(2, 12)
 	exits = {
@@ -148,6 +149,8 @@ func _brick_rect(x: int, y: int, w: int, h: int, color: Color, dark: Color) -> v
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_vic_building()
 	_draw_mod_building()

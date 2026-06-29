@@ -32,6 +32,7 @@ var _WIN_FRAME := Color8(178, 172, 162)
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/reception_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(1, 14)
 	walkable_rows = Vector2i(5, 10)
 	exits = {
@@ -82,6 +83,8 @@ func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_walls()
 	_draw_floor()

@@ -104,6 +104,7 @@ var _font: Font
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/kingst_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	world_cols = 180
 	walkable_cols = Vector2i(0, 179)
 	walkable_rows = Vector2i(4, 10)
@@ -147,6 +148,8 @@ func _dk(c: Color, n := 0.12) -> Color:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	var ww := world_width()
 	_r(0, 0, ww, Config.SCREEN_HEIGHT, _PAVE)
 	# Road + lane markings.

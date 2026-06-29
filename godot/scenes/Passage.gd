@@ -39,6 +39,7 @@ var _WALL_CAP := Color8(178, 172, 162)
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/passage_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(1, 18)
 	walkable_rows = Vector2i(5, 12)
 	exits = {
@@ -86,6 +87,8 @@ func _shade(base: Color, factor: float) -> Color:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_walls()
 	_draw_tunnel()

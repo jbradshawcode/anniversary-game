@@ -35,6 +35,7 @@ var _FLOWER := [Color8(210, 65, 75), Color8(195, 85, 165), Color8(245, 242, 235)
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/garden_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	world_cols = 20
 	walkable_cols = Vector2i(1, 18)
 	walkable_rows = Vector2i(1, 13)
@@ -84,6 +85,8 @@ func _brick(x, y, w, h) -> void:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	# Paving.
 	_r(_TS, _TS, 16 * _TS, 13 * _TS, _YORK)
 	var tsz := 28

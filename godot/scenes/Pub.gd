@@ -59,6 +59,7 @@ var _BAR_PTS := PackedVector2Array([
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/pub_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	world_cols = 34
 	walkable_cols = Vector2i(1, 32)
 	walkable_rows = Vector2i(1, 11)
@@ -126,6 +127,8 @@ func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, world_width(), Config.SCREEN_HEIGHT), Color(0, 0, 0))
 	_draw_floor()
 	_draw_walls()

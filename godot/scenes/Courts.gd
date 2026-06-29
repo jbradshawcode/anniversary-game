@@ -39,6 +39,7 @@ var _COURT := Rect2(3 * _TS + 10, 6 * _TS, 14 * _TS - 20, 6 * _TS)
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/courts_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(2, 16)
 	walkable_rows = Vector2i(2, 14)
 	exits = {
@@ -160,6 +161,8 @@ func _draw_mesh(rect: Rect2) -> void:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_sky_strip()
 	_draw_back_wall()

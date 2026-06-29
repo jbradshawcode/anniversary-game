@@ -85,6 +85,7 @@ var _PUMP_CLIP := [Color8(180, 50, 55), Color8(210, 178, 92), Color8(70, 110, 15
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/wetherspoons_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(1, 18)
 	walkable_rows = Vector2i(3, 13)
 	exits = {
@@ -158,6 +159,8 @@ func _dk(c: Color, n := 22) -> Color:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))
 	_draw_carpet()
 	_draw_walls()
