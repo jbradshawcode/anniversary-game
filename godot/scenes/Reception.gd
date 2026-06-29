@@ -2,6 +2,11 @@
 # Wide, shallow room: corridor door (left), passage door (right), stairs up on
 # the left, sofas + glass partition in the middle, reception desk with windows
 # on the right. Replaces the old Promenade scroll-demo placeholder.
+#
+# Bake captures the room only (walls, floor, glass doors, desk windows). Every
+# floor-standing feature is its own Fixture node: the stairs, sofas, glass partition
+# and desk all line the bottom wall — the player only ever stands north of them (row 11
+# is wall), never behind them -> all Z_BACK, faithful to the baked player-on-top look.
 class_name Reception
 extends GameScene
 
@@ -70,31 +75,63 @@ func _init() -> void:
 	lights.append({"pos": Vector2(11 * _TS + _TS, 11 * _TS + _TS / 2), "radius": 80.0, "color": day, "energy": 0.75})  # desk windows
 
 
+# Draw target: the scene's own canvas while baking the room, or a Fixture node while it
+# paints its feature. _r/_outline/_ln all route through this.
+var _cv: CanvasItem
+
+
+func _on_ready() -> void:
+	# Every lobby feature lines the bottom wall; the player only ever stands north of
+	# them (row 11 is wall), so nothing is ever walked behind -> all Z_BACK, exactly the
+	# baked player-on-top look. They are still nodes for collision/interact ownership.
+	add_fixture(Fixture.Z_BACK, _paint_stairs)
+	add_fixture(Fixture.Z_BACK, _paint_sofas)
+	add_fixture(Fixture.Z_BACK, _paint_partition)
+	add_fixture(Fixture.Z_BACK, _paint_desk)
+
+
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _outline(x, y, w, h, c, width := 1.0) -> void:
-	draw_rect(Rect2(x, y, w, h), c, false, width)
+	_cv.draw_rect(Rect2(x, y, w, h), c, false, width)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
-	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
+	_cv = self
+	_cv.draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_walls()
 	_draw_floor()
 	_draw_glass_door(0)            # corridor door (west)
 	_draw_glass_door(15 * _TS)     # passage door (east)
-	_draw_stairs()
-	_draw_sofas()
-	_draw_glass_partition()
-	_draw_desk()
 	_draw_windows()
+
+
+func _paint_stairs(c: CanvasItem) -> void:
+	_cv = c
+	_draw_stairs()
+
+
+func _paint_sofas(c: CanvasItem) -> void:
+	_cv = c
+	_draw_sofas()
+
+
+func _paint_partition(c: CanvasItem) -> void:
+	_cv = c
+	_draw_glass_partition()
+
+
+func _paint_desk(c: CanvasItem) -> void:
+	_cv = c
+	_draw_desk()
 
 
 func _draw_walls() -> void:
