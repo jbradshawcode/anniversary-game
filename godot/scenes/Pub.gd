@@ -4,6 +4,12 @@
 # tables + chair rows along the bottom wall flanking the teal fireplace, a slate
 # conservatory wing to the east, and stained-glass street doors west.
 # Banquettes stay WALKABLE (the crew sit ON them); bar/tables/fireplaces are solid.
+#
+# Bake captures the room only (floor, walls, windows, doors). Every floor-standing
+# feature is its own Fixture node so it can move/interact/own-collision. Most sit at
+# Z_BACK (behind characters, as the bake had them) — the bar (gantry + counter), the
+# fireplaces and all the seating; nothing is ever occluded by them. The mid-room column
+# is the lone Y->z node, since the player walks behind it from the north.
 class_name Pub
 extends GameScene
 
@@ -56,6 +62,10 @@ var _BOTTLE := [Color8(40, 92, 60), Color8(162, 110, 48), Color8(188, 202, 212),
 var _BAR_PTS := PackedVector2Array([
 	Vector2(10 * 32, 32), Vector2(21 * 32, 32), Vector2(21 * 32, 3 * 32),
 	Vector2(20 * 32, 4 * 32), Vector2(12 * 32, 4 * 32), Vector2(10 * 32, 3 * 32)])
+
+# Draw target: the scene's own canvas while baking the room, or a Fixture node while it
+# paints its feature. _r/_ln and the direct draw calls all route through this.
+var _cv: CanvasItem
 
 
 func _init() -> void:
@@ -117,24 +127,37 @@ func _on_ready() -> void:
 	add_child(milla)
 	npcs.append(milla)
 
+	# The whole bar sits at Z_BACK (as the bake had it): the player always stands south of
+	# the counter and Milla serves at/over it, so nothing is ever occluded by the bar. The
+	# mid-room column is the one feature the player walks behind from the north -> Y->z.
+	# Static furnishings never have anyone behind them -> one Z_BACK node.
+	_add_fixture(Fixture.Z_BACK, _paint_gantry)
+	_add_fixture(Fixture.Z_BACK, _paint_counter)
+	_add_fixture(Fixture.Z_BACK, _paint_furnishings)
+	_add_fixture(7 * _TS, _paint_column)
+
+
+func _add_fixture(z: int, drawer: Callable) -> void:
+	var f := Fixture.new()
+	f.setup(z, drawer)
+	add_child(f)
+
 
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
-	draw_rect(Rect2(0, 0, world_width(), Config.SCREEN_HEIGHT), Color(0, 0, 0))
+	_cv = self
+	_cv.draw_rect(Rect2(0, 0, world_width(), Config.SCREEN_HEIGHT), Color(0, 0, 0))
 	_draw_floor()
 	_draw_walls()
-	_draw_bar()
-	_draw_fireplaces()
-	_draw_seating()
 	_draw_doors()
 
 
@@ -173,10 +196,9 @@ func _draw_walls() -> void:
 		_r(4, r * _TS + 4, (_TS - 6) / 2, (_TS - 8) / 2, _GLASS_HI)
 
 
-func _draw_bar() -> void:
-	draw_colored_polygon(_BAR_PTS, _BAR_WOOD)
-	draw_polyline(_BAR_PTS + PackedVector2Array([_BAR_PTS[0]]), _BAR_DK, 2.0)
-	_ln(12 * _TS, 4 * _TS - 6, 19 * _TS, 4 * _TS - 6, _BRASS, 2)   # foot rail
+# Back-bar gantry (panel, bottle shelves, mirror, fridges, sign) — Z_BACK, behind Milla.
+func _paint_gantry(c: CanvasItem) -> void:
+	_cv = c
 	var gx := 10 * _TS
 	var gw := 11 * _TS
 	_r(gx, _TS, gw, 2 * _TS, _BACKBAR)                  # back-bar gantry panel
@@ -193,12 +215,34 @@ func _draw_bar() -> void:
 	_r(gx + gw / 2 - 24, _TS + 9, 48, 7, _BAR_DK)       # SALUTATION sign
 	for lx in range(gx + gw / 2 - 20, gx + gw / 2 + 20, 5):
 		_r(lx, _TS + 11, 2, 3, _BRASS)
+
+
+# The L-peninsula counter (top + foot rail + cask taps) — Z_BACK; Milla serves over it.
+func _paint_counter(c: CanvasItem) -> void:
+	_cv = c
+	_cv.draw_colored_polygon(_BAR_PTS, _BAR_WOOD)
+	_cv.draw_polyline(_BAR_PTS + PackedVector2Array([_BAR_PTS[0]]), _BAR_DK, 2.0)
+	_ln(12 * _TS, 4 * _TS - 6, 19 * _TS, 4 * _TS - 6, _BRASS, 2)   # foot rail
 	for i in range(7):                                  # cask pump taps along the servery
 		var hx := (12 + i) * _TS + 16
 		if hx > 19 * _TS:
 			break
 		_r(hx - 2, 3 * _TS + 2, 4, 12, _BRASS_DK)
 		_r(hx - 2, 3 * _TS + 5, 4, 5, [_STAIN_R, _STAIN_G, _STAIN_B, _BRASS][i % 4])
+
+
+# Mid-room panelled structural column — Y->z so the player passes behind it from the north.
+func _paint_column(c: CanvasItem) -> void:
+	_cv = c
+	_r(16 * _TS + 8, 6 * _TS + 5, 16, 22, _BAR_WOOD)
+	_r(16 * _TS + 12, 6 * _TS + 8, 8, 16, _BAR_DK)
+
+
+# Static furnishings nothing stands behind: fireplaces + all the seating. One Z_BACK node.
+func _paint_furnishings(c: CanvasItem) -> void:
+	_cv = c
+	_draw_fireplaces()
+	_draw_seating()
 
 
 func _draw_fireplaces() -> void:
@@ -208,7 +252,7 @@ func _draw_fireplaces() -> void:
 	_r(tx, 11 * _TS, 2 * _TS, _TS, _FIRE_DK)            # teal "Salutation" f/p
 	_r(tx + 2, 11 * _TS + 2, 2 * _TS - 4, _TS - 4, _FIRE)
 	_r(tx + 7, 11 * _TS + 6, 2 * _TS - 14, 9, _MIRROR)  # over-mantel mirror
-	draw_rect(Rect2(tx + 6, 11 * _TS + 5, 2 * _TS - 12, 11), _BRASS, false, 2.0)
+	_cv.draw_rect(Rect2(tx + 6, 11 * _TS + 5, 2 * _TS - 12, 11), _BRASS, false, 2.0)
 
 
 func _banq_run(c0: int, c1: int, row: int, top_back: bool, col: Color, dk: Color) -> void:
@@ -232,7 +276,7 @@ func _long_table(c0: int, c1: int, row: int) -> void:
 	var h := _TS - 12
 	_r(x + 2, y, w - 4, h, _TABLE)
 	_r(x + 3, y + 1, w - 6, 3, Color8(196, 160, 112))
-	draw_rect(Rect2(x + 2, y, w - 4, h), _TABLE_DK, false, 1.0)
+	_cv.draw_rect(Rect2(x + 2, y, w - 4, h), _TABLE_DK, false, 1.0)
 	for gx in range(x + _TS, x + w, _TS):
 		_ln(gx, y, gx, y + h, _TABLE_DK)
 
@@ -250,7 +294,7 @@ func _wood_table(col: int, row: int) -> void:
 	var cx := col * _TS + 16
 	var cy := row * _TS + 16
 	_r(cx - 13, cy - 9, 26, 18, _TABLE)
-	draw_rect(Rect2(cx - 13, cy - 9, 26, 18), _TABLE_DK, false, 1.0)
+	_cv.draw_rect(Rect2(cx - 13, cy - 9, 26, 18), _TABLE_DK, false, 1.0)
 	_r(cx - 2, cy - 1, 4, 5, Color8(226, 222, 214))    # the ubiquitous flower vase
 
 
@@ -271,9 +315,6 @@ func _draw_seating() -> void:
 		_chair_at(c, 5, false)
 	_wood_table(26, 7)
 	_wood_table(29, 7)
-	# panelled structural column mid-room
-	_r(16 * _TS + 8, 6 * _TS + 5, 16, 22, _BAR_WOOD)
-	_r(16 * _TS + 12, 6 * _TS + 8, 8, 16, _BAR_DK)
 
 
 func _draw_doors() -> void:

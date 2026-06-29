@@ -1015,6 +1015,22 @@ func _shot() -> void:
 	assert(_sm.current.npcs.any(func(n): return n is Milla), "Milla not spawned in pub")
 	await _save("res://verify_pub.png")
 
+	# Feature-node fixtures: the player north of the mid-room column (16,6) must sort behind
+	# it, one row south in front; and Milla (serving over the Z_BACK bar) must sort in front of it.
+	var pub_col_z := 7 * 32
+	_player.place(16, 5)
+	_player.z_index = int(round(_player.position.y))
+	assert(_player.z_index < pub_col_z, "player north of the column must sort behind it")
+	_player.place(16, 8)
+	_player.z_index = int(round(_player.position.y))
+	assert(_player.z_index > pub_col_z, "player south of the column must sort in front")
+	var pub_milla_z := -9999
+	for o in _sm.current.npcs:
+		if o is Milla:
+			pub_milla_z = o.z_index
+	assert(pub_milla_z > Fixture.Z_BACK, "Milla must sort in front of the bar")
+	_player.place(12, 8)
+
 	# Seating beat: walk the crew to the table and sit them with their drinks.
 	_cutscene.start(_demo_seating())
 	var guard := 0
