@@ -131,16 +131,10 @@ func _on_ready() -> void:
 	# the counter and Milla serves at/over it, so nothing is ever occluded by the bar. The
 	# mid-room column is the one feature the player walks behind from the north -> Y->z.
 	# Static furnishings never have anyone behind them -> one Z_BACK node.
-	_add_fixture(Fixture.Z_BACK, _paint_gantry)
-	_add_fixture(Fixture.Z_BACK, _paint_counter)
-	_add_fixture(Fixture.Z_BACK, _paint_furnishings)
-	_add_fixture(7 * _TS, _paint_column)
-
-
-func _add_fixture(z: int, drawer: Callable) -> void:
-	var f := Fixture.new()
-	f.setup(z, drawer)
-	add_child(f)
+	add_fixture(Fixture.Z_BACK, _paint_gantry)
+	add_fixture(Fixture.Z_BACK, _paint_counter)
+	add_fixture(Fixture.Z_BACK, _paint_furnishings)
+	add_fixture(7 * _TS, _paint_column)
 
 
 func _r(x, y, w, h, c) -> void:

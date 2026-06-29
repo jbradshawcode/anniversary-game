@@ -30,6 +30,15 @@ func world_width() -> int:
 	return world_cols * Config.TILE_SIZE
 
 
+# Add a floor-standing feature as its own node (so it can move / be interacted with /
+# own its collision / depth-sort). z is absolute: Fixture.Z_BACK for a feature nothing
+# walks behind, or round(base_y) for one that should sort against movers by depth.
+func add_fixture(z: int, drawer: Callable) -> void:
+	var f := Fixture.new()
+	f.setup(z, drawer)
+	add_child(f)
+
+
 func _ready() -> void:
 	if bg_texture != "" and use_baked_bg:       # native backdrop, behind the crew
 		var bg := Sprite2D.new()

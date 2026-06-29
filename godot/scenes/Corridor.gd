@@ -31,6 +31,9 @@ var _CHROME_DK := Color8(158, 162, 168)
 var _FLOOR_ZONES := [[1, 19, 4, 7], [1, 5, 7, 12], [8, 12, 7, 14]]
 var _BUILDING := [[0, 20, 0, 12], [7, 13, 12, 15]]
 
+# Draw target: the scene's canvas while baking the room, or a Fixture node while it paints.
+var _cv: CanvasItem
+
 
 func _init() -> void:
 	bg_texture = "res://assets/baked/corridor_bg.png"   # native backdrop; _draw() is now the re-bake seed
@@ -68,27 +71,39 @@ func _init() -> void:
 	lights.append({"pos": Vector2(80, 304), "radius": 80.0, "color": warm, "energy": 0.8})  # west spur
 
 
+func _on_ready() -> void:
+	# The only floor-standing feature: a wall-mounted drinking fountain. Nothing walks
+	# behind it -> Z_BACK. Everything else (walls, pool windows, floor, ceiling lights,
+	# doors) is the room/shell and stays baked.
+	add_fixture(Fixture.Z_BACK, _paint_fountain)
+
+
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _outline(x, y, w, h, c, width := 1.0) -> void:
-	draw_rect(Rect2(x, y, w, h), c, false, width)
+	_cv.draw_rect(Rect2(x, y, w, h), c, false, width)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
-	draw_rect(Rect2(0, 0, _SW, _SH), Color(0, 0, 0))  # black under off-plan areas
+	_cv = self
+	_cv.draw_rect(Rect2(0, 0, _SW, _SH), Color(0, 0, 0))  # black under off-plan areas
 	_draw_walls()
 	_draw_pool_windows()
 	_draw_floor()
 	_draw_ceiling_lights()
 	_draw_doors()
+
+
+func _paint_fountain(c: CanvasItem) -> void:
+	_cv = c
 	_draw_water_fountain()
 
 
