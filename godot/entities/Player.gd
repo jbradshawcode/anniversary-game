@@ -56,6 +56,8 @@ func _ready() -> void:
 	if bare:
 		return                  # volleyball actors get a team ring instead of the glow
 
+	z_as_relative = false       # absolute z so the player depth-sorts against Fixture nodes by Y
+
 	# A warm personal glow that travels with Sarah — dynamic lighting the pygame
 	# version can't do (it would mean re-compositing an alpha overlay every frame).
 	var glow := PointLight2D.new()
@@ -111,6 +113,8 @@ func place(tx: int, ty: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if not bare:                             # depth-sort against Fixture nodes by feet-Y
+		z_index = int(round(position.y))
 	if moving:
 		var to_target := _target - position
 		var dist := to_target.length()

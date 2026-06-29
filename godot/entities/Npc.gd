@@ -42,6 +42,13 @@ func _ready() -> void:
 	position = Vector2(tile_x * ts + ts / 2, tile_y * ts + ts / 2)
 
 
+func _process(_delta: float) -> void:
+	if bare:                                 # volleyball: VBActor owns z
+		return
+	z_as_relative = false                    # depth-sort against Fixture nodes by feet-Y
+	z_index = int(round(position.y))
+
+
 func interaction_lines() -> Array:
 	return interaction_text
 

@@ -616,6 +616,22 @@ func _shot() -> void:
 	# The scene-change seam started the gym's looping theme (Matúš's "lonely people music").
 	assert(Audio._current == Config.GYM_MUSIC, "gym theme not playing in the gym")
 
+	# Fixture depth-sort (Y->z): the ball cart at (2,7) is a Fixture node anchored at its
+	# base, z = (7+1)*32 = 256. Standing above it the player must sort behind (cart occludes
+	# the feet); one tile below, in front. Assert the relation both ways and shoot the above case.
+	var cart_z := (7 + 1) * 32
+	_player.place(2, 6)
+	_player.facing = "down"
+	_player.z_index = int(round(_player.position.y))   # _process sets this live; force it for the shot
+	assert(_player.z_index < cart_z, "player above the cart must sort behind it")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_gym_occlude.png")
+	_player.place(2, 8)
+	_player.z_index = int(round(_player.position.y))
+	assert(_player.z_index > cart_z, "player below the cart must sort in front")
+	_player.place(5, 6)
+	_player.facing = "down"
+
 	# ── The real screenplay ─────────────────────────────────────────────────────
 	# New game: begin -> Week 1's opening (chapter card fires, then the check_baskets
 	# cutscene runs; Nat walks to the bench and sits).
@@ -1219,29 +1235,47 @@ const _PLAYER_FRAMES := [               # animation name -> (facing, sitting); o
 
 func _bake() -> void:
 	DirAccess.make_dir_recursive_absolute(_BAKE_DIR)
-	await _bake_background()
-	await _bake_player_sheet()
-	print("baked: ", _BAKE_DIR, "gym_bg.png + player_sheet.png")
+	var backdrops := [                        # every non-minigame scene; minigames stay procedural
+		["gym", Gym], ["kingst", KingSt], ["pub", Pub], ["garden", Garden],
+		["corridor", Corridor], ["reception", Reception], ["courtyard", Courtyard],
+		["passage", Passage], ["courts", Courts], ["wetherspoons", Wetherspoons],
+	]
+	# Optional filter: `-- --bake <name>` re-bakes only that scene (and skips the player
+	# sheet) so a single-scene change doesn't rewrite every committed PNG.
+	var args := OS.get_cmdline_user_args()
+	var only := ""
+	var bi := args.find("--bake")
+	if bi != -1 and bi + 1 < args.size() and not args[bi + 1].begins_with("--"):
+		only = args[bi + 1]
+	var n := 0
+	for b in backdrops:
+		if only == "" or b[0] == only:
+			await _bake_background(b[1], b[0])
+			n += 1
+	if only == "":
+		await _bake_player_sheet()
+	print("baked ", n, " backdrop(s)", (" + player sheet" if only == "" else ""), " into ", _BAKE_DIR)
 
 
 # A scene backdrop -> one opaque PNG. We strip the scene's lighting + crew children
 # so the texture is the raw, unlit art; runtime CanvasModulate/PointLight2D relight it.
-func _bake_background() -> void:
+# Viewport is sized to world_width() so wide scrolling scenes (King St, Pub, garden) bake whole.
+func _bake_background(scene_class, fname: String) -> void:
+	var scene: GameScene = scene_class.new()
+	scene.use_baked_bg = false                # render the procedural art, not the (absent) bake
+	scene.scale = Vector2(_BAKE_SS, _BAKE_SS)
 	var vp := SubViewport.new()
-	vp.size = Vector2i(Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT) * _BAKE_SS
+	vp.size = Vector2i(scene.world_width(), Config.SCREEN_HEIGHT) * _BAKE_SS
 	vp.transparent_bg = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(vp)
-	var gym := Gym.new()
-	gym.use_baked_bg = false                  # render the procedural art, not the (absent) bake
-	gym.scale = Vector2(_BAKE_SS, _BAKE_SS)
-	vp.add_child(gym)
+	vp.add_child(scene)
 	await get_tree().process_frame            # let Scene._ready add lights/modulate/crew
-	for c in gym.get_children():              # drop them — bake structures only
-		gym.remove_child(c)
+	for c in scene.get_children():            # drop them — bake structures only
+		scene.remove_child(c)
 		c.queue_free()
 	var img := await _grab(vp)
-	img.save_png(_BAKE_DIR + "gym_bg.png")
+	img.save_png(_BAKE_DIR + fname + "_bg.png")
 	vp.queue_free()
 
 

@@ -104,6 +104,25 @@ func _on_ready() -> void:
 		blockers.append(Vector2i(c.tile_x, c.tile_y))
 	grid.set_blockers(blockers)
 
+	# Features as their own nodes (never baked). Carts and nets sort against movers by their
+	# base-Y; the wall benches and the court-divider curtain sit at Z_BACK — nothing ever
+	# stands behind them, so seated/standing crew (e.g. Matúš on the bench) render in front.
+	for b in _BENCHES:
+		var bench := Fixture.new()
+		bench.setup(Fixture.Z_BACK, _draw_bench.bind(b.x, b.y, _BENCH_H))
+		add_child(bench)
+	for k in _BASKETS:
+		var cart := Fixture.new()
+		cart.setup((k.y + 1) * _TS, _draw_basket.bind(k.x, k.y))
+		add_child(cart)
+	for court in [_LEFT, _RIGHT]:
+		var net := Fixture.new()
+		net.setup(_NET_Y + 22, _draw_net.bind(court))
+		add_child(net)
+	var curtain := Fixture.new()
+	curtain.setup(Fixture.Z_BACK, _draw_curtain)
+	add_child(curtain)
+
 
 func _build_walls() -> Array:
 	var w: Array = []
@@ -142,13 +161,9 @@ func _draw() -> void:
 	_draw_court(_RIGHT)
 	_draw_hoops()
 	_draw_entrance()
-	_draw_curtain()
-	_draw_net(_LEFT)
-	_draw_net(_RIGHT)
-	for b in _BENCHES:
-		_draw_bench(b.x, b.y, _BENCH_H)
-	for k in _BASKETS:
-		_draw_basket(k.x, k.y)
+	# Bake = the room only (floor, walls, painted lines, wall-mounted hoops/doors). Every
+	# floor-standing feature — benches, ball carts, the volleyball nets and the court-divider
+	# curtain — is its own Fixture node (see _on_ready), so none of them are painted here.
 
 
 func _draw_walls() -> void:
@@ -237,54 +252,58 @@ func _draw_entrance() -> void:
 	_outline(Rect2(sdx, sdy, 4, sdh), _DOOR_RV, 1)
 
 
-func _draw_curtain() -> void:
+# Court-divider curtain (port of gym.py). Paints onto `c` (its own Fixture node).
+func _draw_curtain(c: CanvasItem) -> void:
 	var x := _CURT_X
 	var y0 := 2 * _TS
 	var y1 := 13 * _TS
-	_r(x - 8, y0 + 2, 16, y1 - y0, _CURT_SH)
-	_r(x - 5, y0, 10, y1 - y0, _CURT)
-	_ln(x - 4, y0, x - 4, y1, _CURT_DK)
-	_ln(x - 1, y0, x - 1, y1, _CURT_LT)
-	_ln(x + 2, y0, x + 2, y1, _CURT_DK)
-	_r(x - 7, y0 - 3, 14, 4, _RAIL)
+	c.draw_rect(Rect2(x - 8, y0 + 2, 16, y1 - y0), _CURT_SH)
+	c.draw_rect(Rect2(x - 5, y0, 10, y1 - y0), _CURT)
+	c.draw_line(Vector2(x - 4, y0), Vector2(x - 4, y1), _CURT_DK)
+	c.draw_line(Vector2(x - 1, y0), Vector2(x - 1, y1), _CURT_LT)
+	c.draw_line(Vector2(x + 2, y0), Vector2(x + 2, y1), _CURT_DK)
+	c.draw_rect(Rect2(x - 7, y0 - 3, 14, 4), _RAIL)
 
 
-func _draw_net(court: Rect2) -> void:
+# One court's volleyball net (poles + mesh + antennae). Paints onto `c` (its own Fixture node).
+func _draw_net(c: CanvasItem, court: Rect2) -> void:
 	var ny := _NET_Y
 	var left := court.position.x
 	var right := court.position.x + court.size.x
 	for px in [left - 2, right + 2]:
-		_r(px - 2, ny - 22, 4, 44, _POLE)
-	_r(left, ny - 6, court.size.x, 12, _NET_FILL)
+		c.draw_rect(Rect2(px - 2, ny - 22, 4, 44), _POLE)
+	c.draw_rect(Rect2(left, ny - 6, court.size.x, 12), _NET_FILL)
 	var x := left
 	while x <= right:
-		_ln(x, ny - 6, x, ny + 6, _NET_MESH)
+		c.draw_line(Vector2(x, ny - 6), Vector2(x, ny + 6), _NET_MESH)
 		x += 6
-	_ln(left, ny - 6, right, ny - 6, _NET_TAPE, 2)
-	_ln(left, ny + 6, right, ny + 6, _NET_TAPE, 2)
+	c.draw_line(Vector2(left, ny - 6), Vector2(right, ny - 6), _NET_TAPE, 2)
+	c.draw_line(Vector2(left, ny + 6), Vector2(right, ny + 6), _NET_TAPE, 2)
 	for ax in [left, right]:
-		_r(ax - 1, ny - 16, 3, 32, _ANT_W)
-		_r(ax - 1, ny - 16, 3, 8, _ANT_R)
-		_r(ax - 1, ny + 8, 3, 8, _ANT_R)
+		c.draw_rect(Rect2(ax - 1, ny - 16, 3, 32), _ANT_W)
+		c.draw_rect(Rect2(ax - 1, ny - 16, 3, 8), _ANT_R)
+		c.draw_rect(Rect2(ax - 1, ny + 8, 3, 8), _ANT_R)
 
 
-# Multi-tile wooden wall bench (port of entities/bench.py Bench.draw).
-func _draw_bench(col: int, row: int, height: int) -> void:
+# Multi-tile wooden wall bench (port of entities/bench.py Bench.draw). Paints onto
+# `c` (its own Fixture node) in absolute scene coords.
+func _draw_bench(c: CanvasItem, col: int, row: int, height: int) -> void:
 	var bx := col * _TS + 6
 	var by := row * _TS + 2
 	var bw := _TS - 12
 	var bh := height * _TS - 4
-	_r(bx, by, bw, bh, _BENCH_SEAT)
-	_r(bx, by, bw, maxi(bh / 6, 3), _BENCH_LITE)
+	c.draw_rect(Rect2(bx, by, bw, bh), _BENCH_SEAT)
+	c.draw_rect(Rect2(bx, by, bw, maxi(bh / 6, 3)), _BENCH_LITE)
 	var sy := by + _TS
 	while sy < by + bh:                   # slat seams once per tile down the run
-		_ln(bx + 1, sy, bx + bw - 2, sy, _BENCH_EDGE, 1)
+		c.draw_line(Vector2(bx + 1, sy), Vector2(bx + bw - 2, sy), _BENCH_EDGE, 1)
 		sy += _TS
-	_outline(Rect2(bx, by, bw, bh), _BENCH_EDGE, 1)
+	c.draw_rect(Rect2(bx, by, bw, bh), _BENCH_EDGE, false, 1)
 
 
-# Single-tile ball cart (port of entities/ball_basket.py BallBasket.draw).
-func _draw_basket(col: int, row: int) -> void:
+# Single-tile ball cart (port of entities/ball_basket.py BallBasket.draw). Paints onto
+# `c` (its own Fixture node) in absolute scene coords.
+func _draw_basket(c: CanvasItem, col: int, row: int) -> void:
 	var cx := col * _TS + 16
 	var cy := row * _TS + 16
 	var bw := 26
@@ -292,19 +311,19 @@ func _draw_basket(col: int, row: int) -> void:
 	var bx := cx - bw / 2
 	var by := cy - 5
 	var leg_bot := cy + 11
-	_ln(bx + 4, by + bh, bx + 2, leg_bot, _BK_STILT, 2)            # splayed legs
-	_ln(bx + bw - 4, by + bh, bx + bw - 2, leg_bot, _BK_STILT, 2)
+	c.draw_line(Vector2(bx + 4, by + bh), Vector2(bx + 2, leg_bot), _BK_STILT, 2)            # splayed legs
+	c.draw_line(Vector2(bx + bw - 4, by + bh), Vector2(bx + bw - 2, leg_bot), _BK_STILT, 2)
 	var brace_y := by + bh + (leg_bot - by - bh) / 2
-	_ln(bx + 3, brace_y, bx + bw - 3, brace_y, _BK_STILT_DK, 1)
+	c.draw_line(Vector2(bx + 3, brace_y), Vector2(bx + bw - 3, brace_y), _BK_STILT_DK, 1)
 	for wx in [bx + 2, bx + bw - 2]:                              # caster wheels
-		draw_circle(Vector2(wx, leg_bot + 2), 2, _BK_WHEEL)
-		draw_arc(Vector2(wx, leg_bot + 2), 2, 0, TAU, 12, _BK_OUTLINE, 1)
+		c.draw_circle(Vector2(wx, leg_bot + 2), 2, _BK_WHEEL)
+		c.draw_arc(Vector2(wx, leg_bot + 2), 2, 0, TAU, 12, _BK_OUTLINE, 1)
 	var ball_y := by - 2
 	for offset in [-7, 0, 7]:                                     # balls peeking over the rim
 		var bpx := cx + int(offset)
-		draw_circle(Vector2(bpx, ball_y), 4, _BK_BALL)
-		draw_circle(Vector2(bpx, ball_y - 1), 1, _BK_BALL_HI)
-		draw_arc(Vector2(bpx, ball_y), 4, 0, TAU, 16, _BK_OUTLINE, 1)
-	_r(bx, by, bw, bh, _BK_BOX)                                   # fabric box covers ball bottoms
-	_outline(Rect2(bx, by, bw, bh), _BK_BOX_DK, 1)
-	_ln(bx + 1, by + 1, bx + bw - 2, by + 1, _BK_BOX_LT, 1)
+		c.draw_circle(Vector2(bpx, ball_y), 4, _BK_BALL)
+		c.draw_circle(Vector2(bpx, ball_y - 1), 1, _BK_BALL_HI)
+		c.draw_arc(Vector2(bpx, ball_y), 4, 0, TAU, 16, _BK_OUTLINE, 1)
+	c.draw_rect(Rect2(bx, by, bw, bh), _BK_BOX)                   # fabric box covers ball bottoms
+	c.draw_rect(Rect2(bx, by, bw, bh), _BK_BOX_DK, false, 1)
+	c.draw_line(Vector2(bx + 1, by + 1), Vector2(bx + bw - 2, by + 1), _BK_BOX_LT, 1)
