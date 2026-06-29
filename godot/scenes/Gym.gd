@@ -36,6 +36,24 @@ var _EXIT_LT := Color8(210, 238, 215)
 var _HOOP_OR := Color8(230, 120, 40)
 var _BACKBOARD := Color8(240, 240, 238)
 var _BB_DK := Color8(200, 200, 198)
+# Wall benches (entities/bench.py) and ball baskets (entities/ball_basket.py) —
+# factory props in scene_configs['gym'], drawn here + blocked in _init.
+var _BENCH_SEAT := Color8(148, 108, 58)
+var _BENCH_LITE := Color8(168, 128, 72)
+var _BENCH_EDGE := Color8(88, 60, 32)
+var _BK_BOX := Color8(35, 85, 185)
+var _BK_BOX_DK := Color8(20, 60, 145)
+var _BK_BOX_LT := Color8(65, 115, 220)
+var _BK_BALL := Color8(240, 195, 20)
+var _BK_BALL_HI := Color8(255, 235, 100)
+var _BK_OUTLINE := Color8(20, 20, 20)
+var _BK_STILT := Color8(170, 170, 185)
+var _BK_STILT_DK := Color8(120, 120, 135)
+var _BK_WHEEL := Color8(45, 45, 52)
+
+const _BENCH_H := 5
+const _BENCHES := [Vector2i(1, 2), Vector2i(1, 8), Vector2i(18, 2), Vector2i(18, 8)]
+const _BASKETS := [Vector2i(2, 7), Vector2i(17, 7)]
 
 var _HALL := Rect2(24, 24, _SW - 48, _SH - 48)
 var _LEFT := Rect2(2 * _TS, 3 * _TS, 7 * _TS, 10 * _TS)
@@ -46,14 +64,21 @@ var _NETB := Rect2(54, 86, 532, 308)
 
 
 func _init() -> void:
+	bg_texture = "res://assets/baked/gym_bg.png"   # native backdrop; _draw() is now the re-bake seed
 	walkable_cols = Vector2i(1, 18)
 	walkable_rows = Vector2i(1, 13)
 	exits = {"up": {"scene": 5, "cols": Vector2i(8, 11)}}
 	entry_points = {"down": Vector2i(9, 1)}
+	var blocked: Array = []
+	for b in _BENCHES:                    # each bench blocks its column for _BENCH_H tiles
+		for i in _BENCH_H:
+			blocked.append(Vector2i(b.x, b.y + i))
+	for k in _BASKETS:                    # baskets block their single tile
+		blocked.append(k)
 	grid = TileGrid.new(
 		walkable_cols, walkable_rows,
 		Config.MAP_COLS, Config.MAP_ROWS,
-		[], _build_walls())
+		blocked, _build_walls())
 
 	# Cool overhead light pools — a lit sports hall (gym.py `lighting`).
 	ambient_color = Color(0.56, 0.59, 0.65)
@@ -107,6 +132,8 @@ func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
 
 
 func _draw() -> void:
+	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
+		return
 	_draw_walls()
 	_draw_floor()
 	_draw_badminton()
@@ -118,6 +145,10 @@ func _draw() -> void:
 	_draw_curtain()
 	_draw_net(_LEFT)
 	_draw_net(_RIGHT)
+	for b in _BENCHES:
+		_draw_bench(b.x, b.y, _BENCH_H)
+	for k in _BASKETS:
+		_draw_basket(k.x, k.y)
 
 
 func _draw_walls() -> void:
@@ -235,3 +266,45 @@ func _draw_net(court: Rect2) -> void:
 		_r(ax - 1, ny - 16, 3, 32, _ANT_W)
 		_r(ax - 1, ny - 16, 3, 8, _ANT_R)
 		_r(ax - 1, ny + 8, 3, 8, _ANT_R)
+
+
+# Multi-tile wooden wall bench (port of entities/bench.py Bench.draw).
+func _draw_bench(col: int, row: int, height: int) -> void:
+	var bx := col * _TS + 6
+	var by := row * _TS + 2
+	var bw := _TS - 12
+	var bh := height * _TS - 4
+	_r(bx, by, bw, bh, _BENCH_SEAT)
+	_r(bx, by, bw, maxi(bh / 6, 3), _BENCH_LITE)
+	var sy := by + _TS
+	while sy < by + bh:                   # slat seams once per tile down the run
+		_ln(bx + 1, sy, bx + bw - 2, sy, _BENCH_EDGE, 1)
+		sy += _TS
+	_outline(Rect2(bx, by, bw, bh), _BENCH_EDGE, 1)
+
+
+# Single-tile ball cart (port of entities/ball_basket.py BallBasket.draw).
+func _draw_basket(col: int, row: int) -> void:
+	var cx := col * _TS + 16
+	var cy := row * _TS + 16
+	var bw := 26
+	var bh := 11
+	var bx := cx - bw / 2
+	var by := cy - 5
+	var leg_bot := cy + 11
+	_ln(bx + 4, by + bh, bx + 2, leg_bot, _BK_STILT, 2)            # splayed legs
+	_ln(bx + bw - 4, by + bh, bx + bw - 2, leg_bot, _BK_STILT, 2)
+	var brace_y := by + bh + (leg_bot - by - bh) / 2
+	_ln(bx + 3, brace_y, bx + bw - 3, brace_y, _BK_STILT_DK, 1)
+	for wx in [bx + 2, bx + bw - 2]:                              # caster wheels
+		draw_circle(Vector2(wx, leg_bot + 2), 2, _BK_WHEEL)
+		draw_arc(Vector2(wx, leg_bot + 2), 2, 0, TAU, 12, _BK_OUTLINE, 1)
+	var ball_y := by - 2
+	for offset in [-7, 0, 7]:                                     # balls peeking over the rim
+		var bpx := cx + int(offset)
+		draw_circle(Vector2(bpx, ball_y), 4, _BK_BALL)
+		draw_circle(Vector2(bpx, ball_y - 1), 1, _BK_BALL_HI)
+		draw_arc(Vector2(bpx, ball_y), 4, 0, TAU, 16, _BK_OUTLINE, 1)
+	_r(bx, by, bw, bh, _BK_BOX)                                   # fabric box covers ball bottoms
+	_outline(Rect2(bx, by, bw, bh), _BK_BOX_DK, 1)
+	_ln(bx + 1, by + 1, bx + bw - 2, by + 1, _BK_BOX_LT, 1)

@@ -28,6 +28,12 @@ var _phone_layer: CanvasLayer
 var _phone_done := Callable()
 var _card: Card
 var _card_layer: CanvasLayer
+var _baking := false        # true during the --bake run: the overworld game isn't wired up
+
+# Music policy (mirror of app.py): per-scene looping track + the character theme
+# that overrides it while that character speaks.
+var _scene_music := {}
+var _speaker_music := ""
 
 # Shot/telemetry: which interlude path last fired + the chapter-start label.
 var _last_stub := ""
@@ -36,6 +42,22 @@ var _chapter_card := ""
 
 func _ready() -> void:
 	Engine.max_fps = 60  # cap so dt stays sane (the 2D scenes otherwise run 1000s of fps)
+
+	if "--bake" in OS.get_cmdline_user_args():
+		# Asset-bake pipeline: render the procedural _draw() art to PNG textures, then
+		# quit. The .gd remains the source of truth; PNGs are regenerable build artifacts.
+		_baking = true                     # _process must no-op: the game state isn't built
+		await _bake()
+		get_tree().quit()
+		return
+
+	_scene_music = {                          # scene_id -> looping track (else silence)
+		1: Config.GYM_MUSIC, 2: Config.KING_ST_MUSIC,
+		3: Config.SALUTATION_MUSIC, 4: Config.GARDEN_MUSIC,
+		5: Config.LATIMER_MUSIC, 6: Config.LATIMER_MUSIC, 7: Config.LATIMER_MUSIC,
+		8: Config.LATIMER_MUSIC, 9: Config.LATIMER_MUSIC,   # school grounds, not the gym
+		10: Config.WETHERSPOONS_MUSIC,
+	}
 
 	var world := Node2D.new()
 	add_child(world)
@@ -124,6 +146,7 @@ func _wire_story_stubs() -> void:
 		if nm == "":
 			nm = kicker
 		var end_game: bool = _story.beat().get("end_game", false)
+		Audio.play(Config.CHAPTER_END_MUSIC if kicker == "Finale" else Config.INTERLUDE_MUSIC)
 		var card := Card.new()
 		card.setup_interlude(kicker, nm, _date)
 		_open_card(card, func():
@@ -133,6 +156,8 @@ func _wire_story_stubs() -> void:
 				if end_game:
 					_finish_finale(adv)
 				else:
+					Audio.reset()   # interludes sit between chapters -> resume marks start fresh
+					update_scene_music(_sm.current_id())
 					_story.set_flag(adv)))
 
 	# An end-of-chapter beat: the star results card, then the post-week phone wrap-up.
@@ -141,6 +166,7 @@ func _wire_story_stubs() -> void:
 		var b := _story.beat()
 		var week := int(b.get("week", 1))
 		var adv: String = b.get("advance_when", "")
+		Audio.play(Config.CHAPTER_END_MUSIC)         # end-of-chapter screen theme
 		var card := Card.new()
 		card.setup_results(_story.stars(), maxi(1, _story.vb_attempts),
 			"%s Complete" % str(_story.week_title()))
@@ -165,6 +191,8 @@ func _wire_story_stubs() -> void:
 # After the post-week phone thread: reset the per-chapter star tally and set the
 # chapter's "left" flag, which advances into the next chapter (firing its card).
 func _finish_week(adv: String) -> void:
+	Audio.reset()                        # new chapter -> songs start fresh, not resumed
+	update_scene_music(_sm.current_id())
 	_story.vb_attempts = 0
 	_story.set_flag(adv)
 
@@ -172,11 +200,13 @@ func _finish_week(adv: String) -> void:
 # After the finale's phone thread: set its flag, then the closing "The End" card.
 # Confirming it starts a fresh playthrough.
 func _finish_finale(adv: String) -> void:
+	Audio.play(Config.CHAPTER_END_MUSIC)
 	_story.set_flag(adv)
 	var card := Card.new()
 	card.setup_the_end(false)
 	_open_card(card, func():
 		_close_card()
+		Audio.reset()             # play again -> no stale resume marks
 		_story.start_new())
 
 
@@ -191,6 +221,9 @@ func _launch_vb() -> void:
 
 
 func _launch_court(mode: String, level: String, week: int, finish: Callable) -> void:
+	# The match gets the volleyball theme; the tutorial keeps the gym theme carried in.
+	if mode == "match":
+		Audio.play(Config.VB_MUSIC)
 	var vc := VolleyCourt.new()
 	vc.configure(mode, level, week)
 	vc.on_finish = finish
@@ -253,11 +286,13 @@ func _end_volleyball() -> void:
 	if won:
 		_return_to_gym_and_advance()  # this chapter's win flag
 	else:
+		Audio.stop()                  # match pygame: lost -> theme dips, retry re-attacks it
 		_launch_vb()                  # lost -> retry the match
 
 
 # ── Diving drill orchestration (mirror of app.py _launch_dive / _end_dive) ──────
 func _launch_dive() -> void:
+	Audio.play(Config.DIVE_MUSIC)
 	var dg := DiveGame.new()
 	dg.on_finish = _end_dive
 	_dive = dg
@@ -274,12 +309,17 @@ func _end_dive() -> void:
 func _return_to_gym_and_advance() -> void:
 	if _sm.current_id() != 1:
 		_sm.go_to(1, _player, Vector2i(_player.tile_x, _player.tile_y))
-	_story.set_flag(_story.beat().get("advance_when", ""))
+	update_scene_music(1)              # back in the gym -> gym theme (the scene instance is
+	_story.set_flag(_story.beat().get("advance_when", ""))  # unchanged, so the seam won't fire)
 
 
 func _on_game_over(lines: Array) -> void:
-	# Show the message, then replay the current beat's cutscene from the top.
-	_dialogue.start(lines, "", func(): _cutscene.start(_story.beat().get("cutscene", [])))
+	# Plays once, then silence; the scene's track resumes when the message closes and
+	# we replay the current beat's cutscene from the top.
+	Audio.play(Config.GAME_OVER_MUSIC, false)
+	_dialogue.start(lines, "", func():
+		update_scene_music(_sm.current_id())
+		_cutscene.start(_story.beat().get("cutscene", [])))
 
 
 func _open_title() -> void:
@@ -295,6 +335,7 @@ func _on_title_select(i: int) -> void:
 	match label:
 		"New Game":
 			_menu.close()
+			Audio.reset()         # fresh game -> no stale song resume marks
 			_sm.go_to(1, _player, Vector2i(5, 6))
 			_story.start_new()
 		"Continue":
@@ -326,6 +367,8 @@ func _on_pause_select(i: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if _baking:                 # --bake run: no overworld state to update
+		return
 	if _minigame != null:       # the minigame drives its own update + input
 		return
 	if _phone != null:          # the phone interlude freezes the overworld
@@ -333,6 +376,7 @@ func _process(delta: float) -> void:
 	if _card != null:           # a story card freezes the overworld (and any queued cutscene)
 		return
 	_update_camera_limits()
+	update_speaker_music()             # a speaking character's theme overrides the scene track
 	if not _cutscene.active:           # the cutscene drives the crew during scripted moves
 		_party.update(delta, _player)
 	_cutscene.update(delta)
@@ -367,9 +411,34 @@ func _update_camera_limits() -> void:
 	_camera.limit_top = 0
 	_camera.limit_right = _sm.current.world_width()
 	_camera.limit_bottom = Config.SCREEN_HEIGHT
+	if _speaker_music == "":             # don't stomp a character theme that's mid-line
+		update_scene_music(_sm.current_id())
 	_party.on_scene_change(_player)  # snap the crew to the player's new entry point
 	if _sm.story != null:
 		_sm.story.notify_enter(_sm.current_id())  # beat on-enter lines + advancement
+
+
+# Swap to the active scene's looping track (or fade to silence if it has none).
+func update_scene_music(scene_id: int) -> void:
+	var track: String = _scene_music.get(scene_id, "")
+	if track != "":
+		Audio.play(track)
+	else:
+		Audio.stop()
+
+
+# While a character with a theme is talking, play it (resuming where it last left
+# off — Audio banks positions); restore the scene's track once they stop.
+func update_speaker_music() -> void:
+	var speaker := _dialogue.current_speaker()
+	var theme: String = Config.CHARACTER_MUSIC.get(speaker, "") if speaker != "" else ""
+	if theme != "":
+		if speaker != _speaker_music:
+			Audio.play(theme)
+			_speaker_music = speaker
+	elif _speaker_music != "":
+		_speaker_music = ""
+		update_scene_music(_sm.current_id())
 
 
 func _facing_for(dtx: int, dty: int) -> String:
@@ -417,7 +486,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					_menu.close()
 		return
 
-	if event.keycode == KEY_ESCAPE and not _dialogue.active and not _cutscene.active:
+	# ESC or C open the pause menu — mirror of pygame's QUIT / MENU bindings.
+	if (event.keycode == KEY_ESCAPE or event.keycode == KEY_C) \
+			and not _dialogue.active and not _cutscene.active:
 		_open_pause()
 		return
 
@@ -436,10 +507,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_DOWN:
 			if _dialogue.is_choosing():
 				_dialogue.move_choice(1)
+
+	if not Config.DEV:
+		return
+	# Dev-only affordances (set ANNIV_DEV=1) — saving/loading also live in the pause menu.
+	match event.keycode:
 		KEY_P:
 			if not _party.active() and not _cutscene.active:
 				_party.form(_player, _crew_roster())
-		KEY_C:
+		KEY_G:
 			if not _cutscene.active and not _dialogue.active:
 				_cutscene.start(_demo_cutscene())
 		KEY_S:
@@ -503,6 +579,7 @@ func _interact_ahead() -> void:
 	if who != null:
 		who.facing = _OPPOSITE[_player.facing]
 		who.queue_redraw()
+		who.on_interact()                # e.g. Matúš's deafening whistle
 		_dialogue.start(who.interaction_lines(), who.display_name)
 
 
@@ -513,6 +590,12 @@ func _shot() -> void:
 	assert(_menu.is_open(), "title menu not open")
 	await _save("res://verify_title.png")
 	_menu.close()
+
+	# Audio: every procedural SFX bank built at startup, plus the loud whistle asset.
+	for n in ["dig", "set", "serve", "spike", "perfect", "block", "tip", "blip",
+			"whistle", "cheer", "whistle_loud"]:
+		assert(Audio._banks.has(n), "sfx bank missing: %s" % n)
+	Audio.sfx("blip")                            # smoke: a bankable sound plays without error
 
 	# Gym (start scene) — verify the lit hall + the full Ch1 crew, before the story
 	# tests below mutate it (despawn joiners, strip absent crew).
@@ -530,6 +613,8 @@ func _shot() -> void:
 	assert(_sm.current.npcs.size() == 9, "gym crew not fully spawned")
 	await get_tree().create_timer(0.3).timeout
 	await _save("res://verify_gym.png")
+	# The scene-change seam started the gym's looping theme (Matúš's "lonely people music").
+	assert(Audio._current == Config.GYM_MUSIC, "gym theme not playing in the gym")
 
 	# ── The real screenplay ─────────────────────────────────────────────────────
 	# New game: begin -> Week 1's opening (chapter card fires, then the check_baskets
@@ -563,6 +648,7 @@ func _shot() -> void:
 		_minigame.on_finish.call()
 		await get_tree().process_frame
 	assert(_minigame != null and _minigame._mode == "match", "match did not start after tutorial")
+	assert(Audio._current == Config.VB_MUSIC, "volleyball theme not playing in the match")
 	# Dismiss the how-to card and drive a live AI-served rally for the shot.
 	_minigame._intro = false
 	_minigame.serving = 1
@@ -601,6 +687,7 @@ func _shot() -> void:
 	_minigame.score = [7, 0]
 	_minigame.phase = VolleyCourt.PHASE_OVER
 	_minigame.on_finish.call()
+	assert(Audio._current == Config.GYM_MUSIC, "gym theme not restored after the match")
 	await get_tree().process_frame
 	assert(_minigame == null, "minigame not closed after win")
 	assert(_story.beat()["name"] == "pub_invite", "win did not advance to pub_invite")
@@ -645,6 +732,7 @@ func _shot() -> void:
 	_story.restore(_story.index_of("w3_dive"), [])
 	_story.begin()
 	assert(_dive != null and _dive is DiveGame, "diving drill did not launch")
+	assert(Audio._current == Config.DIVE_MUSIC, "diving theme not playing")
 	assert(_dive._phase == "intro", "dive did not open on the intro card")
 	await get_tree().create_timer(0.2).timeout
 	await _save("res://verify_dive_intro.png")
@@ -694,6 +782,7 @@ func _shot() -> void:
 	_story.restore(_story.index_of("scrims_texts"), [])
 	_story.begin()
 	assert(_card != null and _card.kind == Card.Kind.INTERLUDE, "interlude title card did not open")
+	assert(Audio._current == Config.INTERLUDE_MUSIC, "interlude theme not playing")
 	await get_tree().create_timer(0.2).timeout
 	await _save("res://verify_interlude_card.png")
 	_card.confirm()                          # title card -> the texts
@@ -747,6 +836,7 @@ func _shot() -> void:
 	_story.begin()
 	assert(_last_stub == "week_end" and _card != null and _card.kind == Card.Kind.RESULTS,
 		"results card did not open")
+	assert(Audio._current == Config.CHAPTER_END_MUSIC, "chapter-end theme not playing on the results card")
 	await get_tree().create_timer(0.2).timeout
 	await _save("res://verify_results.png")
 	_card.confirm()                           # results -> the phone wrap-up
@@ -829,6 +919,26 @@ func _shot() -> void:
 	assert(_player.tile_x == 3 and _player.tile_y == 5, "tile not restored")
 	assert(_player.facing == "left", "facing not restored")
 	_sm.go_to(1, _player, Vector2i(5, 6))       # back to the gym for the visual shots
+	await get_tree().process_frame              # let the scene-change seam restart the gym theme
+
+	# Speaker theme: Matt's music overrides the scene track while he speaks, then the
+	# scene's track resumes when he stops (update_speaker_music, polled each play frame).
+	_dialogue.start(["Test line."], "Matt")
+	update_speaker_music()
+	assert(Audio._current == Config.MATT_MUSIC and _speaker_music == "Matt",
+		"Matt's theme did not override the scene music")
+	_dialogue.active = false
+	_dialogue.visible = false
+	update_speaker_music()
+	assert(_speaker_music == "" and Audio._current == Config.GYM_MUSIC,
+		"scene theme did not resume after the speaker stopped")
+
+	# Game-over track: plays once (no loop); the scene theme resumes when the message closes.
+	_on_game_over(["Game over, man."])
+	assert(Audio._current == Config.GAME_OVER_MUSIC, "game-over theme not playing")
+	_dialogue.active = false
+	_dialogue.visible = false
+	Audio.play(Config.GYM_MUSIC)                 # park the music back on the gym for the shots
 
 	# Choice demo: an `ask` with two branches; drive a selection and check the flag.
 	_cutscene.start(_demo_choice())
@@ -885,6 +995,7 @@ func _shot() -> void:
 	_player.queue_redraw()
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is Pub, "pub not loaded")
+	assert(Audio._current == Config.SALUTATION_MUSIC, "Salutation theme not playing in the pub")
 	assert(_sm.current.npcs.any(func(n): return n is Milla), "Milla not spawned in pub")
 	await _save("res://verify_pub.png")
 
@@ -918,6 +1029,7 @@ func _shot() -> void:
 	_player.queue_redraw()
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is KingSt, "King St not loaded")
+	assert(Audio._current == Config.KING_ST_MUSIC, "King Street theme not playing")
 	await _save("res://verify_kingst.png")
 
 	# The beer garden (scene 4).
@@ -1087,3 +1199,89 @@ func _save(path: String) -> void:
 	RenderingServer.force_draw()
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)
+
+
+# ── Asset-bake pipeline (run via tools/bake.sh / `-- --bake`) ───────────────────
+# Renders the procedural _draw() art into PNG textures so scenes can move to native
+# Sprite2D/AnimatedSprite2D. Bake at SUPERSAMPLE>1 for crisper art under zoom; 1 is
+# pixel-exact to the current game. The .gd stays the source of truth — re-run to
+# regenerate. Each item renders in an isolated SubViewport (no scene lighting leaks).
+const _BAKE_DIR := "res://assets/baked/"
+const _BAKE_SS := 1                     # supersample factor (bump to 2-4 for zoom-crisp art)
+const _PLAYER_CELL := Vector2i(48, 64)  # per-frame box; player art ≈ x[-12,12] y[-15,18] centred
+const _PLAYER_FRAMES := [               # animation name -> (facing, sitting); one frame each
+	["idle_down", "down", false], ["idle_up", "up", false],
+	["idle_left", "left", false], ["idle_right", "right", false],
+	["sit_down", "down", true], ["sit_up", "up", true],
+	["sit_left", "left", true], ["sit_right", "right", true],
+]
+
+
+func _bake() -> void:
+	DirAccess.make_dir_recursive_absolute(_BAKE_DIR)
+	await _bake_background()
+	await _bake_player_sheet()
+	print("baked: ", _BAKE_DIR, "gym_bg.png + player_sheet.png")
+
+
+# A scene backdrop -> one opaque PNG. We strip the scene's lighting + crew children
+# so the texture is the raw, unlit art; runtime CanvasModulate/PointLight2D relight it.
+func _bake_background() -> void:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT) * _BAKE_SS
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	var gym := Gym.new()
+	gym.use_baked_bg = false                  # render the procedural art, not the (absent) bake
+	gym.scale = Vector2(_BAKE_SS, _BAKE_SS)
+	vp.add_child(gym)
+	await get_tree().process_frame            # let Scene._ready add lights/modulate/crew
+	for c in gym.get_children():              # drop them — bake structures only
+		gym.remove_child(c)
+		c.queue_free()
+	var img := await _grab(vp)
+	img.save_png(_BAKE_DIR + "gym_bg.png")
+	vp.queue_free()
+
+
+# The player's 8 overworld states -> a horizontal sprite sheet (one cell per frame).
+func _bake_player_sheet() -> void:
+	var cell := _PLAYER_CELL * _BAKE_SS
+	var sheet := Image.create(cell.x * _PLAYER_FRAMES.size(), cell.y, false, Image.FORMAT_RGBA8)
+	for i in _PLAYER_FRAMES.size():
+		var st: Array = _PLAYER_FRAMES[i]
+		var frame := await _render_player_frame(cell, st[1], st[2])
+		sheet.blit_rect(frame, Rect2i(Vector2i.ZERO, cell), Vector2i(cell.x * i, 0))
+	sheet.save_png(_BAKE_DIR + "player_sheet.png")
+
+
+func _render_player_frame(cell: Vector2i, facing: String, sitting: bool) -> Image:
+	var vp := SubViewport.new()
+	vp.size = cell
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	var p := Player.new()
+	p.use_baked_sprite = false                # draw the procedural body, not the AnimatedSprite2D
+	p.scale = Vector2(_BAKE_SS, _BAKE_SS)
+	vp.add_child(p)
+	await get_tree().process_frame
+	for c in p.get_children():
+		if c is PointLight2D:
+			c.queue_free()                    # the travelling glow is runtime light, not sprite art
+	p.position = Vector2(cell) / 2.0          # origin (tile centre) -> cell centre
+	p.facing = facing
+	p.sitting = sitting
+	p.queue_redraw()
+	var img := await _grab(vp)
+	vp.queue_free()
+	return img
+
+
+# Settle the SubViewport, force a draw, and read its texture back to an Image.
+func _grab(vp: SubViewport) -> Image:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	RenderingServer.force_draw()
+	return vp.get_texture().get_image()

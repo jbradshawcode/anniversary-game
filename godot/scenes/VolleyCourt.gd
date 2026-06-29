@@ -542,6 +542,7 @@ func _do_serve() -> void:
 	ball.team = serving
 	_crossing = true
 	_rally_touches = 1
+	Audio.sfx("serve")
 	phase = PHASE_RALLY
 
 
@@ -584,6 +585,7 @@ func _execute_serve(power: float, lateral: float) -> void:
 	_rally_touches = 1
 	var sp: Vector2 = _SERVE_POS[server]
 	fx.emit_burst(sp.x, sp.y - 16, Color8(255, 240, 150), 8, 130)
+	Audio.sfx("serve")
 	if zone == "in":
 		var q := _serve_quality(power)
 		var peak: float = lerpf(Config.VB_SERVE_PEAK.x, Config.VB_SERVE_PEAK.y, q)
@@ -868,6 +870,7 @@ func _rebound(c: VBActor) -> void:
 		return
 	_in_system = false
 	c.set_pose(P_DIG)
+	Audio.sfx("dig")
 	fx.emit_dust(c.x, c.y)
 	var tgt := _rebound_target(c)
 	ball.launch(Vector2(c.x, c.y), tgt, _REBOUND.x, _REBOUND.y)
@@ -892,6 +895,7 @@ func _do_receive(c: VBActor, outcome: String) -> void:
 		_dump_over(c)
 		return
 	c.set_pose(P_DIG)
+	Audio.sfx("dig")
 	fx.emit_burst(c.x, c.y - 8, Color8(180, 220, 255), 6, 90)
 	if c.role == SETTER:
 		_in_system = false
@@ -945,6 +949,7 @@ func _contact_success(kind: String, c: VBActor, perfect: bool) -> void:
 	if kind == "set" and _touches >= 3:
 		_dump_over(c)
 		return
+	Audio.sfx("set" if kind == "set" else "spike")
 	if kind == "set":
 		c.set_pose(P_READY)
 		var hitter := _smart_hitter(team, c)
@@ -1144,6 +1149,7 @@ func _fire_spike(timed_out := false) -> void:
 	if label == "PERFECT":
 		fx.emit_burst(c.x, c.y - 24, Color8(255, 255, 215), 12, 300)
 	fx.shake(6.0 if label == "PERFECT" else 3.0, 0.20)
+	Audio.sfx("perfect" if label == "PERFECT" else "spike")
 	var over := false
 	if zone == "net":
 		ball.launch(Vector2(c.x, c.y), Vector2(tx, _NET), 60, 0.55)
@@ -1219,6 +1225,7 @@ func _fire_tip() -> void:
 	ball.team = c.team
 	c.set_pose(P_JUMP)
 	fx.emit_burst(c.x, c.y - 22, Color8(200, 230, 255), 8, 120)
+	Audio.sfx("tip")
 	ball.launch(Vector2(c.x, c.y), Vector2(tx, ty), Config.VB_TIP_PEAK, Config.VB_TIP_DUR)
 	_await = null
 	_crossing = true
@@ -1272,6 +1279,7 @@ func _confirm_set() -> void:
 	ball.team = hitter.team
 	_await = ["spike", hitter]
 	_commit_block(hitter)
+	Audio.sfx("set")
 	_action = false
 	_set_pressed = false
 	if setter.is_player:
@@ -1284,6 +1292,7 @@ func _dump_over(c: VBActor) -> void:
 	ball.team = c.team
 	c.set_pose(P_JUMP)
 	fx.emit_burst(c.x, c.y - 20, Color8(200, 230, 255), 8, 120)
+	Audio.sfx("tip")
 	ball.launch(Vector2(c.x, c.y), Vector2(tx, ty), Config.VB_TIP_PEAK, Config.VB_TIP_DUR)
 	_await = null
 	_crossing = true
@@ -1316,6 +1325,7 @@ func _start_block() -> void:
 	_block_jump = dur
 	_block_cd = dur + Config.VB_BLOCK_COOLDOWN
 	fx.emit_burst(p.x, p.y - 24, Color8(255, 240, 150), 8, 150)
+	Audio.sfx("block")
 
 
 func _can_block() -> bool:
@@ -1459,6 +1469,9 @@ func _point(winner: int) -> void:
 	_banner = "Your point!" if winner == 0 else "Their point"
 	_timer = 0.9
 	fx.emit_burst(ball.end.x, ball.end.y, Color8(250, 230, 120), 10, 140)
+	Audio.sfx("whistle")                 # the unobtrusive synth whistle per point
+	if winner == 0:
+		Audio.sfx("cheer")
 	for a in _team(winner):
 		a.set_pose(P_CELEBRATE)
 

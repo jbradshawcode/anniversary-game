@@ -183,7 +183,7 @@ class SoundBank:
     def _whistle(self):
         dur = 0.22
         t = self._t(dur)
-        f = 3200.0 + 90.0 * np.sin(2.0 * np.pi * 22.0 * t)      # peaful trill
+        f = 3200.0 + 90.0 * np.sin(2.0 * np.pi * 22.0 * t)      # playful trill
         phase = 2.0 * np.pi * np.cumsum(f) / self._freq
         tone = np.sin(phase) + 0.5 * np.sin(2.0 * phase) + 0.2 * np.sin(3.0 * phase)
         breath = 0.10 * np.random.uniform(-1.0, 1.0, t.shape[0])

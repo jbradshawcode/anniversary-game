@@ -198,6 +198,7 @@ func _toss() -> void:
 	_sarah_toss = 0.18                             # her little pass motion
 	_pop = null
 	_phase = "step"
+	Audio.sfx("set")
 
 
 # ── geometry of the fed ball ───────────────────────────────────────────────────
@@ -282,6 +283,7 @@ func _enter_slide() -> void:
 	_needle = 0.0
 	_swing_delay = Config.DIVE_SWING_PREROLL
 	_phase = "slide"
+	Audio.sfx("serve")
 
 
 # ── resolve a dig ──────────────────────────────────────────────────────────────
@@ -313,6 +315,7 @@ func _score(quality: String, x: float) -> void:
 	_digs += 1
 	_streak += 1
 	_best = maxi(_best, _streak)
+	Audio.sfx("dig")
 	fx.emit_burst(x, _floor_y - 16, Color8(180, 220, 255), 9, 130)
 	_pop = {"x": x, "y": float(_floor_y - 16),
 		"vx": (_sx - x) * 0.9, "vy": -320.0}        # dug back up towards Sarah

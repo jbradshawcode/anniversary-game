@@ -18,12 +18,25 @@ var world_cols := Config.MAP_COLS   # > MAP_COLS for scenes wider than one scree
 var ambient_color := Color(1, 1, 1)
 var lights: Array = []
 
+# Native render path: a scene with a baked backdrop renders from this image (a
+# Sprite2D, relit by the runtime lights) instead of its procedural _draw(). The
+# _draw() stays as the re-bake seed; the bake tool flips use_baked_bg off to
+# capture it. Subclasses set bg_texture in _init.
+var bg_texture := ""
+var use_baked_bg := true
+
 
 func world_width() -> int:
 	return world_cols * Config.TILE_SIZE
 
 
 func _ready() -> void:
+	if bg_texture != "" and use_baked_bg:       # native backdrop, behind the crew
+		var bg := Sprite2D.new()
+		bg.texture = load(bg_texture)
+		bg.centered = false
+		bg.z_index = -10
+		add_child(bg)
 	if ambient_color != Color(1, 1, 1):
 		var cm := CanvasModulate.new()
 		cm.color = ambient_color

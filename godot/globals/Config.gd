@@ -8,6 +8,31 @@ const SCREEN_WIDTH := 640
 const SCREEN_HEIGHT := 480
 const TILE_MOVE_SPEED := 280.0  # px/sec during the smooth slide between tiles
 
+# Dev-only hotkeys (force party / quick save / quick load / demo cutscene) are
+# gated behind this — the Godot mirror of pygame's ANNIV_DEV. Off in a shipped build.
+static var DEV := OS.get_environment("ANNIV_DEV") == "1"
+
+# ── Audio (mirror of config.py audio block) ───────────────────────────────────
+const MUSIC_VOLUME := 0.5        # 0..1 background-music level
+const MUSIC_FADE_MS := 600       # fade applied on play-in / stop, in ms
+const SFX_VOLUME := 0.55         # 0..1 sound-effects level
+const WHISTLE_VOLUME := 1.0      # the loud recorded whistle (whistle_loud) — overworld/plot only
+const VB_MUSIC := "res://assets/vball_theme.ogg"            # volleyball match theme (not the tutorial)
+const KING_ST_MUSIC := "res://assets/king_st.ogg"          # plays while on King Street (scene 2)
+const GYM_MUSIC := "res://assets/gym_theme.ogg"            # plays while in the gym overworld (scene 1)
+const SALUTATION_MUSIC := "res://assets/salutation.ogg"    # the Salutation pub interior (scene 3)
+const GARDEN_MUSIC := "res://assets/garden.ogg"            # the Salutation beer garden (scene 4)
+const LATIMER_MUSIC := "res://assets/latimer_upper_school.ogg"  # school grounds, not the gym (5-9)
+const WETHERSPOONS_MUSIC := "res://assets/wetherspoons.ogg"  # the Wetherspoons (scene 10)
+const DIVE_MUSIC := "res://assets/diving.ogg"              # the diving minigame (scene 12)
+const GAME_OVER_MUSIC := "res://assets/game_over.ogg"      # the Game Over screen (played once)
+const MATT_MUSIC := "res://assets/matt_theme.ogg"          # Matt's theme, while he's speaking
+const CHAPTER_END_MUSIC := "res://assets/chapter_end.ogg"  # end-of-chapter results + the finale
+const INTERLUDE_MUSIC := "res://assets/interlude.ogg"      # between-chapter texts-only interludes
+
+# A speaking character's theme overrides the scene's music while they talk.
+const CHARACTER_MUSIC := {"Matt": MATT_MUSIC}
+
 # Closing card shown after the finale (and when loading a completed save).
 const END_DEDICATION := [
 	"Thanks for playing.",

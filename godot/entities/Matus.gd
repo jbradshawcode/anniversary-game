@@ -28,6 +28,11 @@ func _init(tx := 0, ty := 0) -> void:
 	]
 
 
+# Talking to the ref earns a deafening overworld whistle.
+func on_interact() -> void:
+	Audio.sfx("whistle_loud")
+
+
 func _head_down() -> void:
 	draw_circle(Vector2(0, -6), 5, p_skin)        # face
 	_oval(0, -10.5, 6, 3.5, _HAIR)                # short messy cap

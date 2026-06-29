@@ -46,6 +46,11 @@ func interaction_lines() -> Array:
 	return interaction_text
 
 
+# Side-effect of being talked to (overworld SFX, seating, ...). Default: nothing.
+func on_interact() -> void:
+	pass
+
+
 # ── seating / drink state (owns the "drink in hand only in transit" rule) ──────
 func sit(face := "") -> void:
 	sitting = true

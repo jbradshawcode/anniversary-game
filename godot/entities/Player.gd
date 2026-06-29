@@ -35,6 +35,15 @@ var _drink_off := Vector2(0, 32)
 var scene  # the active scene (provides is_walkable / has_wall)
 var bare := false               # volleyball: head+body only (no shadow/drink/bob/glow)
 
+# Native render path: the overworld body comes from this AnimatedSprite2D (frames
+# baked from _draw()), picked by facing/sitting. _draw() keeps the procedural body
+# for `bare` (volleyball) and as the re-bake seed; the bake tool flips this off.
+var use_baked_sprite := true
+var _anim: AnimatedSprite2D
+const _SHEET := "res://assets/baked/player_sheet.png"
+const _CELL := Vector2i(48, 64)
+const _FACES := ["down", "up", "left", "right"]
+
 
 func _init(start_tx := 0, start_ty := 0) -> void:
 	tile_x = start_tx
@@ -55,6 +64,37 @@ func _ready() -> void:
 	glow.energy = 0.85
 	glow.texture_scale = (2.0 * 70.0) / 256.0
 	add_child(glow)
+
+	if use_baked_sprite:
+		_anim = AnimatedSprite2D.new()
+		_anim.sprite_frames = _build_frames()
+		add_child(_anim)        # centred -> the baked cell centre lands on the tile centre
+		_sync_sprite()
+
+
+# Build the SpriteFrames from the baked sheet: one 1-frame animation per state,
+# each an AtlasTexture region into the horizontal strip (idle_*, then sit_*).
+func _build_frames() -> SpriteFrames:
+	var tex := load(_SHEET)
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	var i := 0
+	for prefix in ["idle_", "sit_"]:
+		for face in _FACES:
+			sf.add_animation(prefix + face)
+			sf.set_animation_loop(prefix + face, false)
+			var at := AtlasTexture.new()
+			at.atlas = tex
+			at.region = Rect2(i * _CELL.x, 0, _CELL.x, _CELL.y)
+			sf.add_frame(prefix + face, at)
+			i += 1
+	return sf
+
+
+# Point the sprite at the animation for the current facing/seated state.
+func _sync_sprite() -> void:
+	if _anim != null:
+		_anim.animation = ("sit_" if sitting else "idle_") + facing
 
 
 func _tile_center(tx: int, ty: int) -> Vector2:
@@ -81,6 +121,13 @@ func _process(delta: float) -> void:
 		else:
 			position += to_target / dist * step
 		queue_redraw()
+	if _anim != null:                        # mirror facing/seat + the walk bob onto the sprite
+		_sync_sprite()
+		var bob := 0.0
+		if moving and not sitting:
+			var t := 1.0 - (_target - position).length() / float(Config.TILE_SIZE)
+			bob = 3.0 * 4.0 * t * (1.0 - t)
+		_anim.position.y = -bob
 
 
 func try_move(dtx: int, dty: int, target_scene) -> bool:
@@ -132,6 +179,9 @@ func _draw() -> void:
 		_body()
 		if facing == "up":
 			_back_hair()
+		return
+	if use_baked_sprite:        # overworld body comes from the AnimatedSprite2D; overlay the drink
+		_blit_drink()
 		return
 	if sitting:
 		_draw_seated()

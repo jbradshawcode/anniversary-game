@@ -79,6 +79,11 @@ func is_choosing() -> bool:
 	return _choosing and not _typing
 
 
+# The name tag currently showing ("" when idle) — drives the speaker's music theme.
+func current_speaker() -> String:
+	return _speaker if active else ""
+
+
 func move_choice(delta: int) -> void:
 	if not is_choosing() or delta == 0:
 		return
@@ -113,10 +118,15 @@ func _process(delta: float) -> void:
 		return
 	var fast := Input.is_key_pressed(KEY_X)
 	var cps: float = Config.DIALOGUE_CPS * (Config.DIALOGUE_FAST if fast else 1.0)
+	var prev := int(_shown)
 	_shown += cps * delta
 	if _shown >= _full.length():
 		_shown = float(_full.length())
 		_typing = false
+	var now := int(_shown)
+	# blip on each fresh (every other, non-space) glyph — but not while fast-forwarding
+	if not fast and now > prev and now % 2 == 0 and not _full[now - 1].strip_edges().is_empty():
+		Audio.sfx("blip")
 	queue_redraw()
 
 
