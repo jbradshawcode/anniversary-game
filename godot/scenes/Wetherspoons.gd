@@ -5,6 +5,13 @@
 # the front room from the snug, green + mustard wall banquettes, poseur high-tables
 # by the bar, dining tables + a snug, a teal-tiled fireplace, and the street doors.
 # Banquettes/bar/tables/partition/fireplace are all SOLID. Exit: down -> King St (2).
+#
+# Bake captures the room only: the floral carpet, panelled walls (gilt prints, mirror,
+# bunting), the street doors and the pendant/ceiling-rose light fittings. Every solid
+# feature is its own Fixture node. As in the Salutation (Pub.gd), the player never gets
+# north of any of them — the bar/fireplace line the top wall, the partition's north face
+# is that wall, banquettes hug the side walls, and the tables read faithfully player-on-
+# top -> all Z_BACK (no mid-room walk-behind occluder exists here).
 class_name Wetherspoons
 extends GameScene
 
@@ -118,39 +125,53 @@ func _blocked() -> Array:
 	return b
 
 
+# Draw target: the scene's own canvas while baking the room, or a Fixture node while it
+# paints its feature. Every draw helper routes through this.
+var _cv: CanvasItem
+
+
+func _on_ready() -> void:
+	# Every solid feature is a node; none is ever walked behind (the player stays south of
+	# the bar/fireplace/partition, beside the wall banquettes, and on top of the tables) ->
+	# all Z_BACK, the faithful baked look. Nodes own collision/interact at any z.
+	add_fixture(Fixture.Z_BACK, _paint_bar)
+	add_fixture(Fixture.Z_BACK, _paint_partition)
+	add_fixture(Fixture.Z_BACK, _paint_furnishings)
+
+
 # ── draw helpers (pygame.draw.* mirrors) ─────────────────────────────────────
 
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _outline(x, y, w, h, c, width := 1.0) -> void:
-	draw_rect(Rect2(x, y, w, h), c, false, width)
+	_cv.draw_rect(Rect2(x, y, w, h), c, false, width)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _circ(cx, cy, r, c) -> void:
-	draw_circle(Vector2(cx, cy), r, c)
+	_cv.draw_circle(Vector2(cx, cy), r, c)
 
 
 func _circ_o(cx, cy, r, c, w := 1.0) -> void:
-	draw_arc(Vector2(cx, cy), r, 0, TAU, 24, c, w)
+	_cv.draw_arc(Vector2(cx, cy), r, 0, TAU, 24, c, w)
 
 
 func _poly(pts: Array, c: Color) -> void:
-	draw_colored_polygon(PackedVector2Array(pts), c)
+	_cv.draw_colored_polygon(PackedVector2Array(pts), c)
 
 
 # pygame.draw.ellipse bounding-box semantics: (x, y) top-left, (w, h) box size.
 func _ellipse(x, y, w, h, c) -> void:
 	var rx: float = w / 2.0
 	var ry: float = h / 2.0
-	draw_set_transform(Vector2(x + rx, y + ry), 0, Vector2(rx, ry))
-	draw_circle(Vector2.ZERO, 1.0, c)
-	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+	_cv.draw_set_transform(Vector2(x + rx, y + ry), 0, Vector2(rx, ry))
+	_cv.draw_circle(Vector2.ZERO, 1.0, c)
+	_cv.draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 
 func _dk(c: Color, n := 22) -> Color:
@@ -161,18 +182,32 @@ func _dk(c: Color, n := 22) -> Color:
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
-	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))
+	_cv = self
+	_cv.draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))
 	_draw_carpet()
 	_draw_walls()
-	_draw_fireplace()
+	_draw_doors()
+	_draw_lights()
+
+
+func _paint_bar(c: CanvasItem) -> void:
+	_cv = c
 	_draw_bar()
+
+
+func _paint_partition(c: CanvasItem) -> void:
+	_cv = c
 	_draw_partition()
+
+
+# Fireplace + all the seating: nothing is ever walked behind -> one Z_BACK node.
+func _paint_furnishings(c: CanvasItem) -> void:
+	_cv = c
+	_draw_fireplace()
 	_draw_banquettes()
 	_draw_high_tables(_HIGH)
 	_draw_dining(_DINING, ["up", "down", "left", "right"])
 	_draw_dining(_SNUG, ["up", "down", "left"])
-	_draw_doors()
-	_draw_lights()
 
 
 # ── Floor: the famous Wetherspoons floral carpet ─────────────────────────────
@@ -196,7 +231,7 @@ func _draw_carpet() -> void:
 		var off: int = step / 2 if j % 2 else 0
 		var gx := 8 + off
 		while gx < right:
-			draw_arc(Vector2(gx, gy), 14, -2.9, -0.3, 16, _CARPET_CR, 1)
+			_cv.draw_arc(Vector2(gx, gy), 14, -2.9, -0.3, 16, _CARPET_CR, 1)
 			_flower(gx, gy)
 			gx += step
 		gy += step
@@ -349,7 +384,7 @@ func _chair(cx, cy, face) -> void:
 	_circ(cx, cy, 5, _SEAT)
 	_circ_o(cx, cy, 5, _dk(_SEAT), 1)
 	var a: Array = _CHAIR_ARCS[face]
-	draw_arc(Vector2(cx + a[2] + 9, cy + a[3] + 9), 9, -a[1], -a[0], 12, _CHAIR_DK, 3)
+	_cv.draw_arc(Vector2(cx + a[2] + 9, cy + a[3] + 9), 9, -a[1], -a[0], 12, _CHAIR_DK, 3)
 
 
 func _draw_dining(positions: Array, faces: Array) -> void:
