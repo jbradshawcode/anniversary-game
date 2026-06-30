@@ -738,6 +738,9 @@ func _shot() -> void:
 	assert(_cutscene.active, "opening cutscene not running")
 	assert(_story.beat()["name"] == "check_baskets", "wrong starting beat")
 	assert(_chapter_card == "Week 1 — Week 1", "chapter-start callback did not fire")
+	# Paging: the opening say's two mid-sentence fragments merge into one page.
+	assert(_dialogue._full.contains("squeak of fresh trainers"),
+		"opening line did not merge into one page (_paginate)")
 	await _save("res://verify_cutscene.png")
 	await _drive(900)                              # let the opening cutscene finish
 

@@ -38,6 +38,7 @@ var _wait := 0.0
 var _movers: Array = []        # [[actor, [Vector2 waypoints]], ...]
 var _await_dialogue := false
 var _last_speaker := ""
+var _last_line := ""             # last line shown, reused as an empty ask/hub's prompt
 var _fade_to := 0.0
 var _fade_rate := 0.0
 var _fader = null               # [actor, alpha_rate] for a blocking 'vanish'
@@ -175,6 +176,8 @@ func _begin_step() -> void:
 			"say":
 				var lines: Array = step[1]
 				var speaker: String = step[2] if step.size() > 2 else ""
+				if not lines.is_empty():
+					_last_line = str(lines[-1])
 				_converse(speaker)
 				_i += 1
 				_await_dialogue = true
@@ -274,6 +277,8 @@ func _begin_step() -> void:
 # list of steps to splice in (Array of step-Arrays), or [] to just continue.
 func _begin_ask(step: Array) -> void:
 	var text: String = step[1]
+	if text == "":                          # keep the prior line visible above the choices
+		text = _last_line
 	var outcomes: Dictionary = step[2]
 	var speaker: String = step[3] if step.size() > 3 else ""
 	_converse(speaker)
@@ -317,6 +322,8 @@ func _on_ask_done() -> void:
 # ── hub (explore-all menu) ────────────────────────────────────────────────────
 func _begin_hub(step: Array) -> void:
 	var text: String = step[1]
+	if text == "":                          # keep the prior line visible above the choices
+		text = _last_line
 	var outcomes: Dictionary = step[2]
 	var speaker: String = step[3] if step.size() > 3 else ""
 	if not is_same(outcomes, _hub_ref):     # a fresh hub -> reset exploration

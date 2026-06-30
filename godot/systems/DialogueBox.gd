@@ -16,6 +16,10 @@ const _BOX_H := 96
 const _BORDER_W := 3
 const _PAD := 16
 const _FONT_SIZE := 16
+# A page ending in one of these is an intentional beat-break; anything else (a
+# mid-sentence wrap) "has no reason to break" and merges with the next page.
+const _SENTENCE_END := ".!?…\"')]”’"
+const _MAX_LINES := 2          # a single page never shows more than this many lines
 
 var active := false
 var portraits: Dictionary = {}   # speaker (lowercase) -> bust ImageTexture; set by Main
@@ -41,14 +45,79 @@ func _ready() -> void:
 
 
 func start(pages: Array, speaker := "", on_done := Callable(), on_choice := Callable()) -> void:
-	_pages = pages.duplicate()
-	_index = 0
+	if _font == null:
+		_font = ThemeDB.fallback_font
 	_speaker = speaker
+	_pages = _paginate(pages)
+	_index = 0
 	_on_done = on_done
 	_on_choice = on_choice
 	active = true
 	visible = true
 	_begin_page()
+
+
+# Merge consecutive text pages that were only split mid-sentence (a wrap with no
+# reason to break) into one page, capped at 2 lines; then split any page that still
+# exceeds 2 lines. Choice pages (Dictionaries) pass through. Port of dialogue._paginate.
+func _paginate(pages: Array) -> Array:
+	var max_w := _max_text_w()
+	var merged: Array = []
+	for p in pages:
+		var prev = merged[-1] if not merged.is_empty() else null
+		if p is String and prev is String and not _ends_sentence(prev) \
+				and _wrap_lines(prev + " " + p, max_w).size() <= _MAX_LINES:
+			merged[-1] = prev + " " + p
+		else:
+			merged.append(p)
+	var out: Array = []
+	for p in merged:
+		if not (p is String):
+			out.append(p)
+			continue
+		var wl := _wrap_lines(p, max_w)
+		if wl.size() <= _MAX_LINES:
+			out.append(p)
+		else:                                  # too long -> chunk into 2-line pages
+			var i := 0
+			while i < wl.size():
+				out.append(" ".join(wl.slice(i, i + _MAX_LINES)))
+				i += _MAX_LINES
+	return out
+
+
+func _ends_sentence(s: String) -> bool:
+	var t := s.strip_edges()
+	return t == "" or _SENTENCE_END.contains(t[t.length() - 1])
+
+
+func _wrap_lines(text: String, max_w: float) -> Array:
+	var lines: Array = []
+	var cur := ""
+	for word in text.split(" "):
+		var trial := word if cur == "" else cur + " " + word
+		if cur == "" or _font.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x <= max_w:
+			cur = trial
+		else:
+			lines.append(cur)
+			cur = word
+	if cur != "":
+		lines.append(cur)
+	return lines
+
+
+# Width available for wrapped text — narrower when a portrait bust shows, minus the
+# "* " prefix the draw prepends (so a wrapped line plus prefix can't overflow).
+func _max_text_w() -> float:
+	var box_w := float(Config.SCREEN_WIDTH - _MARGIN * 2)
+	var content_off := float(_PAD)
+	var bust = portraits.get(_speaker.to_lower()) if _speaker != "" else null
+	if bust != null:
+		var ph := float(_BOX_H - 24)
+		var pw: float = ph * bust.get_width() / bust.get_height()
+		content_off = 12.0 + pw + _PAD
+	var prefix_w := _font.get_string_size("* ", HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE).x
+	return maxf(60.0, box_w - content_off - _PAD - prefix_w)
 
 
 func _begin_page() -> void:
