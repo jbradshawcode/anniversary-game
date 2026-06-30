@@ -121,17 +121,27 @@ func _back() -> void:
 
 
 # ── menu builders ────────────────────────────────────────────────────────────────
+# Title screens paint over a gradient backdrop; pause screens dim the live world.
+# Only the title root shows the big hero header.
+func _present(hero_header: bool) -> void:
+	_menu.backdrop = "gradient" if _root == "title" else "dim"
+	_menu.hero = hero_header
+
+
 func _open_root() -> void:
 	_state = "root"
 	if _root == "title":
+		_present(true)
 		_menu.open("The Story of Us", ["New Game", "Load Game", "Quit"], _select, _TITLE_HINT)
 	else:
+		_present(false)
 		_menu.open("Paused", ["Resume", "Save Game", "Quit to Title", "Quit to Desktop"],
 			_select, _PAUSE_HINT)
 
 
 func _open_slots(state: String) -> void:
 	_state = state                       # "save" or "load"
+	_present(false)
 	var title := "Save Game" if state == "save" else "Load Game"
 	_menu.open(title, _slot_labels() + ["Back"], _select)
 
@@ -140,6 +150,7 @@ func _open_slot_action(slot: int, source: String) -> void:
 	_slot_target = slot
 	_slot_source = source
 	_state = "slot_action"
+	_present(false)
 	var verb := "Load" if source == "load" else "Overwrite"
 	var nm := "Autosave" if slot == SaveManager.AUTOSAVE else "Slot %d" % slot
 	_menu.open(nm, [verb, "Delete", "Back"], _select)
