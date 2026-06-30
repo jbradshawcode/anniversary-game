@@ -1062,6 +1062,18 @@ func _shot() -> void:
 	await get_tree().create_timer(0.3).timeout
 	assert(_sm.current is KingSt, "King St not loaded")
 	assert(Audio._current == Config.KING_ST_MUSIC, "King Street theme not playing")
+	# Streetlamp depth-sort (Y->z): the north lamps are a Fixture anchored at the curb
+	# row, z = 6*32 = 192. On the north pavement (row 5) the player must sort behind a
+	# lamp (it occludes); stepping south onto a crossing tile (row 7) puts them in front.
+	var lamp_z := 6 * 32
+	_player.place(90, 5)                                # north pavement, at a lamp column
+	_player.z_index = int(round(_player.position.y))   # _process sets this live; force it for the shot
+	assert(_player.z_index < lamp_z, "player on the north pavement must sort behind a streetlamp")
+	_player.place(96, 7)                                # crossing tile, south of the curb base
+	_player.z_index = int(round(_player.position.y))
+	assert(_player.z_index > lamp_z, "player on the crossing must sort in front of a north streetlamp")
+	_player.place(97, 5)
+	_player.facing = "down"
 	await _save("res://verify_kingst.png")
 
 	# The beer garden (scene 4).

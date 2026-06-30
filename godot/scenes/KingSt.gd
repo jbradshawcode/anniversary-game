@@ -4,6 +4,13 @@
 # zebra crossings, evening lamplight. (Condensed from the original: per-shop style
 # variants -> one generic shopfront; live traffic -> a few parked cars; the green-man
 # timing -> crossings always passable.)
+#
+# Bake captures the street surface only: pavements, carriageway + lane markings, side
+# roads, and the zebra crossings (surface markings). Every feature is its own node:
+# the north shops and south buildings sit Z_BACK (the player walks the pavement in
+# front of them, never behind), as do the parked cars (in the non-walkable road). The
+# streetlamps are the lone Y->z occluders — the player walks the pavement behind their
+# bases, so each lamp group sorts at its base row.
 class_name KingSt
 extends GameScene
 
@@ -90,7 +97,9 @@ var _BUILDINGS := [
 
 var _SIDE_ROADS := [[10, 3], [25, 3], [42, 3], [61, 3], [78, 3]]
 var _CROSSINGS := [[10, 11], [25, 26], [42, 43], [61, 62], [78, 79], [96, 97], [129, 130], [157, 158]]
-var _LAMP_COLS := [4, 19, 35, 53, 71, 90, 106, 123, 142, 161, 176, 11, 27, 46, 64, 83, 100, 119, 135, 153, 171]
+# North-pavement lamps (base at the curb, row 6) vs south-pavement lamps (row 11).
+var _NORTH_LAMP_COLS := [4, 19, 35, 53, 71, 90, 106, 123, 142, 161, 176]
+var _SOUTH_LAMP_COLS := [11, 27, 46, 64, 83, 100, 119, 135, 153, 171]
 var _PARKED := [[8, 0], [33, 1], [55, 0], [88, 1], [115, 0], [145, 1], [167, 0]]
 
 var _SIGN_COLORS := {
@@ -114,15 +123,35 @@ func _init() -> void:
 
 	# Golden-hour evening: warm ambient + a pool under each streetlamp.
 	ambient_color = Color(0.74, 0.60, 0.46)
-	for c in _LAMP_COLS:
-		var by := 6 * _TS if c in [4, 19, 35, 53, 71, 90, 106, 123, 142, 161, 176] else 11 * _TS
-		lights.append({"pos": Vector2(c * _TS + 16, by), "radius": 78.0,
+	for c in _NORTH_LAMP_COLS:
+		lights.append({"pos": Vector2(c * _TS + 16, 6 * _TS), "radius": 78.0,
 			"color": Color8(255, 214, 150), "energy": 1.0})
+	for c in _SOUTH_LAMP_COLS:
+		lights.append({"pos": Vector2(c * _TS + 16, 11 * _TS), "radius": 78.0,
+			"color": Color8(255, 214, 150), "energy": 1.0})
+
+
+# Draw target: the scene's own canvas while baking the street surface, or a Fixture
+# node while it paints its feature. Every draw helper routes through this.
+var _cv: CanvasItem
 
 
 func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	super._ready()
+
+
+func _on_ready() -> void:
+	# North shops + south buildings: the player walks the pavement in front of them and
+	# never behind (their rows aren't walkable) -> Z_BACK. Parked cars sit in the
+	# non-walkable carriageway, never walked behind -> Z_BACK. The streetlamps are the
+	# walk-behind occluders: the player passes the pavement behind each base -> Y->z,
+	# grouped by base row (all north bases at row 6, all south at row 11).
+	add_fixture(Fixture.Z_BACK, _paint_shops)
+	add_fixture(Fixture.Z_BACK, _paint_buildings)
+	add_fixture(Fixture.Z_BACK, _paint_cars)
+	add_fixture(6 * _TS, _paint_north_lamps)
+	add_fixture(11 * _TS, _paint_south_lamps)
 
 
 # Road rows (6-8) are crossable only on a zebra crossing; pavements free.
@@ -136,11 +165,11 @@ func is_walkable(tx: int, ty: int) -> bool:
 
 
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _dk(c: Color, n := 0.12) -> Color:
@@ -150,6 +179,7 @@ func _dk(c: Color, n := 0.12) -> Color:
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
+	_cv = self
 	var ww := world_width()
 	_r(0, 0, ww, Config.SCREEN_HEIGHT, _PAVE)
 	# Road + lane markings.
@@ -161,17 +191,38 @@ func _draw() -> void:
 		_r(x, cy - 1, 20, 2, _ROAD_LINE)
 	for sr in _SIDE_ROADS:
 		_draw_side_road(sr[0], sr[1])
-	for shop in _SHOPS:
-		_draw_shop(shop)
-	for b in _BUILDINGS:
-		_draw_building(b)
 	for cr in _CROSSINGS:
 		_draw_crossing(cr[0], cr[1])
+
+
+func _paint_shops(c: CanvasItem) -> void:
+	_cv = c
+	for shop in _SHOPS:
+		_draw_shop(shop)
+
+
+func _paint_buildings(c: CanvasItem) -> void:
+	_cv = c
+	for b in _BUILDINGS:
+		_draw_building(b)
+
+
+func _paint_cars(c: CanvasItem) -> void:
+	_cv = c
 	for car in _PARKED:
 		_draw_car(car[0], car[1])
-	for c in _LAMP_COLS:
-		var by := 6 * _TS if c in [4, 19, 35, 53, 71, 90, 106, 123, 142, 161, 176] else 11 * _TS
-		_draw_lamp(c, by)
+
+
+func _paint_north_lamps(c: CanvasItem) -> void:
+	_cv = c
+	for col in _NORTH_LAMP_COLS:
+		_draw_lamp(col, 6 * _TS)
+
+
+func _paint_south_lamps(c: CanvasItem) -> void:
+	_cv = c
+	for col in _SOUTH_LAMP_COLS:
+		_draw_lamp(col, 11 * _TS)
 
 
 func _draw_side_road(col: int, w: int) -> void:
@@ -192,19 +243,19 @@ func _draw_shop(shop: Array) -> void:
 	# Window strip + a door.
 	_r(x + 4, 2 * _TS + 12, pw - 8, h - (2 * _TS + 14), _GLASS)
 	_r(x + 5, 2 * _TS + 12, (pw - 8) / 2, 8, _GLASS_HI)
-	draw_rect(Rect2(x + 4, 2 * _TS + 12, pw - 8, h - (2 * _TS + 14)), _dk(wall, 0.2), false, 1.0)
+	_cv.draw_rect(Rect2(x + 4, 2 * _TS + 12, pw - 8, h - (2 * _TS + 14)), _dk(wall, 0.2), false, 1.0)
 	_r(x + pw / 2 - 9, h - 22, 18, 22, _DOOR_WOOD)
 	# Awning.
 	var ay := 2 * _TS - 12
 	_r(x + 2, ay, pw - 4, 20, awning)
 	_r(x + 2, ay + 18, pw - 4, 3, _dk(awning, 0.12))
-	draw_rect(Rect2(x, 0, pw, h), _dk(wall, 0.08), false, 1.0)
+	_cv.draw_rect(Rect2(x, 0, pw, h), _dk(wall, 0.08), false, 1.0)
 	# Sign text on the awning.
 	var sc: Color = _SIGN_COLORS.get(label, Color8(35, 32, 28) if _brightness(awning) >= 0.5 else Color8(252, 252, 245))
 	var lines := label.split("\n")
 	var ty := ay + 8 - (lines.size() - 1) * 5
 	for ln in lines:
-		draw_string(_font, Vector2(x + 2, ty), ln, HORIZONTAL_ALIGNMENT_CENTER, pw - 4, 9, sc)
+		_cv.draw_string(_font, Vector2(x + 2, ty), ln, HORIZONTAL_ALIGNMENT_CENTER, pw - 4, 9, sc)
 		ty += 10
 
 
@@ -223,7 +274,7 @@ func _draw_building(b: Array) -> void:
 		var wx := x + i * _TS + 6
 		_r(wx, y + 8, _TS * 2 - 12, 20, _GLASS)
 		_r(wx, y + 8, (_TS * 2 - 12) / 2, 10, _GLASS_HI)
-	draw_rect(Rect2(x, y, pw, h), _dk(wall, 0.08), false, 1.0)
+	_cv.draw_rect(Rect2(x, y, pw, h), _dk(wall, 0.08), false, 1.0)
 
 
 func _draw_crossing(c0: int, c1: int) -> void:
@@ -233,8 +284,8 @@ func _draw_crossing(c0: int, c1: int) -> void:
 		_r(bx, 6 * _TS + 2, 6, 3 * _TS - 4, _ZEBRA)
 	for ky in [6 * _TS - 7, 9 * _TS + 6]:       # signal heads
 		_r(x0 - 9, ky - 7, 7, 14, Color8(30, 30, 34))
-		draw_circle(Vector2(x0 - 5, ky - 3), 2, Color8(225, 60, 45))
-		draw_circle(Vector2(x0 - 5, ky + 3), 2, Color8(70, 215, 95))
+		_cv.draw_circle(Vector2(x0 - 5, ky - 3), 2, Color8(225, 60, 45))
+		_cv.draw_circle(Vector2(x0 - 5, ky + 3), 2, Color8(70, 215, 95))
 
 
 func _draw_car(col: int, lane: int) -> void:
