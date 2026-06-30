@@ -4,6 +4,12 @@
 # modern wing (east). Narrows at the gates, widens into a piazza near the glass.
 # The walkable box (3..16, 2..12) is carved by static_blocked: planted borders and
 # building edges down both sides, leaving the central path + piazza navigable.
+#
+# Bake captures the room only: the flanking buildings, gate walls + posts, south walls,
+# the paved floor and the glass entrance. Every courtyard feature is its own node. The
+# planted borders, benches and cafe tables are low -> Z_BACK (faithful player-on-top).
+# The trees and cypresses are tall: the player walks behind them, so each is a Y->z
+# node anchored at its trunk base.
 class_name Courtyard
 extends GameScene
 
@@ -98,43 +104,60 @@ func _init() -> void:
 	lights.append({"pos": Vector2(9 * _TS + _TS, 1 * _TS), "radius": 160.0, "color": sky, "energy": 0.4})    # gate gap
 
 
+# Draw target: the scene's own canvas while baking the room, or a Fixture node while it
+# paints its feature. Every draw helper routes through this.
+var _cv: CanvasItem
+
+
+func _on_ready() -> void:
+	# Low features the player never visibly stands behind -> Z_BACK (faithful player-on-top).
+	add_fixture(Fixture.Z_BACK, _paint_planters)
+	add_fixture(Fixture.Z_BACK, _paint_benches)
+	add_fixture(Fixture.Z_BACK, _paint_cafe_tables)
+	# Tall vegetation the player rounds from the north -> Y->z, anchored at the trunk base.
+	for t in [[5, 2], [14, 4], [5, 10]]:
+		add_fixture(t[1] * _TS + 22, _paint_tree.bind(t[0], t[1]))
+	for cp in [[3, 10], [3, 11]]:
+		add_fixture(cp[1] * _TS + 24, _paint_cypress.bind(cp[0], cp[1]))
+
+
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _outline(x, y, w, h, c, width := 1.0) -> void:
-	draw_rect(Rect2(x, y, w, h), c, false, width)
+	_cv.draw_rect(Rect2(x, y, w, h), c, false, width)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _circ(cx, cy, r, c) -> void:
-	draw_circle(Vector2(cx, cy), r, c)
+	_cv.draw_circle(Vector2(cx, cy), r, c)
 
 
 func _circ_outline(cx, cy, r, c, w := 1.0) -> void:
-	draw_arc(Vector2(cx, cy), r, 0, TAU, 24, c, w)
+	_cv.draw_arc(Vector2(cx, cy), r, 0, TAU, 24, c, w)
 
 
 func _poly(pts: Array, c) -> void:
-	draw_colored_polygon(PackedVector2Array(pts), c)
+	_cv.draw_colored_polygon(PackedVector2Array(pts), c)
 
 
 func _poly_outline(pts: Array, c, w := 1.0) -> void:
 	var closed := pts.duplicate()
 	closed.append(pts[0])
-	draw_polyline(PackedVector2Array(closed), c, w)
+	_cv.draw_polyline(PackedVector2Array(closed), c, w)
 
 
 # pygame.draw.ellipse bounding-box semantics: (x, y) top-left, (w, h) box size.
 func _ellipse(x, y, w, h, c) -> void:
 	var rx: float = w / 2.0
 	var ry: float = h / 2.0
-	draw_set_transform(Vector2(x + rx, y + ry), 0, Vector2(rx, ry))
-	draw_circle(Vector2.ZERO, 1.0, c)
-	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+	_cv.draw_set_transform(Vector2(x + rx, y + ry), 0, Vector2(rx, ry))
+	_cv.draw_circle(Vector2.ZERO, 1.0, c)
+	_cv.draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 
 # Flat brick fill with offset courses + mortar lines (courtyard.py's inline pattern).
@@ -151,27 +174,41 @@ func _brick_rect(x: int, y: int, w: int, h: int, color: Color, dark: Color) -> v
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
-	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
+	_cv = self
+	_cv.draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_vic_building()
 	_draw_mod_building()
 	_draw_gate_walls()
 	_draw_south_walls()
 	_draw_floor()
-	_draw_planted_borders()
 	_draw_gateposts()
 	_draw_glass_entrance()
 
-	_draw_tree(5, 2)
-	_draw_tree(14, 4)
-	_draw_tree(5, 10)
 
-	_draw_cypress(3, 10)
-	_draw_cypress(3, 11)
+func _paint_planters(c: CanvasItem) -> void:
+	_cv = c
+	_draw_planted_borders()
 
+
+func _paint_benches(c: CanvasItem) -> void:
+	_cv = c
 	_draw_bench(5, 6, "east")
 	_draw_bench(14, 7, "west")
 
+
+func _paint_cafe_tables(c: CanvasItem) -> void:
+	_cv = c
 	_draw_cafe_tables()
+
+
+func _paint_tree(c: CanvasItem, col: int, row: int) -> void:
+	_cv = c
+	_draw_tree(col, row)
+
+
+func _paint_cypress(c: CanvasItem, col: int, row: int) -> void:
+	_cv = c
+	_draw_cypress(col, row)
 
 
 func _draw_vic_building() -> void:

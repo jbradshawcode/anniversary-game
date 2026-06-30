@@ -1107,6 +1107,17 @@ func _shot() -> void:
 	assert(_sm.current is Courtyard, "courtyard not loaded")
 	await _save("res://verify_courtyard.png")
 
+	# Tree depth-sort (Y->z): the mid-avenue tree at (5,10) is a Fixture anchored at its
+	# trunk base, z = 10*32 + 22 = 342. North of it (row 9) the player sorts behind (the
+	# canopy occludes); south of it (row 11) in front.
+	var tree_z := 10 * 32 + 22
+	_player.place(5, 9)
+	_player.z_index = int(round(_player.position.y))   # _process sets this live; force it for the shot
+	assert(_player.z_index < tree_z, "player north of the tree must sort behind its canopy")
+	_player.place(5, 11)
+	_player.z_index = int(round(_player.position.y))
+	assert(_player.z_index > tree_z, "player south of the tree must sort in front")
+
 	# Normal step along the central path (player.try_move path).
 	_player.place(9, 5)
 	_sm.try_move(1, 0, _player)
