@@ -44,6 +44,10 @@ func _ready() -> void:
 		var bg := Sprite2D.new()
 		bg.texture = load(bg_texture)
 		bg.centered = false
+		# Baked at Config.BAKE_SS× world resolution; render at 1/BAKE_SS with LINEAR
+		# filtering so the downscale is SSAA, not a nearest-texel subsample.
+		bg.scale = Vector2.ONE / float(Config.BAKE_SS)
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		bg.z_index = -10
 		add_child(bg)
 	if ambient_color != Color(1, 1, 1):

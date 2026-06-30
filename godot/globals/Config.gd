@@ -8,6 +8,14 @@ const SCREEN_WIDTH := 640
 const SCREEN_HEIGHT := 480
 const TILE_MOVE_SPEED := 280.0  # px/sec during the smooth slide between tiles
 
+# Supersample factor for the native-art bake (Main._bake): backdrops/player are baked
+# at this multiple of world resolution, then the runtime renders them at 1/BAKE_SS with
+# LINEAR filtering — SSAA that smooths the procedural art's edges (the project default is
+# NEAREST, zoom is 1:1). Single source of truth: the bake side AND the runtime downscale
+# both read this, so the two can't drift. 2 is the ceiling on GL Compatibility — KingSt's
+# 5760px width × 3 would exceed the 16384 max texture size.
+const BAKE_SS := 2
+
 # Dev-only hotkeys (force party / quick save / quick load / demo cutscene) are
 # gated behind this — the Godot mirror of pygame's ANNIV_DEV. Off in a shipped build.
 static var DEV := OS.get_environment("ANNIV_DEV") == "1"

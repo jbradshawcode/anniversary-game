@@ -73,6 +73,10 @@ func _ready() -> void:
 		# Body draws behind Player's own canvas so a held drink (the only self-draw on
 		# the baked path) overlays the hand instead of hiding under the sprite.
 		_anim.show_behind_parent = true
+		# Sheet is baked at Config.BAKE_SS× cell size; render at 1/BAKE_SS with LINEAR
+		# filtering (SSAA downscale), matching the backdrop bake in Scene.gd.
+		_anim.scale = Vector2.ONE / float(Config.BAKE_SS)
+		_anim.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		add_child(_anim)        # centred -> the baked cell centre lands on the tile centre
 		_sync_sprite()
 
@@ -81,6 +85,7 @@ func _ready() -> void:
 # each an AtlasTexture region into the horizontal strip (idle_*, then sit_*).
 func _build_frames() -> SpriteFrames:
 	var tex := load(_SHEET)
+	var cell := _CELL * Config.BAKE_SS    # baked cell size; _anim.scale renders it back to _CELL
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
 	var i := 0
@@ -90,7 +95,7 @@ func _build_frames() -> SpriteFrames:
 			sf.set_animation_loop(prefix + face, false)
 			var at := AtlasTexture.new()
 			at.atlas = tex
-			at.region = Rect2(i * _CELL.x, 0, _CELL.x, _CELL.y)
+			at.region = Rect2(i * cell.x, 0, cell.x, cell.y)
 			sf.add_frame(prefix + face, at)
 			i += 1
 	return sf

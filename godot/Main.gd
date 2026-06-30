@@ -1276,12 +1276,12 @@ func _save(path: String) -> void:
 
 # ── Asset-bake pipeline (run via tools/bake.sh / `-- --bake`) ───────────────────
 # Renders the procedural _draw() art into PNG textures so scenes can move to native
-# Sprite2D/AnimatedSprite2D. Bake at SUPERSAMPLE>1 for crisper art under zoom; 1 is
-# pixel-exact to the current game. The .gd stays the source of truth — re-run to
-# regenerate. Each item renders in an isolated SubViewport (no scene lighting leaks).
+# Sprite2D/AnimatedSprite2D. Baked at Config.BAKE_SS× world resolution; the runtime
+# downscales with LINEAR filtering for SSAA (see Config.BAKE_SS). The .gd stays the
+# source of truth — re-run to regenerate. Each item renders in an isolated SubViewport
+# (no scene lighting leaks).
 const _BAKE_DIR := "res://assets/baked/"
 const _REVIEW_DIR := "res://assets/review/"
-const _BAKE_SS := 1                     # supersample factor (bump to 2-4 for zoom-crisp art)
 # Bright, well-separated highlight hues for the fixture-vs-bake review sheets. One per
 # Fixture in tree order; cycles if a scene has more fixtures than colours.
 const _REVIEW_COLORS := [
@@ -1329,9 +1329,9 @@ func _bake() -> void:
 func _bake_background(scene_class, fname: String) -> void:
 	var scene: GameScene = scene_class.new()
 	scene.use_baked_bg = false                # render the procedural art, not the (absent) bake
-	scene.scale = Vector2(_BAKE_SS, _BAKE_SS)
+	scene.scale = Vector2(Config.BAKE_SS, Config.BAKE_SS)
 	var vp := SubViewport.new()
-	vp.size = Vector2i(scene.world_width(), Config.SCREEN_HEIGHT) * _BAKE_SS
+	vp.size = Vector2i(scene.world_width(), Config.SCREEN_HEIGHT) * Config.BAKE_SS
 	vp.transparent_bg = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(vp)
@@ -1410,7 +1410,7 @@ func _flat_mat(col: Color) -> ShaderMaterial:
 
 # The player's 8 overworld states -> a horizontal sprite sheet (one cell per frame).
 func _bake_player_sheet() -> void:
-	var cell := _PLAYER_CELL * _BAKE_SS
+	var cell := _PLAYER_CELL * Config.BAKE_SS
 	var sheet := Image.create(cell.x * _PLAYER_FRAMES.size(), cell.y, false, Image.FORMAT_RGBA8)
 	for i in _PLAYER_FRAMES.size():
 		var st: Array = _PLAYER_FRAMES[i]
@@ -1427,7 +1427,7 @@ func _render_player_frame(cell: Vector2i, facing: String, sitting: bool) -> Imag
 	add_child(vp)
 	var p := Player.new()
 	p.use_baked_sprite = false                # draw the procedural body, not the AnimatedSprite2D
-	p.scale = Vector2(_BAKE_SS, _BAKE_SS)
+	p.scale = Vector2(Config.BAKE_SS, Config.BAKE_SS)
 	vp.add_child(p)
 	await get_tree().process_frame
 	for c in p.get_children():
