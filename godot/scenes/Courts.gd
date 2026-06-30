@@ -5,6 +5,11 @@
 # pathway runs alongside down to the same walkway.
 # Edge-walls (not blocked tiles) carve the fence/stair lines; the walkable box is
 # (2..16, 2..14) minus those edges. Exits: left -> passage (8), down -> courtyard (7).
+#
+# Bake captures the room only: sky, brick walls, concrete walkways, stairs, the tarmac
+# court surface and its painted line-markings (surface markings stay baked). The two
+# floor-standing features are nodes: the goal hoops and the wire fence both ring the
+# court boundary with the player always on the inner/court side in front of them -> Z_BACK.
 class_name Courts
 extends GameScene
 
@@ -83,29 +88,43 @@ func _build_walls() -> Array:
 	return w
 
 
+# Draw target: the scene's own canvas while baking the room, or a Fixture node while it
+# paints its feature. Every draw helper routes through this.
+var _cv: CanvasItem
+
+
+func _on_ready() -> void:
+	# The hoops and the wire fence ring the court boundary; the player is always on the
+	# inner/court side, in front of them, never behind -> Z_BACK (the baked player-on-top
+	# look). They are nodes for interact/collision ownership (the fence already owns its
+	# wall-edges in the grid).
+	add_fixture(Fixture.Z_BACK, _paint_hoops)
+	add_fixture(Fixture.Z_BACK, _paint_fence)
+
+
 func _r(x, y, w, h, c) -> void:
-	draw_rect(Rect2(x, y, w, h), c)
+	_cv.draw_rect(Rect2(x, y, w, h), c)
 
 
 func _outline(x, y, w, h, c, width := 1.0) -> void:
-	draw_rect(Rect2(x, y, w, h), c, false, width)
+	_cv.draw_rect(Rect2(x, y, w, h), c, false, width)
 
 
 func _ln(x0, y0, x1, y1, c, w := 1.0) -> void:
-	draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
+	_cv.draw_line(Vector2(x0, y0), Vector2(x1, y1), c, w)
 
 
 func _circ_outline(cx, cy, r, c, w := 1.0) -> void:
-	draw_arc(Vector2(cx, cy), r, 0, TAU, 24, c, w)
+	_cv.draw_arc(Vector2(cx, cy), r, 0, TAU, 24, c, w)
 
 
 # pygame.draw.ellipse bounding-box semantics: (x, y) top-left, (w, h) box size.
 func _ellipse(x, y, w, h, c) -> void:
 	var rx: float = w / 2.0
 	var ry: float = h / 2.0
-	draw_set_transform(Vector2(x + rx, y + ry), 0, Vector2(rx, ry))
-	draw_circle(Vector2.ZERO, 1.0, c)
-	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
+	_cv.draw_set_transform(Vector2(x + rx, y + ry), 0, Vector2(rx, ry))
+	_cv.draw_circle(Vector2.ZERO, 1.0, c)
+	_cv.draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 
 func _shade(c: Color, f: float) -> Color:
@@ -163,7 +182,8 @@ func _draw_mesh(rect: Rect2) -> void:
 func _draw() -> void:
 	if use_baked_bg:        # live path renders the baked Sprite2D; _draw() is the bake seed
 		return
-	draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
+	_cv = self
+	_cv.draw_rect(Rect2(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT), Color(0, 0, 0))  # black off-plan
 	_draw_sky_strip()
 	_draw_back_wall()
 	_draw_side_walls()
@@ -172,9 +192,17 @@ func _draw() -> void:
 	_draw_court_surface()
 	_draw_left_pathway()
 	_draw_court_lines()
-	_draw_hoops()
-	_draw_fence()
 	_draw_bottom_walkway()
+
+
+func _paint_hoops(c: CanvasItem) -> void:
+	_cv = c
+	_draw_hoops()
+
+
+func _paint_fence(c: CanvasItem) -> void:
+	_cv = c
+	_draw_fence()
 
 
 func _draw_sky_strip() -> void:
@@ -251,8 +279,8 @@ func _draw_court_lines() -> void:
 		_ln(lx, top, lx, bottom, _LINE, 2)
 	_circ_outline(cx, cy, 22, _LINE, 2)
 	var d_r := ct.size.y / 2.0
-	draw_arc(Vector2(left, cy), d_r, -1.5708, 1.5708, 32, _LINE, 2)
-	draw_arc(Vector2(right, cy), d_r, 1.5708, 4.7124, 32, _LINE, 2)
+	_cv.draw_arc(Vector2(left, cy), d_r, -1.5708, 1.5708, 32, _LINE, 2)
+	_cv.draw_arc(Vector2(right, cy), d_r, 1.5708, 4.7124, 32, _LINE, 2)
 
 
 func _draw_hoops() -> void:
