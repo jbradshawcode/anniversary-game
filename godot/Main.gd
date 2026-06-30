@@ -97,6 +97,7 @@ func _ready() -> void:
 	_sm.register(9, Courts.new())
 	_sm.register(10, Wetherspoons.new())
 	_party = Party.new(party_layer, _sm)
+	_sm.party = _party                  # crew/followers block the player's movement
 
 	_player = Player.new(5, 6)
 	_sm.start(1, _player)

@@ -7,6 +7,7 @@ extends RefCounted
 
 var current: GameScene
 var story = null                 # optional StoryManager: gates exits + scene-enter
+var party = null                 # optional Party: crew/followers block movement too
 var _current_id: int = -1
 var _scenes: Dictionary = {}
 var _world: Node2D
@@ -63,7 +64,22 @@ func try_move(dtx: int, dty: int, player) -> void:
 			_transition_to(res[0], player, exit_dir, res[1])
 			return
 
+	if _occupied(player.tile_x + dtx, player.tile_y + dty):
+		return                         # a person is solid — can't walk through crew/NPCs
 	player.try_move(dtx, dty, current)
+
+
+# A crew member or scene NPC occupies this tile (solid whatever their state).
+func _occupied(tx: int, ty: int) -> bool:
+	if current != null:
+		for o in current.npcs:
+			if o.tile_x == tx and o.tile_y == ty:
+				return true
+	if party != null:
+		for f in party.followers:
+			if f.tile_x == tx and f.tile_y == ty:
+				return true
+	return false
 
 
 # Hard jump to a scene + tile (load, chapter jump) — bypasses exit gating.

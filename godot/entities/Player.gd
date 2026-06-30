@@ -143,6 +143,7 @@ func _process(delta: float) -> void:
 
 
 func try_move(dtx: int, dty: int, target_scene) -> bool:
+	stand()                          # any move stands you up; a seated drink stays behind
 	if moving:
 		return false
 	var ntx := tile_x + dtx

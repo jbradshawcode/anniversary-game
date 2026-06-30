@@ -338,21 +338,37 @@ func talk(name) -> bool:
 	var lines = beat().get("talk", {}).get(str(name).to_lower(), null)
 	if lines == null:
 		return false
+	# Face the person, then turn them back to their seated default when the chat ends
+	# (so they don't keep staring at Sarah after she's moved on).
+	var crew = _crew_named(name)
+	var prev_facing: String = crew.facing if crew != null else ""
 	_face_crew(name)
-	_dialogue.start(lines, name)
+	var restore := func():
+		if crew != null and is_instance_valid(crew):
+			crew.facing = prev_facing
+			crew.queue_redraw()
+	_dialogue.start(lines, name, restore)
 	return true
+
+
+func _crew_named(name):
+	if _party == null:
+		return null
+	for f in _party.followers:
+		if str(f.display_name).to_lower() == str(name).to_lower():
+			return f
+	return null
 
 
 func _face_crew(name: String) -> void:
 	if _party == null or _player == null:
 		return
-	for f in _party.followers:
-		if str(f.display_name).to_lower() == name.to_lower():
-			_cutscene._face_actor(f, _player)
-			_cutscene._face_actor(_player, f)
-			f.queue_redraw()
-			_player.queue_redraw()
-			break
+	var f = _crew_named(name)
+	if f != null:
+		_cutscene._face_actor(f, _player)
+		_cutscene._face_actor(_player, f)
+		f.queue_redraw()
+		_player.queue_redraw()
 
 
 # ── party rebuild (new game / load) ─────────────────────────────────────────────
