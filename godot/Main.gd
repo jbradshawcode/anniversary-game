@@ -51,6 +51,15 @@ func _ready() -> void:
 		get_tree().quit()
 		return
 
+	if "--review" in OS.get_cmdline_user_args():
+		# Review pipeline: per scene, render the dimmed baked room with every Fixture
+		# flat-colour-highlighted, so the bake-vs-node split can be eyeballed. Output to
+		# assets/review/. Not a build artifact — a human-review aid.
+		_baking = true
+		await _review()
+		get_tree().quit()
+		return
+
 	_scene_music = {                          # scene_id -> looping track (else silence)
 		1: Config.GYM_MUSIC, 2: Config.KING_ST_MUSIC,
 		3: Config.SALUTATION_MUSIC, 4: Config.GARDEN_MUSIC,
@@ -1262,7 +1271,16 @@ func _save(path: String) -> void:
 # pixel-exact to the current game. The .gd stays the source of truth — re-run to
 # regenerate. Each item renders in an isolated SubViewport (no scene lighting leaks).
 const _BAKE_DIR := "res://assets/baked/"
+const _REVIEW_DIR := "res://assets/review/"
 const _BAKE_SS := 1                     # supersample factor (bump to 2-4 for zoom-crisp art)
+# Bright, well-separated highlight hues for the fixture-vs-bake review sheets. One per
+# Fixture in tree order; cycles if a scene has more fixtures than colours.
+const _REVIEW_COLORS := [
+	["magenta", Color(1.0, 0.0, 0.85)], ["cyan", Color(0.0, 0.9, 1.0)],
+	["yellow", Color(1.0, 0.92, 0.0)], ["lime", Color(0.4, 1.0, 0.1)],
+	["orange", Color(1.0, 0.5, 0.0)], ["red", Color(1.0, 0.1, 0.1)],
+	["blue", Color(0.2, 0.4, 1.0)], ["white", Color(1.0, 1.0, 1.0)],
+]
 const _PLAYER_CELL := Vector2i(48, 64)  # per-frame box; player art ≈ x[-12,12] y[-15,18] centred
 const _PLAYER_FRAMES := [               # animation name -> (facing, sitting); one frame each
 	["idle_down", "down", false], ["idle_up", "up", false],
@@ -1316,6 +1334,69 @@ func _bake_background(scene_class, fname: String) -> void:
 	var img := await _grab(vp)
 	img.save_png(_BAKE_DIR + fname + "_bg.png")
 	vp.queue_free()
+
+
+# ── Fixture-vs-bake review pipeline (run via `-- --review`) ─────────────────────
+# Per scene: render the live composite with the baked room DIMMED (reads as background)
+# and every Fixture flat-colour-highlighted (reads as a live sprite/feature), one hue
+# each so feature groups are distinguishable. Writes assets/review/<scene>.png plus a
+# legend.txt mapping hue -> _paint_* method. A human-review aid, not a build artifact.
+func _review() -> void:
+	DirAccess.make_dir_recursive_absolute(_REVIEW_DIR)
+	var scenes := [
+		["gym", Gym], ["kingst", KingSt], ["pub", Pub], ["garden", Garden],
+		["corridor", Corridor], ["reception", Reception], ["courtyard", Courtyard],
+		["passage", Passage], ["courts", Courts], ["wetherspoons", Wetherspoons],
+	]
+	var legend := "Fixture-vs-bake review — dimmed baked room = background; flat-colour = live Fixture node.\n\n"
+	for s in scenes:
+		legend += await _review_scene(s[1], s[0])
+	var f := FileAccess.open(_REVIEW_DIR + "legend.txt", FileAccess.WRITE)
+	f.store_string(legend)
+	f.close()
+	print("wrote ", scenes.size(), " review sheets + legend.txt into ", _REVIEW_DIR)
+
+
+func _review_scene(scene_class, fname: String) -> String:
+	var scene: GameScene = scene_class.new()   # use_baked_bg stays true: _ready adds the baked bg
+	var vp := SubViewport.new()
+	vp.size = Vector2i(scene.world_width(), Config.SCREEN_HEIGHT)
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	vp.add_child(scene)
+	await get_tree().process_frame             # let Scene._ready add the bg sprite + fixtures + lights
+	var hi := 0
+	var legend := "[%s]\n" % fname
+	for c in scene.get_children():
+		if c is PointLight2D or c is CanvasModulate:
+			c.queue_free()                     # strip lighting → true, flat colours
+		elif c is Sprite2D:                    # the baked room backdrop → dim it to read as background
+			c.modulate = Color(0.42, 0.42, 0.42)
+		elif c is Fixture:                     # flat-colour silhouette, one hue per feature node
+			var entry: Array = _REVIEW_COLORS[hi % _REVIEW_COLORS.size()]
+			c.material = _flat_mat(entry[1])
+			c.z_index = 100 + hi               # force fixtures above the dimmed bg regardless of Z_BACK
+			legend += "  %-8s %s\n" % [entry[0], c.get_drawer_name()]
+			hi += 1
+	await get_tree().process_frame
+	var img := await _grab(vp)
+	img.save_png(_REVIEW_DIR + fname + ".png")
+	vp.queue_free()
+	if hi == 0:
+		legend += "  (no fixtures — scene is entirely baked room)\n"
+	return legend + "\n"
+
+
+# A canvas_item material that paints every drawn pixel a flat colour (keeping alpha), so a
+# Fixture renders as a solid-hue silhouette — unambiguous against the dimmed baked room.
+func _flat_mat(col: Color) -> ShaderMaterial:
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nuniform vec4 hi : source_color;\nvoid fragment() { COLOR = vec4(hi.rgb, COLOR.a); }"
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.set_shader_parameter("hi", col)
+	return m
 
 
 # The player's 8 overworld states -> a horizontal sprite sheet (one cell per frame).

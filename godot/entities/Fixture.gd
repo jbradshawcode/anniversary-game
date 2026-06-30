@@ -21,3 +21,8 @@ func setup(z: int, drawer: Callable) -> void:
 func _draw() -> void:
 	if _drawer.is_valid():
 		_drawer.call(self)
+
+
+# The paint method backing this fixture (e.g. "_paint_bar") — for the review legend.
+func get_drawer_name() -> String:
+	return str(_drawer.get_method())
