@@ -111,6 +111,21 @@ var _CAR_COLORS := [Color8(190, 60, 55), Color8(70, 90, 150), Color8(210, 200, 9
 	Color8(70, 120, 90), Color8(210, 215, 220), Color8(50, 52, 58)]
 var _font: Font
 
+# ── live traffic (port of king_st.py) ───────────────────────────────────────────
+const _CAR_LEN := 52
+const _CAR_W := 24
+const _WALK_TIME := 6.0          # green-man window
+const _WAIT_TIME := 7.0          # red-man (traffic flows)
+const _CROSS_OFFSET := 3.1       # stagger neighbouring lights
+# lane centre-y + travel direction: north lane westbound, south lane eastbound
+var _LANES := [[6 * _TS + _TS - 2, -1], [8 * _TS + 2, 1]]
+var _t := 0.0
+var _cars: Array = []            # [{x, y, dir, lane, speed, color}]
+var _spawn := [1.0, 2.4]         # per-lane spawn countdown
+var _rng := RandomNumberGenerator.new()
+var _car_fix: Fixture
+var _sig_fix: Fixture
+
 
 func _init() -> void:
 	bg_texture = "res://assets/baked/kingst_bg.png"   # native backdrop; _draw() is now the re-bake seed
@@ -149,19 +164,133 @@ func _on_ready() -> void:
 	# grouped by base row (all north bases at row 6, all south at row 11).
 	add_fixture(Fixture.Z_BACK, _paint_shops)
 	add_fixture(Fixture.Z_BACK, _paint_buildings)
-	add_fixture(Fixture.Z_BACK, _paint_cars)
+	# Cars drive in the carriageway (never walked behind) -> Z_BACK, but they move, so
+	# their fixture is redrawn each frame; the signal heads cycle red/green likewise.
+	_car_fix = add_fixture(Fixture.Z_BACK, _paint_cars)
+	_sig_fix = add_fixture(Fixture.Z_BACK, _paint_signals)
 	add_fixture(6 * _TS, _paint_north_lamps)
 	add_fixture(11 * _TS, _paint_south_lamps)
+	_prime_traffic()
 
 
-# Road rows (6-8) are crossable only on a zebra crossing; pavements free.
+# Road rows (6-8): crossable only on a zebra crossing, and only on the green man
+# (or to finish a crossing already begun); pavements are free.
 func is_walkable(tx: int, ty: int) -> bool:
 	if ty >= 6 and ty <= 8:
-		for cr in _CROSSINGS:
-			if cr[0] <= tx and tx <= cr[1]:
-				return grid.is_walkable(tx, ty)
-		return false
+		var ci := _crossing_index(tx)
+		if ci == -1:
+			return false                              # no jaywalking
+		if _walk_now(ci):
+			return true
+		# red man: only let a pedestrian already on the road step off it
+		return player != null and player.tile_y >= 6 and player.tile_y <= 8
 	return grid.is_walkable(tx, ty)
+
+
+# ── traffic lights / crossings ──────────────────────────────────────────────────
+func _crossing_index(tx: int) -> int:
+	for i in range(_CROSSINGS.size()):
+		if _CROSSINGS[i][0] <= tx and tx <= _CROSSINGS[i][1]:
+			return i
+	return -1
+
+
+func _ped_on_crossing(i: int) -> bool:
+	var c0: int = _CROSSINGS[i][0]
+	var c1: int = _CROSSINGS[i][1]
+	var peds: Array = []
+	if player != null:
+		peds.append(Vector2i(player.tile_x, player.tile_y))
+	if party != null:
+		for f in party.followers:
+			peds.append(Vector2i(int(f.position.x / _TS), int(f.position.y / _TS)))
+	for p in peds:
+		if c0 <= p.x and p.x <= c1 and p.y >= 6 and p.y <= 8:
+			return true
+	return false
+
+
+func _walk_now(i: int) -> bool:
+	var period := _WALK_TIME + _WAIT_TIME
+	var green: bool = fmod(_t + i * _CROSS_OFFSET, period) < _WALK_TIME
+	return green or _ped_on_crossing(i)               # never go red while someone's on it
+
+
+# ── cars ─────────────────────────────────────────────────────────────────────────
+func _new_car(lane: int, x: float) -> Dictionary:
+	return {"x": x, "y": float(_LANES[lane][0]), "dir": _LANES[lane][1], "lane": lane,
+		"speed": _rng.randf_range(110.0, 170.0), "color": _CAR_COLORS[_rng.randi() % _CAR_COLORS.size()]}
+
+
+func _spawn_car(lane: int) -> void:
+	var d: int = _LANES[lane][1]
+	var x: float = -_CAR_LEN if d > 0 else world_width() + _CAR_LEN
+	_cars.append(_new_car(lane, x))
+
+
+func _x_off_crossing(x: float) -> bool:
+	for i in range(_CROSSINGS.size()):
+		if _walk_now(i):
+			var lo: float = _CROSSINGS[i][0] * _TS - _CAR_LEN
+			var hi: float = (_CROSSINGS[i][1] + 1) * _TS + _CAR_LEN
+			if lo <= x and x <= hi:
+				return false
+	return true
+
+
+func _prime_traffic() -> void:
+	_cars = []
+	_spawn = [_rng.randf_range(1.8, 4.2), _rng.randf_range(1.8, 4.2)]
+	for lane in range(_LANES.size()):
+		var x := _rng.randf_range(0.0, 200.0)
+		while x < world_width():
+			if _x_off_crossing(x):
+				_cars.append(_new_car(lane, x))
+			x += _rng.randf_range(150.0, 280.0)
+
+
+# Furthest a car may advance: the stop line of the next green crossing, or the back
+# of the car ahead in its lane (whichever it reaches first).
+func _car_stop_x(car: Dictionary) -> float:
+	var d: int = car["dir"]
+	var x: float = car["x"]
+	var limit: float = d * 1e9
+	for i in range(_CROSSINGS.size()):
+		if not _walk_now(i):
+			continue
+		var line: float = (_CROSSINGS[i][0] * _TS - _CAR_LEN / 2.0 - 2) if d > 0 \
+			else ((_CROSSINGS[i][1] + 1) * _TS + _CAR_LEN / 2.0 + 2)
+		if (line - x) * d >= 0:
+			limit = minf(limit, line) if d > 0 else maxf(limit, line)
+	for o in _cars:
+		if o == car or o["lane"] != car["lane"]:
+			continue
+		if (o["x"] - x) * d > 0:
+			var gap: float = o["x"] - d * (_CAR_LEN + 6)
+			limit = minf(limit, gap) if d > 0 else maxf(limit, gap)
+	return limit
+
+
+func _process(dt: float) -> void:
+	_t += dt
+	for lane in range(_LANES.size()):
+		_spawn[lane] -= dt
+		if _spawn[lane] <= 0.0:
+			_spawn_car(lane)
+			_spawn[lane] = _rng.randf_range(1.8, 4.2)
+	for car in _cars:
+		var nx: float = car["x"] + car["dir"] * car["speed"] * dt
+		var stop := _car_stop_x(car)
+		car["x"] = minf(nx, stop) if car["dir"] > 0 else maxf(nx, stop)
+	var kept: Array = []
+	for c in _cars:
+		if c["x"] >= -_CAR_LEN * 2 and c["x"] <= world_width() + _CAR_LEN * 2:
+			kept.append(c)
+	_cars = kept
+	if _car_fix != null:
+		_car_fix.queue_redraw()
+	if _sig_fix != null:
+		_sig_fix.queue_redraw()
 
 
 func _r(x, y, w, h, c) -> void:
@@ -209,8 +338,22 @@ func _paint_buildings(c: CanvasItem) -> void:
 
 func _paint_cars(c: CanvasItem) -> void:
 	_cv = c
-	for car in _PARKED:
-		_draw_car(car[0], car[1])
+	for car in _cars:
+		_render_car(car)
+
+
+# Live signal heads on each crossing kerb — the lit lamp follows the green-man timing.
+func _paint_signals(c: CanvasItem) -> void:
+	_cv = c
+	for i in range(_CROSSINGS.size()):
+		var walk := _walk_now(i)
+		var x0: int = _CROSSINGS[i][0] * _TS
+		var red := Color8(80, 30, 28) if walk else Color8(225, 60, 45)
+		var grn := Color8(70, 215, 95) if walk else Color8(28, 70, 40)
+		for ky in [6 * _TS - 7, 9 * _TS + 6]:
+			_r(x0 - 9, ky - 7, 7, 14, Color8(30, 30, 34))
+			_cv.draw_circle(Vector2(x0 - 5, ky - 3), 2, red)
+			_cv.draw_circle(Vector2(x0 - 5, ky + 3), 2, grn)
 
 
 func _paint_north_lamps(c: CanvasItem) -> void:
@@ -278,23 +421,28 @@ func _draw_building(b: Array) -> void:
 
 
 func _draw_crossing(c0: int, c1: int) -> void:
+	# Zebra stripes only — a baked surface marking. The signal heads are a live
+	# fixture (_paint_signals) so they can cycle red/green.
 	var x0 := c0 * _TS
 	var x1 := (c1 + 1) * _TS
-	for bx in range(x0 + 3, x1 - 3, 10):        # zebra stripes
+	for bx in range(x0 + 3, x1 - 3, 10):
 		_r(bx, 6 * _TS + 2, 6, 3 * _TS - 4, _ZEBRA)
-	for ky in [6 * _TS - 7, 9 * _TS + 6]:       # signal heads
-		_r(x0 - 9, ky - 7, 7, 14, Color8(30, 30, 34))
-		_cv.draw_circle(Vector2(x0 - 5, ky - 3), 2, Color8(225, 60, 45))
-		_cv.draw_circle(Vector2(x0 - 5, ky + 3), 2, Color8(70, 215, 95))
 
 
-func _draw_car(col: int, lane: int) -> void:
-	var cx := col * _TS + 16
-	var cy := 6 * _TS + _TS - 2 if lane == 0 else 8 * _TS + 2
-	var c: Color = _CAR_COLORS[(col + lane) % _CAR_COLORS.size()]
-	_r(cx - 26, cy - 12, 52, 24, _dk(c, 0.12))
-	_r(cx - 24, cy - 8, 48, 16, c)
-	_r(cx - 8, cy - 8, 16, 16, _CAR_GLASS)
+func _render_car(car: Dictionary) -> void:
+	var cx: float = car["x"]
+	var cy: float = car["y"]
+	var col: Color = car["color"]
+	var d: int = car["dir"]
+	var hl := _CAR_LEN / 2.0
+	var hw := _CAR_W / 2.0
+	_r(cx - hl, cy - hw, _CAR_LEN, _CAR_W, _dk(col, 0.30))             # shadow base
+	_r(cx - hl + 1, cy - hw + 2, _CAR_LEN - 2, _CAR_W - 4, col)       # body
+	_cv.draw_rect(Rect2(cx - hl + 1, cy - hw + 2, _CAR_LEN - 2, _CAR_W - 4), _dk(col, 0.18), false, 1.0)
+	_r(cx - _CAR_LEN / 6.0, cy - hw + 4, _CAR_LEN / 3.0, _CAR_W - 8, _CAR_GLASS)   # windscreen band
+	var fx := cx + d * (hl - 3)                                       # headlights lead the way
+	_r(fx - 1, cy - hw + 2, 2, 3, Color8(255, 240, 190))
+	_r(fx - 1, cy + hw - 5, 2, 3, Color8(255, 240, 190))
 
 
 func _draw_lamp(col: int, base_y: int) -> void:

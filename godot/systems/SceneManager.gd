@@ -34,6 +34,8 @@ func start(scene_id: int, player) -> void:
 	current = _scenes[scene_id]
 	_world.add_child(current)
 	player.scene = current
+	current.player = player
+	current.party = party
 
 
 # One tile-step request: an exit step transitions scenes, otherwise a normal move.
@@ -92,6 +94,8 @@ func go_to(scene_id: int, player, tile: Vector2i) -> void:
 	current = _scenes[scene_id]
 	_world.add_child(current)
 	player.scene = current
+	current.player = player
+	current.party = party
 	player.place(tile.x, tile.y)
 
 
@@ -120,6 +124,8 @@ func _transition_to(new_id, player, exit_dir: String, entry_pos) -> void:
 	current = _scenes[new_id]
 	_world.add_child(current)
 	player.scene = current
+	current.player = player
+	current.party = party
 
 	var pos = entry_pos
 	if pos == null:

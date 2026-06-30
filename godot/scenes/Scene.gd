@@ -6,6 +6,8 @@ extends Node2D
 
 var grid: TileGrid
 var npcs: Array = []
+var player = null                   # set by SceneManager; scenes that animate (e.g. traffic) read it
+var party = null
 var walkable_cols: Vector2i
 var walkable_rows: Vector2i
 var exits: Dictionary = {}          # dir -> {scene:int, cols:Vector2i?, rows:Vector2i?, target:Vector2i?}
@@ -33,10 +35,11 @@ func world_width() -> int:
 # Add a floor-standing feature as its own node (so it can move / be interacted with /
 # own its collision / depth-sort). z is absolute: Fixture.Z_BACK for a feature nothing
 # walks behind, or round(base_y) for one that should sort against movers by depth.
-func add_fixture(z: int, drawer: Callable) -> void:
+func add_fixture(z: int, drawer: Callable) -> Fixture:
 	var f := Fixture.new()
 	f.setup(z, drawer)
 	add_child(f)
+	return f
 
 
 func _ready() -> void:
