@@ -70,6 +70,9 @@ func _ready() -> void:
 	if use_baked_sprite:
 		_anim = AnimatedSprite2D.new()
 		_anim.sprite_frames = _build_frames()
+		# Body draws behind Player's own canvas so a held drink (the only self-draw on
+		# the baked path) overlays the hand instead of hiding under the sprite.
+		_anim.show_behind_parent = true
 		add_child(_anim)        # centred -> the baked cell centre lands on the tile centre
 		_sync_sprite()
 

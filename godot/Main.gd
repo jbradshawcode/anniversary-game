@@ -641,6 +641,15 @@ func _shot() -> void:
 	_player.place(5, 6)
 	_player.facing = "down"
 
+	# Held drink in transit: a carried drink overlays the body sprite (it sits in
+	# Sarah's hand), so the baked body must render behind Player's own canvas.
+	_player.carry("beer")
+	assert(_player.holding == "beer" and not _player.sitting, "Sarah should be standing with a drink")
+	assert(_player._anim.show_behind_parent, "body must draw behind the held-drink overlay")
+	await get_tree().create_timer(0.2).timeout
+	await _save("res://verify_held_drink.png")
+	_player.carry("")
+
 	# ── The real screenplay ─────────────────────────────────────────────────────
 	# New game: begin -> Week 1's opening (chapter card fires, then the check_baskets
 	# cutscene runs; Nat walks to the bench and sits).
