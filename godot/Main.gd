@@ -761,6 +761,9 @@ func _shot() -> void:
 	assert(_minigame != null and _minigame is VolleyCourt, "volleyball minigame did not launch")
 	# Ch1 opens with the controls tutorial (w1_want_tut); finishing it launches the match.
 	if _minigame._mode == "tutorial":
+		_minigame._intro = false                   # dismiss the HOW-TO card to show the live tutorial HUD
+		await get_tree().create_timer(0.2).timeout
+		await _save("res://verify_tutorial.png")
 		_minigame.phase = VolleyCourt.PHASE_OVER
 		_minigame.on_finish.call()
 		await get_tree().process_frame

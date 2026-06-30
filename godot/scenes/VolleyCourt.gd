@@ -2255,13 +2255,29 @@ func _draw_tut(c: CanvasItem) -> void:
 		col = Color8(255, 230, 140)
 	var sw := Config.SCREEN_WIDTH
 	var cx := sw / 2.0
-	var w: float = maxf(_text_w(head, 11), maxf(_text_w(instr, 13), _text_w(status, 13) if status != "" else 0)) + 36
-	var h := 44 + (20 if status != "" else 0)
-	_panel(c, cx - w / 2.0, 42, w, h)
-	_text(c, cx, 48, head, 11, Color8(180, 200, 230), true)
-	_text(c, cx, 64, instr, 13, Color8(245, 242, 212), true)
-	if status != "":
-		_text(c, cx, 86, status, 13, col, true)
+	# Wrap to a capped width so the panel sits between the side HUD columns and below
+	# the score box, instead of spanning the screen and overlapping them.
+	var maxw := 300.0
+	var instr_lines := _wrap(instr, maxw, 13)
+	var status_lines: Array = _wrap(status, maxw, 13) if status != "" else []
+	var w := _text_w(head, 11)
+	for ln in instr_lines:
+		w = maxf(w, _text_w(ln, 13))
+	for ln in status_lines:
+		w = maxf(w, _text_w(ln, 13))
+	w += 36
+	var y0 := 48.0
+	var h := 22.0 + instr_lines.size() * 16 + (status_lines.size() * 16 + 6 if status != "" else 0)
+	_panel(c, cx - w / 2.0, y0, w, h)
+	_text(c, cx, y0 + 6, head, 11, Color8(180, 200, 230), true)
+	var yy := y0 + 22
+	for ln in instr_lines:
+		_text(c, cx, yy, ln, 13, Color8(245, 242, 212), true)
+		yy += 16
+	yy += 6
+	for ln in status_lines:
+		_text(c, cx, yy, ln, 13, col, true)
+		yy += 16
 
 
 func _draw_left_hud(c: CanvasItem) -> void:
