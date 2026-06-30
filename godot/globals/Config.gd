@@ -170,20 +170,18 @@ const DIVE_PLAYER_SPEED := 320.0   # px/s run speed while positioning (the STEP)
 const DIVE_PLAYER_ACCEL := 3000.0  # px/s^2 momentum ramp (snappy starts/stops)
 const DIVE_STEP_TIME := 1.05       # s of airtime to get under the feed before the swing
 const DIVE_SWING_PREROLL := 0.18   # s the timing bar shows (needle at 0) before it sweeps
-const DIVE_PUSH_SWEEP := 0.90      # s for the PUSH needle to cross the bar
-const DIVE_SLIDE_SWEEP := 1.00     # s for the SLIDE needle — slower than PUSH
-const DIVE_PUSH_CENTRE := 0.58     # where on the 0..1 bar the PUSH band sits
-const DIVE_SLIDE_CENTRE := 0.60    # where the SLIDE band sits
+const DIVE_SWING_SWEEP := 0.85     # s for the SWING needle to cross the bar
+const DIVE_SWING_CENTRE := 0.60    # where on the 0..1 bar the SWING band sits
 const DIVE_BAND_GOOD := 0.18       # half-width (fraction of bar) of the green 'good' band
 const DIVE_BAND_PERFECT := 0.05    # half-width of the gold 'perfect' centre
-const DIVE_SLIDE_CONNECT := 0.30   # minimum SLIDE score to make contact at all
+const DIVE_SWING_CONNECT := 0.30   # minimum SWING score to make contact at all
 const DIVE_SET_GOOD := 46.0        # px from the target = a clean standing dig
 const DIVE_SET_PERFECT := 20.0     # px = perfect footwork
-const DIVE_REACH := 128.0          # px the SLIDE can extend to still reach the ball
+const DIVE_REACH := 128.0          # px the SWING can extend to still reach the ball
 const DIVE_SPREAD_MIN := 36.0      # px the feed lands either side of you (first digs)
 const DIVE_SPREAD_MAX := 104.0     # px cap on that offset
 const DIVE_SPREAD_GROW := 6.0      # px added to the landing spread per dig, up to the cap
-const DIVE_PERFECT_AT := 0.86      # blended STEP+PUSH+SLIDE score for a PERFECT
+const DIVE_PERFECT_AT := 0.86      # blended STEP+SWING score for a PERFECT
 const DIVE_NICE_AT := 0.55         # ...for a NICE; below this still counts as a SHANK
 const DIVE_DIVE_CAP := 0.80        # a stretched dive never blends above this
 const DIVE_LUNGE_TIME := 0.46      # s the slide/dive animation takes

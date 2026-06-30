@@ -1,6 +1,6 @@
-# Undertale-style typewriter dialogue box. Scoped port of systems/dialogue.py:
-# bottom panel, speaker name tag, char-by-char reveal, X to speed/skip, Z to advance.
-# (Choices + portrait busts are deferred — the original supports both.)
+# Undertale-style typewriter dialogue box. Port of systems/dialogue.py: bottom panel,
+# speaker name tag, char-by-char reveal, X to speed/skip, Z to advance, choices, and a
+# left-side speaker bust (the `portraits` map, built by Main from portraits.py's recipe).
 # Lives in a CanvasLayer so the world's 2D lighting never dims the UI.
 class_name DialogueBox
 extends Control
@@ -18,6 +18,7 @@ const _PAD := 16
 const _FONT_SIZE := 16
 
 var active := false
+var portraits: Dictionary = {}   # speaker (lowercase) -> bust ImageTexture; set by Main
 var _pages: Array = []
 var _index := 0
 var _speaker := ""
@@ -151,10 +152,19 @@ func _draw() -> void:
 		draw_string(_font, Vector2(tag.position.x + 12, tag.position.y + 17),
 			_speaker, HORIZONTAL_ALIGNMENT_LEFT, -1, _FONT_SIZE, _NAME)
 
+	# Speaker bust on the left (if this speaker has one); text wraps to its right.
+	var content_left := box.position.x + _PAD
+	var bust = portraits.get(_speaker.to_lower()) if _speaker != "" else null
+	if bust != null:
+		var ph := float(_BOX_H - 24)
+		var pw: float = ph * bust.get_width() / bust.get_height()
+		draw_texture_rect(bust, Rect2(box.position.x + 12, box.position.y + 12, pw, ph), false)
+		content_left = box.position.x + 12 + pw + _PAD
+
 	var shown_text := _full.substr(0, int(_shown))
-	var tx := box.position.x + _PAD
+	var tx := content_left
 	var ty := box.position.y + _PAD + _font.get_ascent(_FONT_SIZE)
-	var tw := box.size.x - _PAD * 2
+	var tw := box.position.x + box.size.x - _PAD - content_left
 	draw_multiline_string(_font, Vector2(tx, ty), "* " + shown_text,
 		HORIZONTAL_ALIGNMENT_LEFT, tw, _FONT_SIZE, -1, _TEXT)
 

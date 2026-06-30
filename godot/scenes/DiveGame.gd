@@ -1,7 +1,8 @@
 # Scene 12 — the Ch3 diving drill (real-time, own input). Port of scenes/dive.py.
-# Sarah feeds short balls side-on; each is a three-beat dig: STEP (run under the
-# telegraphed ring), PUSH (timing needle), SLIDE (second needle — stretched balls
-# dive). Self-contained; on_finish returns to the gym and advances the beat.
+# Sarah feeds short balls side-on; each is a two-beat dig: STEP (run under the
+# telegraphed ring), then SWING (one timing needle — stretched balls dive). The
+# footwork gap decides reach + dig-vs-dive; the swing decides power + quality.
+# Self-contained; on_finish returns to the gym and advances the beat.
 #
 # Like VolleyCourt, it lives on its own CanvasLayer (Main owns it) and covers the
 # overworld. Background / ball / fx are _Layer proxies that defer their _draw back
@@ -34,8 +35,7 @@ const _VERDICTS := {
 	"shank": ["SHANK!", _SHANK],
 }
 const _STAGE_LABEL := {
-	"step": "STEP — get under it", "push": "PUSH — load your legs",
-	"slide": "SLIDE — pass it back!",
+	"step": "STEP — get under it", "swing": "SWING — pass it back!",
 }
 
 # ── geometry ───────────────────────────────────────────────────────────────────
@@ -66,9 +66,8 @@ var _tx := 0.0
 var _needle := 0.0
 var _swing_delay := 0.0
 var _step_q := 0.0
-var _push_q := 0.0
-var _slide_q := 0.0
-var _slide_pressed := false
+var _swing_q := 0.0
+var _swing_pressed := false
 var _bx0 := 0.0
 var _step_t := 0.0
 var _feed_t := 0.0
@@ -163,9 +162,8 @@ func _reset_state() -> void:
 	_needle = 0.0
 	_swing_delay = 0.0             # the "ready" beat before a bar starts sweeping
 	_step_q = 0.0
-	_push_q = 0.0
-	_slide_q = 0.0
-	_slide_pressed = false
+	_swing_q = 0.0
+	_swing_pressed = false
 
 
 func _restart() -> void:
@@ -192,9 +190,8 @@ func _toss() -> void:
 	_needle = 0.0
 	_swing_delay = 0.0
 	_step_q = 0.0
-	_push_q = 0.0
-	_slide_q = 0.0
-	_slide_pressed = false
+	_swing_q = 0.0
+	_swing_pressed = false
 	_sarah_toss = 0.18                             # her little pass motion
 	_pop = null
 	_phase = "step"
@@ -212,10 +209,8 @@ func _ball_pos() -> Vector2:
 		var hand_y := _floor_y - 24.0
 		var y := hand_y + (ready_y - hand_y) * t - _LOB_PEAK * sin(PI * t)
 		return Vector2(x, y)
-	if _phase == "push":
-		return Vector2(_tx, ready_y + (dig_y - ready_y) * (0.5 * _needle))
-	if _phase == "slide":
-		return Vector2(_tx, ready_y + (dig_y - ready_y) * (0.5 + 0.5 * _needle))
+	if _phase == "swing":
+		return Vector2(_tx, ready_y + (dig_y - ready_y) * _needle)
 	return Vector2(_tx, dig_y)
 
 
@@ -241,13 +236,12 @@ func _set_score(gap: float) -> float:
 
 # ── input ──────────────────────────────────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey and event.pressed and not event.echo):
+	if event is InputEventKey and (not event.pressed or event.echo):
 		return
-	match event.keycode:
-		KEY_Z, KEY_ENTER:
-			_confirm = true
-		KEY_X:
-			_cancel = true
+	if event.is_action_pressed("confirm"):
+		_confirm = true
+	elif event.is_action_pressed("cancel"):
+		_cancel = true
 
 
 func _handle_action(confirm: bool) -> void:
@@ -265,40 +259,29 @@ func _handle_action(confirm: bool) -> void:
 	elif _phase == "step":                         # too early — the ball's still up
 		_step_hint = 0.6
 		fx.shake(2, 0.12)
-	elif _phase == "push":
+	elif _phase == "swing":
 		if _swing_delay <= 0:                       # ignore presses during the ready beat
-			_push_q = _band_score(_needle, Config.DIVE_PUSH_CENTRE)
-			_enter_slide()
-	elif _phase == "slide":
-		if _swing_delay <= 0:
-			_slide_pressed = true
-			_slide_q = _band_score(_needle, Config.DIVE_SLIDE_CENTRE)
+			_swing_pressed = true
+			_swing_q = _band_score(_needle, Config.DIVE_SWING_CENTRE)
 			_resolve()
 	elif _phase == "over":                          # acknowledge the drop, feed on
 		_streak = 0
 		_feed_or_end()
 
 
-func _enter_slide() -> void:
-	_needle = 0.0
-	_swing_delay = Config.DIVE_SWING_PREROLL
-	_phase = "slide"
-	Audio.sfx("serve")
-
-
 # ── resolve a dig ──────────────────────────────────────────────────────────────
 func _resolve() -> void:
 	var gap := absf(_px - _tx)
-	# How far you extend is set by how well you loaded (PUSH) and reached (SLIDE):
-	# a clean swing covers the full reach, a sloppy one barely leaves your stance.
-	# Good footwork (small gap) reaches regardless, so timing only bites when stretched.
-	var power := 0.35 * _push_q + 0.65 * _slide_q
+	# How far you extend is set by how well you time the SWING: a clean swing covers
+	# the full reach, a sloppy one barely leaves your stance. Good footwork (small gap)
+	# reaches regardless, so timing only bites when you're stretched.
+	var power := _swing_q
 	var eff_reach := Config.DIVE_SET_GOOD + (Config.DIVE_REACH - Config.DIVE_SET_GOOD) * power
-	if not _slide_pressed or _slide_q < Config.DIVE_SLIDE_CONNECT or gap > eff_reach:
+	if not _swing_pressed or _swing_q < Config.DIVE_SWING_CONNECT or gap > eff_reach:
 		_miss()                                    # whiffed the contact, or couldn't get there
 		return
 	var diving := gap > Config.DIVE_SET_GOOD
-	var combine := 0.34 * _step_q + 0.33 * _push_q + 0.33 * _slide_q
+	var combine := 0.5 * _step_q + 0.5 * _swing_q
 	if diving:
 		combine = minf(combine, Config.DIVE_DIVE_CAP)   # a scrappy dive never reads "perfect"
 	var quality := ("perfect" if combine >= Config.DIVE_PERFECT_AT else
@@ -379,24 +362,16 @@ func _update(dt: float) -> void:
 			_step_t = 1.0
 			_step_q = _set_score(absf(_px - _tx))
 			_needle = 0.0
-			_swing_delay = Config.DIVE_SWING_PREROLL    # a ready beat before PUSH sweeps
-			_phase = "push"
-	elif _phase == "push":
+			_swing_delay = Config.DIVE_SWING_PREROLL    # a ready beat before SWING sweeps
+			_phase = "swing"
+	elif _phase == "swing":
 		if _swing_delay > 0:
 			_swing_delay = maxf(0.0, _swing_delay - dt)
 		else:
-			_needle += dt / Config.DIVE_PUSH_SWEEP
-			if _needle >= 1.0:                      # let it sweep past — a no-press push scores 0
+			_needle += dt / Config.DIVE_SWING_SWEEP
+			if _needle >= 1.0:                      # never pressed -> dropped
 				_needle = 1.0
-				_push_q = 0.0
-				_enter_slide()
-	elif _phase == "slide":
-		if _swing_delay > 0:
-			_swing_delay = maxf(0.0, _swing_delay - dt)
-		else:
-			_needle += dt / Config.DIVE_SLIDE_SWEEP
-			if _needle >= 1.0:                      # never pressed slide -> dropped
-				_needle = 1.0
+				_swing_q = 0.0
 				_resolve()
 	elif _phase == "dive":
 		_update_dive(dt)
@@ -473,7 +448,7 @@ func _place_james() -> void:
 			_floor_y - 4 - Config.DIVE_LUNGE_HOP * sin(PI * t) + off.y)
 	else:
 		j.diving = ""
-		var crouch := 6.0 if (_dig_anim > 0 or _phase == "push" or _phase == "slide") else 0.0
+		var crouch := 6.0 if (_dig_anim > 0 or _phase == "swing") else 0.0
 		j.position = Vector2(_px + off.x, _floor_y - 14 + crouch + off.y)
 		if _phase == "step" and absf(_pvx) > 24:
 			j.walking = true
@@ -502,7 +477,7 @@ func _draw_bg(c: CanvasItem) -> void:
 			c.draw_rect(Rect2(0, fy + i, sw, 5), _GFLOOR_SHEEN)
 		i += 14
 	c.draw_line(Vector2(0, fy), Vector2(sw, fy), _LINE, 3)             # court line
-	if _phase == "step" or _phase == "push" or _phase == "slide":
+	if _phase == "step" or _phase == "swing":
 		_draw_target(c, off)
 
 
@@ -529,7 +504,7 @@ func _draw_ball(c: CanvasItem) -> void:
 		var pp := Vector2(_pop["x"] + off.x, _pop["y"] + off.y)
 		c.draw_circle(pp, 8, _BALL)
 		c.draw_arc(pp, 8, 0, TAU, 20, _BALL_EDGE, 1)
-	var live := (_phase == "step" or _phase == "push" or _phase == "slide"
+	var live := (_phase == "step" or _phase == "swing"
 		or (_phase == "dive" and not _dive_scored))
 	if not live:
 		return
@@ -544,9 +519,7 @@ func _draw_ball(c: CanvasItem) -> void:
 		var bp := _ball_pos()
 		bx = bp.x
 		by = bp.y
-		drop = (_step_t if _phase == "step" else                       # 0..1 of the full descent
-			0.5 * _needle if _phase == "push" else
-			0.5 + 0.5 * _needle)
+		drop = _step_t if _phase == "step" else _needle                # 0..1 of the full descent
 	bx += off.x
 	by += off.y
 	var shw := 10.0 + 16.0 * drop
@@ -570,7 +543,7 @@ func _draw_hud(c: CanvasItem) -> void:
 		_draw_intro(c)
 		return
 	_draw_hud_text(c)
-	if _phase == "push" or _phase == "slide":
+	if _phase == "swing":
 		_draw_timing(c)
 	if _phase == "done":
 		_draw_done(c)
@@ -594,8 +567,8 @@ func _draw_hud_text(c: CanvasItem) -> void:
 
 
 func _draw_timing(c: CanvasItem) -> void:
-	# The PUSH / SLIDE bar: green good band, gold perfect centre, sweeping needle.
-	var centre: float = Config.DIVE_PUSH_CENTRE if _phase == "push" else Config.DIVE_SLIDE_CENTRE
+	# The SWING bar: green good band, gold perfect centre, sweeping needle.
+	var centre := Config.DIVE_SWING_CENTRE
 	var w := 340.0
 	var h := 22.0
 	var x0 := Config.SCREEN_WIDTH / 2.0 - w / 2.0
@@ -623,15 +596,15 @@ func _draw_intro(c: CanvasItem) -> void:
 	_text(c, cx, sh / 2.0 - 118, "DIG RALLY", 40, Color8(245, 238, 220), true, true)
 	var lines := [
 		"Sarah feeds you short balls. Keep the rally alive.",
-		"Three beats to every dig:",
+		"Two beats to every dig:",
 		"STEP   <-  ->   onto the ring on the floor.",
-		"PUSH   Z  in the band as the needle sweeps.",
-		"SLIDE  Z  again to pass it back — stretched balls dive.",
+		"SWING  Z  in the band as the needle sweeps —",
+		"       stretched balls dive.",
 		"Drop one and the streak resets. Get to %d digs." % Config.DIVE_TARGET,
 	]
 	for i in lines.size():
 		var ln: String = lines[i]
-		var big := ln.begins_with("STEP") or ln.begins_with("PUSH") or ln.begins_with("SLIDE")
+		var big := ln.begins_with("STEP") or ln.begins_with("SWING")
 		_text(c, cx, sh / 2.0 - 64 + i * 28, ln, 18,
 			Color8(228, 232, 238) if big else Color8(200, 204, 212), true)
 	_text(c, cx, sh - 44, "Z to start", 18, Color8(245, 238, 220), true)

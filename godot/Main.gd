@@ -19,6 +19,8 @@ var _party: Party
 var _cutscene: Cutscene
 var _story: StoryManager
 var _save_mgr: SaveManager
+var _menuflow: MenuFlow
+var _portraits := {}     # speaker (lowercase) -> bust ImageTexture for the dialogue box
 var _menu: Menu
 var _minigame_layer: CanvasLayer
 var _minigame: VolleyCourt
@@ -42,6 +44,15 @@ var _chapter_card := ""
 
 func _ready() -> void:
 	Engine.max_fps = 60  # cap so dt stays sane (the 2D scenes otherwise run 1000s of fps)
+
+	# Fullscreen for a real play session (mirror of pygame's FULLSCREEN | SCALED); the
+	# stretch settings scale the 640x480 viewport to fit. Tooling runs (--shot/--bake/
+	# --review) stay windowed so the verify/bake framebuffer read-back keeps working.
+	var _args := OS.get_cmdline_user_args()
+	if not (_args.has("--shot") or _args.has("--bake") or _args.has("--review")):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+	_setup_input_actions()
 
 	if "--bake" in OS.get_cmdline_user_args():
 		# Asset-bake pipeline: render the procedural _draw() art to PNG textures, then
@@ -128,6 +139,9 @@ func _ready() -> void:
 	_menu = Menu.new()
 	menu_layer.add_child(_menu)
 
+	await _build_portraits()          # speaker busts for the dialogue box (port of portraits.py)
+	_dialogue.portraits = _portraits
+
 	if "--shot" in OS.get_cmdline_user_args():
 		await _shot()
 	else:
@@ -191,6 +205,7 @@ func _wire_story_stubs() -> void:
 	_story.on_chapter_start = func(week, title, first):
 		_chapter_card = "Week %d — %s" % [week, title]
 		_party.clear()
+		_save_mgr.save(SaveManager.AUTOSAVE)   # autosave the fresh chapter (load-only in the menu)
 		if not first:
 			var card := Card.new()
 			card.setup_chapter(week - 1, week)
@@ -209,14 +224,16 @@ func _finish_week(adv: String) -> void:
 # After the finale's phone thread: set its flag, then the closing "The End" card.
 # Confirming it starts a fresh playthrough.
 func _finish_finale(adv: String) -> void:
-	Audio.play(Config.CHAPTER_END_MUSIC)
 	_story.set_flag(adv)
+	# Stamp the autosave completed, so loading the 'continue' file later offers a
+	# fresh start from the beginning (mirror of app.py _game_complete).
+	_save_mgr.save(SaveManager.AUTOSAVE, true)
+	Audio.play(Config.CHAPTER_END_MUSIC)
 	var card := Card.new()
 	card.setup_the_end(false)
 	_open_card(card, func():
 		_close_card()
-		Audio.reset()             # play again -> no stale resume marks
-		_story.start_new())
+		_new_game())              # play again -> a fresh playthrough from the gym
 
 
 # ── Volleyball orchestration (mirror of app.py _launch_match / _end_volleyball) ──
@@ -332,53 +349,74 @@ func _on_game_over(lines: Array) -> void:
 
 
 func _open_title() -> void:
-	var opts := ["New Game"]
-	if _save_mgr.has(1):
-		opts.append("Continue")
-	opts.append("Quit")
-	_menu.open("ANNIVERSARY", opts, _on_title_select, "press Z to select")
-
-
-func _on_title_select(i: int) -> void:
-	var label: String = _menu.options[i]
-	match label:
-		"New Game":
-			_menu.close()
-			Audio.reset()         # fresh game -> no stale song resume marks
-			_sm.go_to(1, _player, Vector2i(5, 6))
-			_story.start_new()
-		"Continue":
-			_menu.close()
-			_save_mgr.apply(_save_mgr.load_slot(1))
-		"Quit":
-			get_tree().quit()
+	_menuflow = MenuFlow.new("title", _menu_ctx(), _menu, _save_mgr)
 
 
 func _open_pause() -> void:
-	var opts := ["Resume", "Save", "Load"] if _save_mgr.has(1) else ["Resume", "Save"]
-	opts.append("Quit to Title")
-	_menu.open("Paused", opts, _on_pause_select)
+	_menuflow = MenuFlow.new("pause", _menu_ctx(), _menu, _save_mgr)
 
 
-func _on_pause_select(i: int) -> void:
-	match _menu.options[i]:
-		"Resume":
-			_menu.close()
-		"Save":
-			_save_mgr.save(1)
-			_menu.close()
-		"Load":
-			_save_mgr.apply(_save_mgr.load_slot(1))
-			_menu.close()
-		"Quit to Title":
-			_menu.close()
-			_open_title()
+# The terminal effects the MenuFlow fires (mirror of app.py's menu_flow context).
+func _menu_ctx() -> Dictionary:
+	return {
+		"start_new": _menu_new_game,
+		"load_slot": _load_from_slot,
+		"save_to_slot": _menu_save_slot,   # stays in the menu (back out to leave)
+		"resume": _resume_menu,
+		"open_title": _open_title,         # pause -> title: swap the flow root
+		"quit_game": _quit_game,
+	}
+
+
+func _menu_new_game() -> void:
+	_menu.close()
+	_menuflow = null
+	_new_game()
+
+
+func _menu_save_slot(slot: int) -> void:
+	_save_mgr.save(slot)
+
+
+func _quit_game() -> void:
+	get_tree().quit()
+
+
+func _resume_menu() -> void:
+	_menu.close()
+	_menuflow = null
+
+
+func _new_game() -> void:
+	Audio.reset()                # fresh game -> no stale song resume marks
+	_sm.go_to(1, _player, Vector2i(5, 6))
+	_story.start_new()
+
+
+# Load a slot. A completed file offers a fresh start (the "The End" prompt) instead
+# of resuming a finished game (mirror of app.py load_slot).
+func _load_from_slot(slot: int) -> void:
+	var data = _save_mgr.load_slot(slot)
+	if data == null:
+		return
+	if data.get("completed", false):
+		_menu.close()
+		_menuflow = null
+		var card := Card.new()
+		card.setup_the_end(true)
+		_open_card(card, func():
+			_close_card()
+			_new_game())          # CONFIRM on the loaded prompt -> fresh playthrough
+		return
+	_save_mgr.apply(data)
+	_menu.close()
+	_menuflow = null
 
 
 func _process(delta: float) -> void:
 	if _baking:                 # --bake run: no overworld state to update
 		return
-	if _minigame != null:       # the minigame drives its own update + input
+	if _minigame != null or _dive != null:   # the minigame drives its own update + input
 		return
 	if _phone != null:          # the phone interlude freezes the overworld
 		return
@@ -460,66 +498,97 @@ func _facing_for(dtx: int, dty: int) -> String:
 	return "up"
 
 
+# Keyboard + gamepad action bindings (mirror of pygame's input_handler Z/X/C scheme
+# plus a DualSense). Registered in code so there's no fragile project.godot event
+# serialization; movement reuses the built-in ui_* actions (already joypad-bound).
+func _setup_input_actions() -> void:
+	_bind_action("confirm", [KEY_Z, KEY_ENTER], [JOY_BUTTON_A])           # Z / Cross
+	_bind_action("cancel", [KEY_X], [JOY_BUTTON_B])                       # X / Circle
+	_bind_action("menu", [KEY_C], [JOY_BUTTON_X, JOY_BUTTON_Y])           # C / Square / Triangle
+
+
+func _bind_action(name: String, keys: Array, buttons: Array) -> void:
+	if InputMap.has_action(name):
+		InputMap.erase_action(name)
+	InputMap.add_action(name)
+	for k in keys:
+		var ev := InputEventKey.new()
+		ev.keycode = k
+		InputMap.action_add_event(name, ev)
+	for b in buttons:
+		var jb := InputEventJoypadButton.new()
+		jb.button_index = b
+		InputMap.action_add_event(name, jb)
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if _minigame != null:              # the minigame owns input while it's up
+	if _minigame != null or _dive != null:   # the minigame owns input while it's up
 		return
-	if not (event is InputEventKey and event.pressed and not event.echo):
-		return
+	if event is InputEventKey and (not event.pressed or event.echo):
+		return                         # ignore key releases/echoes; joypad presses pass through
+
+	var confirm := event.is_action_pressed("confirm")
+	var cancel := event.is_action_pressed("cancel")
+	var menu := event.is_action_pressed("menu")
+	var up := event.is_action_pressed("ui_up")
+	var down := event.is_action_pressed("ui_down")
+	# Esc still opens/backs the menu (keyboard QUIT binding); pads use cancel/menu.
+	var esc: bool = event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == KEY_ESCAPE
 
 	if _card != null:                  # a story card owns input while it's up
-		if event.keycode == KEY_Z or event.keycode == KEY_ENTER:
+		if confirm:
 			_card.confirm()
-		elif (event.keycode == KEY_X or event.keycode == KEY_ESCAPE) \
-				and _card.kind == Card.Kind.THE_END and _card.loaded:
+		elif (cancel or esc) and _card.kind == Card.Kind.THE_END and _card.loaded:
 			_close_card()              # backing out of a completed-save prompt
 			_open_title()
 		return
 
 	if _phone != null:                 # the phone interlude owns input while it's up
-		if event.keycode == KEY_Z or event.keycode == KEY_ENTER:
+		if confirm:
 			if not _phone.advance():
 				var done := _phone_done
 				done.call()            # the thread is exhausted -> finish (closes the phone)
 		return
 
 	if _menu.is_open():                # the menu owns input while it's up
-		match event.keycode:
-			KEY_UP:
-				_menu.move(-1)
-			KEY_DOWN:
-				_menu.move(1)
-			KEY_Z, KEY_ENTER:
-				_menu.select()
-			KEY_ESCAPE:
-				if _menu.title == "Paused":
-					_menu.close()
+		if up:
+			_menu.move(-1)
+		elif down:
+			_menu.move(1)
+		elif confirm:
+			_menu.select()
+		elif cancel or esc:
+			if _menuflow != null:
+				_menuflow.back()
 		return
 
-	# ESC or C open the pause menu — mirror of pygame's QUIT / MENU bindings.
-	if (event.keycode == KEY_ESCAPE or event.keycode == KEY_C) \
-			and not _dialogue.active and not _cutscene.active:
+	# Menu button or Esc opens the pause menu — mirror of pygame's MENU / QUIT bindings.
+	if (menu or esc) and not _dialogue.active and not _cutscene.active:
 		_open_pause()
 		return
 
-	match event.keycode:
-		KEY_Z, KEY_ENTER:
-			if _dialogue.active:
-				_dialogue.advance()
-			elif not _cutscene.active:
-				_interact_ahead()
-		KEY_X:
-			if _dialogue.active:
-				_dialogue.skip()
-		KEY_UP:
-			if _dialogue.is_choosing():
-				_dialogue.move_choice(-1)
-		KEY_DOWN:
-			if _dialogue.is_choosing():
-				_dialogue.move_choice(1)
+	if confirm:
+		if _dialogue.active:
+			_dialogue.advance()
+		elif not _cutscene.active:
+			_interact_ahead()
+	elif cancel:
+		if _dialogue.active:
+			_dialogue.skip()
+	elif up:
+		if _dialogue.is_choosing():
+			_dialogue.move_choice(-1)
+	elif down:
+		if _dialogue.is_choosing():
+			_dialogue.move_choice(1)
 
 	if not Config.DEV:
 		return
-	# Dev-only affordances (set ANNIV_DEV=1) — saving/loading also live in the pause menu.
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	# Dev-only affordances (set ANNIV_DEV=1) — keyboard only; saving/loading also live
+	# in the pause menu.
 	match event.keycode:
 		KEY_P:
 			if not _party.active() and not _cutscene.active:
@@ -597,8 +666,18 @@ func _shot() -> void:
 	_open_title()
 	await get_tree().create_timer(0.2).timeout
 	assert(_menu.is_open(), "title menu not open")
+	# Keyboard + gamepad action bindings registered (each has a key and a joypad event).
+	for a in ["confirm", "cancel", "menu"]:
+		assert(InputMap.has_action(a), "input action missing: %s" % a)
+		var has_key := false
+		var has_pad := false
+		for ev in InputMap.action_get_events(a):
+			has_key = has_key or ev is InputEventKey
+			has_pad = has_pad or ev is InputEventJoypadButton
+		assert(has_key and has_pad, "action %s missing a key or joypad binding" % a)
 	await _save("res://verify_title.png")
 	_menu.close()
+	_menuflow = null
 
 	# Audio: every procedural SFX bank built at startup, plus the loud whistle asset.
 	for n in ["dig", "set", "serve", "spike", "perfect", "block", "tip", "blip",
@@ -759,7 +838,7 @@ func _shot() -> void:
 	_cutscene.stop()
 
 	# Diving drill (scene 12): the w3_dive beat launches the real minigame. Drive
-	# each path — intro, a live STEP feed, the PUSH/SLIDE timing bars, the dive pose,
+	# each path — intro, a live STEP feed, the SWING timing bar, the dive pose,
 	# a scored verdict, the done card — then finish and confirm it advances the beat.
 	_party.clear()
 	_dialogue.active = false
@@ -777,14 +856,14 @@ func _shot() -> void:
 	await get_tree().create_timer(0.3).timeout
 	await _save("res://verify_dive.png")
 
-	# PUSH timing bar: park the needle in the band and screenshot the sweep UI.
-	_dive._phase = "push"
+	# SWING timing bar: park the needle in the band and screenshot the sweep UI.
+	_dive._phase = "swing"
 	_dive._swing_delay = 0.0
-	_dive._needle = Config.DIVE_PUSH_CENTRE
+	_dive._needle = Config.DIVE_SWING_CENTRE
 	await get_tree().process_frame
-	await _save("res://verify_dive_push.png")
+	await _save("res://verify_dive_swing.png")
 
-	# Dive pose: a stretched SLIDE sprawls James flat (Npc.diving). Drive the lunge.
+	# Dive pose: a stretched swing sprawls James flat (Npc.diving). Drive the lunge.
 	_dive._px = _dive._left + 40
 	_dive._tx = _dive._px + Config.DIVE_SET_GOOD + 30   # gap > SET_GOOD -> a dive
 	_dive._start_dive("perfect")
@@ -954,6 +1033,43 @@ func _shot() -> void:
 	assert(_player.facing == "left", "facing not restored")
 	_sm.go_to(1, _player, Vector2i(5, 6))       # back to the gym for the visual shots
 	await get_tree().process_frame              # let the scene-change seam restart the gym theme
+
+	# ── Save system: autosave, completed-load prompt, delete, slot menu ───────────
+	# The new game (start_new, above) fired on_chapter_start, which autosaves slot 0.
+	assert(_save_mgr.has(SaveManager.AUTOSAVE), "chapter start did not write the autosave")
+	assert(_save_mgr.scene_title(6) == "Reception", "scene-name table wrong (id 6)")
+	# A completed save -> the 'The End' prompt (a fresh start), never a resumed finish.
+	_save_mgr.save(SaveManager.AUTOSAVE, true)
+	_load_from_slot(SaveManager.AUTOSAVE)
+	assert(_card != null and _card.kind == Card.Kind.THE_END and _card.loaded,
+		"loading a completed save did not raise the 'The End' prompt")
+	_close_card()
+	# Delete keeps a backup but clears the live slot.
+	_save_mgr.save(3)
+	assert(_save_mgr.has(3), "slot 3 not written")
+	_save_mgr.delete(3)
+	assert(not _save_mgr.has(3), "delete did not clear the slot")
+	# The MenuFlow: Load Game lists the autosave first, with a real label.
+	_open_title()
+	assert(_menu.is_open() and _menu.options[0] == "New Game", "title flow did not open")
+	_menuflow.move(1)                           # New Game -> Load Game
+	_menuflow.select()
+	assert(_menu.title == "Load Game", "Load Game screen did not open")
+	assert(str(_menu.options[0]).begins_with("Autosave:"), "autosave not listed first in Load")
+	await _save("res://verify_save_menu.png")
+	_menuflow.back()                            # slot list -> title root
+	assert(_menu.title == "The Story of Us", "back did not return to the title root")
+	_menu.close()
+	_menuflow = null
+
+	# Dialogue portrait bust: a known speaker shows their bust beside the text.
+	assert(_portraits.has("james") and _portraits["james"] is ImageTexture, "James bust not built")
+	_dialogue.start(["Proper hands on you!"], "James")
+	_dialogue.skip()                            # reveal the full line for the shot
+	await get_tree().process_frame
+	await _save("res://verify_portrait.png")
+	_dialogue.active = false
+	_dialogue.visible = false
 
 	# Speaker theme: Matt's music overrides the scene track while he speaks, then the
 	# scene's track resumes when he stops (update_speaker_music, polled each play frame).
@@ -1417,6 +1533,51 @@ func _bake_player_sheet() -> void:
 		var frame := await _render_player_frame(cell, st[1], st[2])
 		sheet.blit_rect(frame, Rect2i(Vector2i.ZERO, cell), Vector2i(cell.x * i, 0))
 	sheet.save_png(_BAKE_DIR + "player_sheet.png")
+
+
+# ── Dialogue portrait busts (port of systems/portraits.py) ──────────────────────
+# Each speaker's down-facing head+torso, rendered once from the in-game sprite into a
+# cached ImageTexture. Mirror of portraits.py: a name maps to its character class.
+const _BUST_SS := 4                          # supersample for a crisp bust
+const _BUST_W := 22                          # crop width (sprite-local px), centred on the body
+const _BUST_H := 26                          # crop height: headroom + head down to mid-torso (legs cut)
+
+
+func _build_portraits() -> void:
+	# Speaker -> character class (class refs can't be const, so the map is local).
+	var reg := {
+		"james": James, "dan": Dan, "matt": Matt, "nat": Nat, "leonard": Leonard,
+		"sarah": Player, "you": Player, "player": Player,
+		"milla": Milla, "bailey": Bailey, "mayu": Mayu, "wallace": Wallace,
+		"matúš": Matus, "matus": Matus,
+	}
+	for nm in reg:
+		_portraits[nm] = await _render_bust(reg[nm])
+
+
+func _render_bust(char_class) -> ImageTexture:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(_BUST_W, _BUST_H) * _BUST_SS
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	var ch = char_class.new()
+	if "use_baked_sprite" in ch:
+		ch.use_baked_sprite = false           # procedural body, not the baked sheet
+	ch.bare = true                            # head + body only (no shadow/drink/bob/glow)
+	vp.add_child(ch)
+	await get_tree().process_frame            # let _ready run (it overwrites position/adds nodes)
+	for c in ch.get_children():
+		if c is PointLight2D:
+			c.queue_free()
+	ch.facing = "down"
+	ch.scale = Vector2(_BUST_SS, _BUST_SS)
+	# sprite-local (-11, -19) -> viewport (0, 0): headroom on top, torso fills down, legs cut.
+	ch.position = Vector2(_BUST_W / 2.0, 19.0) * _BUST_SS
+	ch.queue_redraw()
+	var img := await _grab(vp)
+	vp.queue_free()
+	return ImageTexture.create_from_image(img)
 
 
 func _render_player_frame(cell: Vector2i, facing: String, sitting: bool) -> Image:

@@ -4,5 +4,5 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 GODOT="${GODOT:-/opt/homebrew/bin/godot}"
-"$GODOT" --path "$HERE" --quit-after 600 -- --shot
+"$GODOT" --path "$HERE" --quit-after 4000 -- --shot
 echo "wrote $HERE/verify_shot.png"

@@ -320,15 +320,14 @@ func enter() -> void:
 
 # ── Input ────────────────────────────────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey and event.pressed and not event.echo):
+	if event is InputEventKey and (not event.pressed or event.echo):
 		return
-	match event.keycode:
-		KEY_Z, KEY_ENTER:
-			_action = true
-		KEY_X:
-			_set_pressed = true
-		KEY_C:
-			_tip_pressed = true
+	if event.is_action_pressed("confirm"):       # Z / Cross — dig/attack/serve/block
+		_action = true
+	elif event.is_action_pressed("cancel"):      # X / Circle — set
+		_set_pressed = true
+	elif event.is_action_pressed("menu"):        # C / Square — tip / dump
+		_tip_pressed = true
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

@@ -11,8 +11,8 @@
 #   ["flag", name]                set a story flag
 #   ["call", Callable]            run a callable once
 # ask/hub choices, walkto/moveto pathfind, vanish, hold, sit/settle/sit_all,
-# if_flag and game_over (inside ask) are all supported. Only the sprawled `pose`
-# ART is deferred (with the dive minigame) — the verb is consumed, not drawn.
+# pose (the sprawled dive/prone pose via actor.diving), if_flag and game_over
+# (inside ask) are all supported.
 # `who` is case-insensitive: sarah/player/you -> the player, else a party follower
 # or current-scene NPC matched on display name.
 class_name Cutscene
@@ -212,11 +212,11 @@ func _begin_step() -> void:
 					a.queue_redraw()
 				_i += 1
 			"pose":
-				# The sprawled-on-the-floor pose art is deferred with the dive minigame;
-				# for now consume the step (turning the actor if a direction is given).
+				# Sprawled prone/dive pose: set actor.diving (mirror of pygame's
+				# actor.diving = step[2]); a null clears it, back onto their feet.
 				var pa = _resolve(step[1])
-				if pa != null and step.size() > 2 and step[2] is String:
-					pa.facing = step[2]
+				if pa != null and "diving" in pa:
+					pa.diving = step[2] if step[2] is String else ""
 					pa.queue_redraw()
 				_i += 1
 			"sit":

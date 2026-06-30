@@ -63,7 +63,12 @@ func _draw() -> void:
 	var sh := Config.SCREEN_HEIGHT
 	draw_rect(Rect2(0, 0, sw, sh), Color(0, 0, 0, 0.62))   # dim the world behind
 
-	var pw := 300
+	var maxw := _font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+	if subtitle != "":
+		maxw = maxf(maxw, _font.get_string_size(subtitle, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x)
+	for opt in options:
+		maxw = maxf(maxw, _font.get_string_size("> " + str(opt), HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x)
+	var pw := int(maxf(300.0, maxw + 72.0))   # 44px left inset + right padding
 	var ph := 64 + options.size() * 30 + (26 if subtitle != "" else 0)
 	var px := (sw - pw) / 2.0
 	var py := (sh - ph) / 2.0
