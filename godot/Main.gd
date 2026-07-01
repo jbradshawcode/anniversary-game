@@ -528,6 +528,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and (not event.pressed or event.echo):
 		return                         # ignore key releases/echoes; joypad presses pass through
 
+	# Dev only (N): hop to the next beat from anywhere — overworld, cutscene, card, phone.
+	if Config.DEV and event is InputEventKey and event.keycode == KEY_N:
+		_debug_cycle()
+		return
+
 	var confirm := event.is_action_pressed("confirm")
 	var cancel := event.is_action_pressed("cancel")
 	var menu := event.is_action_pressed("menu")
@@ -603,6 +608,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_L:
 			if _save_mgr.has(1) and not _dialogue.active and not _cutscene.active:
 				_save_mgr.apply(_save_mgr.load_slot(1))
+
+
+# Dev only: bail out of whatever's on screen, then step the story to the next beat.
+func _debug_cycle() -> void:
+	_cutscene.stop()
+	_dialogue.active = false
+	_dialogue.visible = false
+	if _card != null:
+		_close_card()
+	if _phone != null:
+		_close_phone()
+	if _menu.is_open():
+		_menu.close()
+		_menuflow = null
+	_story.debug_cycle()
 
 
 func _crew_roster() -> Array:
@@ -1016,6 +1036,12 @@ func _shot() -> void:
 	_story.restore(_story.index_of("wind_down"), [])
 	assert(_story.talk("James"), "talk line not shown")
 	assert(_dialogue.active, "talk did not open dialogue")
+
+	# Dev cycle (N key): debug_cycle steps to the next beat in a playable state.
+	_story.restore(_story.index_of("check_baskets"), [])
+	var before: String = _story.beat()["name"]
+	_story.debug_cycle()
+	assert(_story.beat()["name"] != before, "debug_cycle did not advance the beat")
 
 	# Disable the story for the remaining (save/load, lighting, party, choice) shots.
 	_sm.story = null

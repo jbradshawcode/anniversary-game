@@ -159,6 +159,35 @@ func start_new() -> void:
 	_enter_beat()
 
 
+# Dev only (N key): step to the next beat, wrapping at the end, so you can walk
+# through every sub-chapter. Port of story.debug_cycle / debug_jump_to.
+func debug_cycle() -> void:
+	debug_jump_to((_beat + 1) % _beats.size())
+
+
+func debug_jump_to(i: int) -> void:
+	_beat = clampi(i, 0, _beats.size() - 1)
+	flags = {}
+	_fired = {}
+	vb_attempts = 0
+	_cur_week = beat().get("week", null)          # no chapter card on a dev jump
+	# Work out which scene this beat happens in (its own goto, else the last goto
+	# up to here) and land the player there before running it.
+	var scene := 1
+	var tile = null
+	for b in _beats.slice(0, _beat + 1):
+		if b.get("goto", null) != null:
+			scene = int(b["goto"]["scene"])
+			tile = b["goto"].get("tile", null)
+	if _sm != null and _player != null:
+		_sm.go_to(scene, _player, tile if tile != null else Vector2i(_player.tile_x, _player.tile_y))
+	_remove_absent()
+	if _player != null:
+		sync_party(_player)
+	print("[dev] beat %d/%d: %s" % [_beat + 1, _beats.size(), beat().get("name", "?")])
+	_enter_beat()
+
+
 func _enter_beat() -> void:
 	var b := beat()
 	# A drink lives in hand only between the bar and a seat: a beat that isn't a
