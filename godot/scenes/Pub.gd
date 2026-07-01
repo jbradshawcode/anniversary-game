@@ -133,6 +133,10 @@ func _on_ready() -> void:
 	# Static furnishings never have anyone behind them -> one Z_BACK node.
 	add_fixture(Fixture.Z_BACK, _paint_gantry)
 	add_fixture(Fixture.Z_BACK, _paint_counter)
+	# The servery FRONT face is a Y->z occluder anchored at the counter's south edge, so
+	# it draws in front of Milla (who stands north at row 3) — she reads as behind the
+	# bar — but behind the customers to the south. Gantry + counter top stay behind her.
+	add_fixture(4 * _TS, _paint_bar_front)
 	add_fixture(Fixture.Z_BACK, _paint_furnishings)
 	add_fixture(7 * _TS, _paint_column)
 
@@ -223,6 +227,22 @@ func _paint_counter(c: CanvasItem) -> void:
 			break
 		_r(hx - 2, 3 * _TS + 2, 4, 12, _BRASS_DK)
 		_r(hx - 2, 3 * _TS + 5, 4, 5, [_STAIN_R, _STAIN_G, _STAIN_B, _BRASS][i % 4])
+
+
+# Servery front face — the vertical panel of the bar facing the customers. Drawn in
+# front of the bartender (Y->z) so she stands behind the bar, not on top of it.
+func _paint_bar_front(c: CanvasItem) -> void:
+	_cv = c
+	var x0 := 12 * _TS
+	var x1 := 20 * _TS
+	var ytop := 3 * _TS + 12      # overlaps Milla's lower body so it occludes her legs
+	var ybot := 4 * _TS + 2
+	_r(x0, ytop, x1 - x0, ybot - ytop, _BAR_WOOD)
+	_r(x0, ytop, x1 - x0, 3, _BAR_TOP)               # lit lip along the top of the face
+	_r(x0, ybot - 4, x1 - x0, 4, _BAR_DK)            # shadow at the base
+	for px in range(x0 + 6, x1 - 6, 28):             # subtle panel divisions
+		_r(px, ytop + 5, 1, ybot - ytop - 10, _BAR_DK)
+	_ln(x0, ybot - 7, x1, ybot - 7, _BRASS, 2)       # brass foot rail
 
 
 # Mid-room panelled structural column — Y->z so the player passes behind it from the north.
