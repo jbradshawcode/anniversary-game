@@ -1188,8 +1188,7 @@ func _shot() -> void:
 	# Exercise a normal in-scene step (player.try_move path) before any exit, so a
 	# regression there can't hide behind the transition-only path.
 	_player.place(5, 6)
-	_sm.try_move(1, 0, _player)
-	await get_tree().create_timer(0.2).timeout
+	await _walk_steps(1, 1, 0)
 	assert(not _player.moving and _player.tile_x == 6, "normal move failed")
 
 	# Gym -> corridor.
@@ -1336,8 +1335,7 @@ func _shot() -> void:
 
 	# Normal step along the central path (player.try_move path).
 	_player.place(9, 5)
-	_sm.try_move(1, 0, _player)
-	await get_tree().create_timer(0.2).timeout
+	await _walk_steps(1, 1, 0)
 	assert(not _player.moving and _player.tile_x == 10, "courtyard normal move failed")
 
 	# Up-exit transition: out the gate gap (cols 9-10) onto King Street.
@@ -1363,8 +1361,7 @@ func _shot() -> void:
 
 	# Normal in-scene step across the court (player.try_move path).
 	_player.place(8, 8)
-	_sm.try_move(1, 0, _player)
-	await get_tree().create_timer(0.2).timeout
+	await _walk_steps(1, 1, 0)
 	assert(not _player.moving and _player.tile_x == 9, "courts normal move failed")
 
 	# Down-exit transition: out the bottom-left gate gap (cols 3,4) to the courtyard.
@@ -1387,8 +1384,7 @@ func _shot() -> void:
 
 	# Normal in-scene step across the front room (player.try_move path).
 	_player.place(6, 13)
-	_sm.try_move(1, 0, _player)
-	await get_tree().create_timer(0.2).timeout
+	await _walk_steps(1, 1, 0)
 	assert(not _player.moving and _player.tile_x == 7, "wetherspoons normal move failed")
 
 	# Down-exit transition: out the street doors (cols 8-11) onto King Street.
@@ -1469,7 +1465,13 @@ func _save(path: String) -> void:
 	await get_tree().process_frame
 	RenderingServer.force_draw()
 	var img := get_viewport().get_texture().get_image()
-	img.save_png(path)
+	# Redirect shots to ANNIV_SHOT_DIR (set by tools/verify.sh) so they don't clog
+	# the project dir; falls back to the res:// path for editor-run --shot.
+	var out := path
+	var dir := OS.get_environment("ANNIV_SHOT_DIR")
+	if dir != "":
+		out = dir.path_join(path.get_file())
+	img.save_png(out)
 
 
 # ── Asset-bake pipeline (run via tools/bake.sh / `-- --bake`) ───────────────────
