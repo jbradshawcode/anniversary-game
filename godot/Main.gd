@@ -24,6 +24,7 @@ var _portraits := {}     # speaker (lowercase) -> bust ImageTexture for the dial
 var _menu: Menu
 var _minigame_layer: CanvasLayer
 var _minigame: VolleyCourt
+var _paused_mg: Node = null       # a minigame frozen behind the pause menu (Esc during play)
 var _dive: DiveGame
 var _phone: Phone
 var _phone_layer: CanvasLayer
@@ -131,11 +132,11 @@ func _ready() -> void:
 	_save_mgr.bind(_story, _sm, _player)
 
 	_minigame_layer = CanvasLayer.new()
-	_minigame_layer.layer = 3     # above everything (world / dialogue / menu) — covers the overworld
+	_minigame_layer.layer = 3     # above the overworld (world / dialogue) — covers it
 	add_child(_minigame_layer)
 
 	var menu_layer := CanvasLayer.new()
-	menu_layer.layer = 2          # above dialogue/fade (layer 1)
+	menu_layer.layer = 4          # above the minigame too, so the pause menu shows over it
 	add_child(menu_layer)
 	_menu = Menu.new()
 	menu_layer.add_child(_menu)
@@ -364,15 +365,21 @@ func _menu_ctx() -> Dictionary:
 		"load_slot": _load_from_slot,
 		"save_to_slot": _menu_save_slot,   # stays in the menu (back out to leave)
 		"resume": _resume_menu,
-		"open_title": _open_title,         # pause -> title: swap the flow root
+		"open_title": _menu_to_title,      # pause -> title: swap the flow root
 		"quit_game": _quit_game,
 	}
 
 
 func _menu_new_game() -> void:
+	_abandon_paused_minigame()
 	_menu.close()
 	_menuflow = null
 	_new_game()
+
+
+func _menu_to_title() -> void:
+	_abandon_paused_minigame()
+	_open_title()
 
 
 func _menu_save_slot(slot: int) -> void:
@@ -386,6 +393,33 @@ func _quit_game() -> void:
 func _resume_menu() -> void:
 	_menu.close()
 	_menuflow = null
+	_resume_minigame()
+
+
+# ── pause / resume a minigame behind the pause menu (Esc during play) ────────────
+func _pause_minigame() -> void:
+	_paused_mg = _minigame if _minigame != null else _dive
+	if _paused_mg != null:
+		_paused_mg.set_process(false)
+		_paused_mg.set_process_unhandled_input(false)
+	_open_pause()
+
+
+func _resume_minigame() -> void:
+	if _paused_mg != null and is_instance_valid(_paused_mg):
+		_paused_mg.set_process(true)
+		_paused_mg.set_process_unhandled_input(true)
+	_paused_mg = null
+
+
+# Tear down a minigame outright (Quit to Title / New Game / dev cycle out of one).
+func _abandon_paused_minigame() -> void:
+	_paused_mg = null
+	if _minigame != null:
+		_close_minigame()
+	if _dive != null:
+		_dive.queue_free()
+		_dive = null
 
 
 func _new_game() -> void:
@@ -523,12 +557,11 @@ func _bind_action(name: String, keys: Array, buttons: Array) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _minigame != null or _dive != null:   # the minigame owns input while it's up
-		return
 	if event is InputEventKey and (not event.pressed or event.echo):
 		return                         # ignore key releases/echoes; joypad presses pass through
 
-	# Dev only (N): hop to the next beat from anywhere — overworld, cutscene, card, phone.
+	# Dev only (N): hop to the next beat from anywhere — overworld, cutscene, card,
+	# phone, or mid-minigame (it bails out of whatever's up first).
 	if Config.DEV and event is InputEventKey and event.keycode == KEY_N:
 		_debug_cycle()
 		return
@@ -541,6 +574,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Esc still opens/backs the menu (keyboard QUIT binding); pads use cancel/menu.
 	var esc: bool = event is InputEventKey and event.pressed and not event.echo \
 			and event.keycode == KEY_ESCAPE
+
+	# A running minigame owns input — except Esc, which pauses it (C/menu stays gameplay:
+	# tip/dump). Once paused the menu is open, so this gate is skipped and the menu block
+	# below drives the overlay.
+	if (_minigame != null or _dive != null) and not _menu.is_open():
+		if esc:
+			_pause_minigame()
+		return
 
 	if _card != null:                  # a story card owns input while it's up
 		if confirm:
@@ -612,6 +653,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # Dev only: bail out of whatever's on screen, then step the story to the next beat.
 func _debug_cycle() -> void:
+	_abandon_paused_minigame()      # also frees a live (unpaused) minigame
 	_cutscene.stop()
 	_dialogue.active = false
 	_dialogue.visible = false
@@ -779,6 +821,13 @@ func _shot() -> void:
 	# gym_match hands off to the launch_volleyball stub.
 	assert(await _play_until("gym_match", 2000), "did not reach gym_match")
 	assert(_minigame != null and _minigame is VolleyCourt, "volleyball minigame did not launch")
+	# Pause during a minigame: Esc freezes it behind the pause menu; Resume un-freezes.
+	_pause_minigame()
+	assert(_menu.is_open() and _paused_mg == _minigame, "Esc did not pause the minigame")
+	assert(not _minigame.is_processing(), "paused minigame should stop processing")
+	_resume_menu()
+	assert(not _menu.is_open() and _paused_mg == null and _minigame.is_processing(),
+		"Resume did not un-pause the minigame")
 	# Ch1 opens with the controls tutorial (w1_want_tut); finishing it launches the match.
 	if _minigame._mode == "tutorial":
 		_minigame._intro = false                   # dismiss the HOW-TO card to show the live tutorial HUD
