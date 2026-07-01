@@ -1,14 +1,21 @@
+# Godot
+/.godot/
+/verify_*.png
+/verify_*.png.import
+assets/review/
+
+# Env / editor / local state
 .env
+.playwright-mcp/
+saves/
+TODO.md
+
+# scene-from-place skill (Python) + gathered reference imagery
 __pycache__/
-streetview_refs/
 *.pyc
+refs/
+streetview_refs/
 streetview_ext/
+gym_refs/
 wetherspoons_refs/
 salutation_refs/
-CLAUDE.md
-TODO.md
-gym_refs/
-saves/
-refs/
-.playwright-mcp/
-godot/assets/review/
